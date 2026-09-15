@@ -1,7 +1,9 @@
 {
   "identifier": "main-capability",
   "description": "Main window capabilities",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "shell:allow-open",
@@ -11,6 +13,7 @@
     "notification:default",
     "os:default",
     "http:default",
-    "opener:default"
+    "opener:default",
+    "updater:default"
   ]
 }

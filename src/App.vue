@@ -14,6 +14,7 @@ import { useDataCache } from "@/stores/dataCache";
 import { useProactiveAlerts } from "@/composables/useProactiveAlerts";
 import { logger } from "@/utils/logger";
 import { sdiRelease } from "@/utils/sdiGuard";
+import { checkForUpdate } from "@/composables/useAutoUpdate";
 
 const { start: startAlerts, stop: stopAlerts } = useProactiveAlerts();
 const appVersion = __APP_VERSION__;
@@ -209,6 +210,9 @@ onMounted(async () => {
     load(22, "get_bios_info"),
     load(23, "ai_find_llamacpp_server"),
   ]);
+
+  // ── Mise a jour : apres le chargement, sans bloquer le demarrage ──
+  void checkForUpdate();
 
   // ── Handler fermeture ──
   try {
