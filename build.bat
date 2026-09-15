@@ -245,39 +245,20 @@ if not defined SFX_STUB (
 
 if defined SFX_STUB goto SFX_STUB_FOUND
 
-:: ── Telechargement automatique du stub SFX ───────────────────────────────────
-echo --- 7zSD.sfx introuvable. Telechargement depuis 7-zip.org...
-if not exist "%~dp0tools" mkdir "%~dp0tools"
-set "EXTRA_DL=%TEMP%\_7z_sfx_extra.7z"
-set "SZVER="
-"!SEVENZIP!" i > "%TEMP%\_7zver.txt" 2>nul
-for /f "tokens=2" %%V in ('type "%TEMP%\_7zver.txt" ^| findstr /B /C:"7-Zip "') do (
-    if not defined SZVER set "SZVER=%%V"
-)
-del /Q "%TEMP%\_7zver.txt" >nul 2>&1
-if defined SZVER (
-    set "SZVER_URL=!SZVER:.=!"
-    echo     Version detectee : !SZVER! ^(7z!SZVER_URL!-extra.7z^)
-    powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest 'https://www.7-zip.org/a/7z!SZVER_URL!-extra.7z' -OutFile '!EXTRA_DL!' -UseBasicParsing -ErrorAction SilentlyContinue"
-)
-if not exist "!EXTRA_DL!" (
-    echo     Fallback sur la version stable 24.08...
-    powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest 'https://www.7-zip.org/a/7z2408-extra.7z' -OutFile '!EXTRA_DL!' -UseBasicParsing -ErrorAction SilentlyContinue"
-)
-if exist "!EXTRA_DL!" (
-    "!SEVENZIP!" e "!EXTRA_DL!" 7zSD.sfx 7zS.sfx -o"%~dp0tools" -y >nul 2>&1
-    del /Q "!EXTRA_DL!" >nul 2>&1
-)
-for %%P in ("%~dp0tools\7zSD.sfx" "%~dp0tools\7zS.sfx") do (
-    if exist %%P (
-        if not defined SFX_STUB set "SFX_STUB=%%~P"
-    )
-)
+:: -- Stub SFX absent : il n y a plus rien a telecharger ---------------------
+:: Le telechargement automatique qui vivait ici etait MORT : 7-Zip ne livre
+:: plus 7zSD.sfx dans "7-Zip Extra" (verifie le 2026-09-15 : absent de
+:: 7z2603-extra.7z, et 7z2408-extra.7z rend 404 sur 7-zip.org). Il ne pouvait
+:: donc que faire perdre deux minutes avant d echouer quand meme.
+::
+:: Le stub se recupere en copiant les 215040 premiers octets d une release
+:: Nitrite_vX_full.exe deja publiee -- tout ce qui precede le marqueur
+:: ";!@Install@!UTF-8!" -- ou depuis une archive 7-Zip Extra <= 21.07.
 if not defined SFX_STUB (
-    echo [ERREUR] Echec du telechargement du stub SFX.
-    echo Copiez manuellement 7zSD.sfx dans tools\ depuis :
-    echo https://www.7-zip.org/download.html  ^(section "7-Zip Extra"^)
-    pause & exit /b 1
+    echo [ERREUR] tools/7zSD.sfx introuvable.
+    echo Recuperez-le depuis une release full.exe deja publiee :
+    echo   powershell -NoProfile -Command "[IO.File]::WriteAllBytes('tools/7zSD.sfx', [IO.File]::ReadAllBytes('release/Nitrite_vX_full.exe')[0..215039])"
+    pause ^& exit /b 1
 )
 
 :SFX_STUB_FOUND
