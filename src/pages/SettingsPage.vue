@@ -9,6 +9,7 @@ import DiagBanner from "@/components/ui/DiagBanner.vue";
 import { useAppStore, type ThemeName } from "@/stores/app";
 import { useNotificationStore } from "@/stores/notifications";
 import { useAiStore } from "@/stores/ai";
+import { checkForUpdate } from "@/composables/useAutoUpdate";
 import {
   Settings, Palette, Bot, Download, Info,
   Save, RotateCcw, Wifi, CheckCircle, XCircle, FolderOpen,
@@ -23,6 +24,13 @@ const aiStore  = useAiStore();
 type Tab = "interface" | "performance" | "notifications" | "ai" | "export" | "about";
 const activeTab = ref<Tab>("interface");
 const appVersion = __APP_VERSION__;
+
+// ── Mise à jour manuelle (le démarrage la vérifie déjà en silence) ──
+const majEnCours = ref(false);
+async function verifierMaj() {
+  majEnCours.value = true;
+  try { await checkForUpdate(false); } finally { majEnCours.value = false; }
+}
 
 // ── Paramètres locaux ─────────────────────────────────────────
 // ollamaUrl / ollamaModel / temperature → proxy vers le store AI (v-model compatible)
@@ -562,6 +570,11 @@ const tabs: { id: Tab; label: string; icon: Component }[] = [
             <p class="about-sub">Outil de diagnostic et maintenance Windows</p>
             <div class="about-beta-notice">
               Application en version bêta — des bugs peuvent survenir.
+            </div>
+            <div class="btn-group">
+              <button class="size-btn" :disabled="majEnCours" @click="verifierMaj">
+                {{ majEnCours ? "Vérification…" : "Vérifier les mises à jour" }}
+              </button>
             </div>
           </div>
 

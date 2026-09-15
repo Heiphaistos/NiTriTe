@@ -111,7 +111,7 @@ pub fn run() {
     utils::logger::init_logger();
     logging::init_log_dir();
     logging::log_internal("INFO", "SYSTEM", "NiTriTe démarré — init logging", None);
-    tracing::info!("Demarrage NiTriTe 8.208.0");
+    tracing::info!("Demarrage NiTriTe {}", env!("CARGO_PKG_VERSION"));
 
     let config = AppConfig::load();
     let app_state = AppState::new(config);
@@ -125,11 +125,13 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             // Systeme
             get_system_info,
             get_platform_info,
+            is_portable_install,
             // Monitoring
             start_monitoring,
             stop_monitoring,

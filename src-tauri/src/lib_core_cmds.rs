@@ -31,6 +31,24 @@ async fn get_system_info(state: tauri::State<'_, AppState>) -> Result<serde_json
     Ok(json)
 }
 
+/// Vrai quand cette copie porte son propre contenu : les dossiers `Drivers` et
+/// `Script Windows` sont a cote de l'executable (version portable, ou SFX
+/// complet `Nitrite_vX_full.exe`).
+///
+/// L'installeur NSIS ne pose QUE l'executable. Proposer la mise a jour
+/// automatique a une copie portable installerait donc une SECONDE copie dans
+/// Program Files, amputee des 733 Mo de `logiciel\` et des pilotes -- pendant
+/// que la copie d'origine, celle que l utilisateur lance vraiment, resterait a son
+/// ancienne version. Ces copies-la se mettent a jour en retelechargeant le SFX.
+///
+/// `logiciel\` n'est PAS un temoin fiable : `paths::portables_dir()` le cree a
+/// vide des le premier usage, y compris sur une installation NSIS.
+#[tauri::command]
+fn is_portable_install() -> bool {
+    let root = crate::utils::paths::app_root_dir();
+    root.join("Drivers").is_dir() || root.join("Script Windows").is_dir()
+}
+
 #[tauri::command]
 async fn get_platform_info() -> Result<PlatformInfo, NiTriTeError> {
     tokio::task::spawn_blocking(PlatformInfo::detect)
