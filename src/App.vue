@@ -141,6 +141,15 @@ onMounted(async () => {
 
   await nextTick();
 
+  // ── Mise a jour, AVANT les lots de chargement ────────────────────────────
+  // Elle etait appelee apres les 23 sondes systeme du demarrage, donc elle en
+  // dependait : mesure sur deux lancements de la meme machine, 68 s puis
+  // 3 min 45. Sur un poste ou une de ces sondes traine -- un depot WMI abime,
+  // un service Windows Update fige -- la mise a jour n'etait jamais proposee de
+  // la session. Elle n'a aucune raison d'attendre un inventaire de pilotes :
+  // l'appel ne bloque pas (`void`), il vit sa vie pendant le chargement.
+  void checkForUpdate();
+
   // ── Tâche 0 : Interface (synchrone) ──
   loadTasks.value[0].status = "running";
   appStore.loadSavedTheme();
@@ -210,9 +219,6 @@ onMounted(async () => {
     load(22, "get_bios_info"),
     load(23, "ai_find_llamacpp_server"),
   ]);
-
-  // ── Mise a jour : apres le chargement, sans bloquer le demarrage ──
-  void checkForUpdate();
 
   // ── Handler fermeture ──
   try {
