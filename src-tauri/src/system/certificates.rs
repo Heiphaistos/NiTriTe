@@ -1,7 +1,15 @@
 use serde::Serialize;
-use std::process::Command;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+
+use crate::maintenance::commands::execute_system_command;
+
+// Aucun de ces appels n'avait de limite de temps : `Command::output()` attend la
+// fin du processus, point. Un depot WMI abime, un service Windows Update fige ou
+// un pnputil qui attend une signature bloquait donc le thread pour le reste de la
+// session, sans une ligne dans les journaux. Meme famille que `monitor.rs`.
+// `execute_system_command` tue le processus au dela du delai.
+
+/// Enumerer tous les magasins de certificats de la machine.
+const DELAI: u64 = 30;
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct CertEntry {
@@ -78,13 +86,14 @@ $out | ConvertTo-Json -Depth 4 -Compress
 
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", ps])
-            .creation_flags(0x08000000)
-            .output();
+        let output = execute_system_command(
+            "powershell",
+            &["-NoProfile", "-NonInteractive", "-Command", ps],
+            DELAI,
+        );
 
         if let Ok(o) = output {
-            let text = String::from_utf8_lossy(&o.stdout);
+            let text = o.stdout;
             let v: serde_json::Value = match serde_json::from_str(text.trim()) {
                 Ok(v) => v,
                 Err(_) => return CertsData::default(),

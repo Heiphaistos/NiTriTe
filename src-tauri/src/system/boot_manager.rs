@@ -1,9 +1,13 @@
 use serde::Serialize;
-use std::process::Command;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-#[cfg(target_os = "windows")]
-use crate::maintenance::commands::decode_output;
+
+use crate::maintenance::commands::execute_system_command;
+
+// Aucun de ces appels n'avait de limite de temps : `Command::output()` attend la
+// fin du processus, point. bcdedit et shutdown ne pendent presque jamais, mais
+// « presque jamais » n'est pas jamais, et la convention du projet est que tout
+// appel systeme passe par `execute_system_command`, qui tue le processus au dela
+// du delai. Meme famille que `monitor.rs`.
+const DELAI: u64 = 30;
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct BcdEntry {
@@ -85,11 +89,16 @@ try {
 "#;
     #[cfg(target_os = "windows")]
     {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",ps]).creation_flags(0x08000000).output();
+        let o = execute_system_command(
+            "powershell",
+            &["-NoProfile", "-NonInteractive", "-Command", ps],
+            DELAI,
+        );
         if let Ok(o) = o {
-            // decode_output : descriptions/en-têtes accentués (« Gestionnaire de
-            // démarrage Windows ») sortent en OEM → mojibake avec from_utf8_lossy.
-            let t = decode_output(&o.stdout);
+            // La sortie est deja decodee : descriptions et en-tetes accentues
+            // (« Gestionnaire de demarrage Windows ») sortent en OEM et
+            // donneraient du mojibake avec from_utf8_lossy.
+            let t = o.stdout;
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(t.trim()) {
                 let entries = v["entries"].as_array().map(|arr| arr.iter().map(|e| {
                     let id = e["id"].as_str().unwrap_or("").to_string();
@@ -126,13 +135,12 @@ try {
 /// ("successfully" en EN, "L'opération a réussi." en FR). Args array : pas d'injection.
 #[cfg(target_os = "windows")]
 fn run_bcdedit(args: &[&str]) -> Result<String, String> {
-    let o = Command::new("bcdedit").args(args).creation_flags(0x08000000).output()
-        .map_err(|e| e.to_string())?;
-    let stdout = decode_output(&o.stdout).trim().to_string();
-    if o.status.success() {
+    let o = execute_system_command("bcdedit", args, DELAI).map_err(|e| e.to_string())?;
+    let stdout = o.stdout.trim().to_string();
+    if o.success {
         Ok(stdout)
     } else {
-        let stderr = decode_output(&o.stderr).trim().to_string();
+        let stderr = o.stderr.trim().to_string();
         Err(if stderr.is_empty() {
             if stdout.is_empty() { "Échec bcdedit (droits admin requis ?)".into() } else { stdout }
         } else { stderr })
@@ -190,16 +198,13 @@ pub async fn boot_to_recovery() -> Result<String, String> {
 fn boot_to_recovery_blocking() -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
-        let o = Command::new("shutdown")
-            .args(["/r", "/o", "/f", "/t", "0"])
-            .creation_flags(0x08000000)
-            .output()
+        let o = execute_system_command("shutdown", &["/r", "/o", "/f", "/t", "0"], DELAI)
             .map_err(|e| e.to_string())?;
-        if o.status.success() {
+        if o.success {
             Ok("Redémarrage en mode récupération lancé".to_string())
         } else {
-            let stderr = decode_output(&o.stderr).trim().to_string();
-            let stdout = decode_output(&o.stdout).trim().to_string();
+            let stderr = o.stderr.trim().to_string();
+            let stdout = o.stdout.trim().to_string();
             Err(if !stderr.is_empty() {
                 stderr
             } else if !stdout.is_empty() {
