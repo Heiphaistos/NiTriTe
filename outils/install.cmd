@@ -41,21 +41,52 @@ if !ERRORLEVEL! neq 0 (
 
 :: ── Ou l'installeur s'est-il pose ? ─────────────────────────────────────────
 :: NSIS ecrit le dossier dans HKLM\Software\nitrite\Nitrite (valeur par defaut).
+::
+:: Ne PAS decouper cette ligne en jetons separes par des espaces : le nom de la
+:: valeur par defaut est TRADUIT (« (par defaut) » en francais, deux jetons ;
+:: « (Default) » en anglais, un seul), donc « tokens=2,* » ne tombe pas au meme
+:: endroit selon la langue de Windows. Le premier jet rendait
+:: « REG_SZ    C:\Program Files\Nitrite », un chemin invalide, et robocopy
+:: refusait tout avec le code 16.
+:: `REG_SZ`, lui, n'est jamais traduit : on coupe la ligne dessus.
 set "DEST="
-for /f "tokens=2,*" %%A in ('reg query "HKLM\Software\nitrite\Nitrite" /ve 2^>nul ^| findstr /R "REG_SZ"') do set "DEST=%%B"
+set "LIGNE="
+for /f "delims=" %%A in ('reg query "HKLM\Software\nitrite\Nitrite" /ve 2^>nul ^| findstr /C:"REG_SZ"') do set "LIGNE=%%A"
+if defined LIGNE (
+    set "DEST=!LIGNE:*REG_SZ=!"
+    rem Retire les espaces de tete laisses par reg query.
+    for /f "tokens=* delims= " %%B in ("!DEST!") do set "DEST=%%B"
+)
 if not defined DEST set "DEST=%ProgramFiles%\Nitrite"
+if not exist "!DEST!\nitrite.exe" (
+    echo [ERREUR] Dossier d'installation introuvable : !DEST!
+    pause & exit /b 1
+)
 echo --- Dossier d'installation : !DEST!
 
 :: ── Contenu depose a cote de l'application ──────────────────────────────────
 :: robocopy /MOVE : instantane quand la source et la destination sont sur le
 :: meme volume (cas courant : %TEMP% et Program Files sont tous deux sur C:),
 :: et bascule sur une vraie copie quand ce n'est pas le cas.
+set "RATE=0"
 for %%D in ("logiciel" "Drivers" "Script Windows") do (
     if exist "%~dp0%%~D" (
         echo --- Mise en place de %%~D ...
         robocopy "%~dp0%%~D" "!DEST!\%%~D" /E /MOVE /NFL /NDL /NJH /NJS /NP >nul
-        if !ERRORLEVEL! geq 8 echo [ATTENTION] Copie de %%~D incomplete ^(robocopy !ERRORLEVEL!^).
+        rem robocopy rend 0 a 7 quand tout va bien, 8 et plus en cas d'echec.
+        if !ERRORLEVEL! geq 8 (
+            echo [ERREUR] Copie de %%~D echouee ^(robocopy !ERRORLEVEL!^).
+            set "RATE=1"
+        )
     )
+)
+
+:: Une installation amputee ne doit pas se declarer reussie : Nitrite tourne
+:: sans ces dossiers, mais il ne fait plus la moitie de ce qu'on attend de lui.
+if "!RATE!"=="1" (
+    echo.
+    echo [ERREUR] L'application est installee mais son contenu est incomplet.
+    pause & exit /b 1
 )
 
 echo.
