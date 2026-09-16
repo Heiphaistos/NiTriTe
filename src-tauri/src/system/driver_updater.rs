@@ -1,11 +1,20 @@
 use serde::Serialize;
-use std::process::Command;
 use std::path::Path;
 use std::collections::HashMap;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-#[cfg(target_os = "windows")]
-use crate::maintenance::commands::decode_output;
+
+use crate::maintenance::commands::execute_system_command;
+
+// Aucun de ces appels n'avait de limite de temps : `Command::output()` attend la
+// fin du processus, point. Un depot WMI abime (cas reel documente sous Windows),
+// un service Windows Update fige ou un pnputil qui attend une signature bloquait
+// donc le thread pour le reste de la session, sans une ligne dans les journaux.
+// Meme famille de bugs que `monitor.rs`. `execute_system_command` tue le
+// processus au dela du delai.
+//
+// Les installations ont droit a bien plus de temps que les lectures : elles
+// telechargent depuis Windows Update.
+const LECTURE: u64 = 60;
+const INSTALLATION: u64 = 900;
 
 // ─── Windows Update driver status ─────────────────────────────────────────────
 #[derive(Debug, Clone, Serialize, Default)]
@@ -116,13 +125,14 @@ $devs | ConvertTo-Json -Depth 4 -Compress
 
     #[cfg(target_os = "windows")]
     {
-        let o = Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", ps])
-            .creation_flags(0x08000000)
-            .output();
+        let o = execute_system_command(
+            "powershell",
+            &["-NoProfile", "-NonInteractive", "-Command", ps],
+            LECTURE,
+        );
 
         if let Ok(o) = o {
-            let text = String::from_utf8_lossy(&o.stdout);
+            let text = o.stdout;
             let t = text.trim();
             let arr_t = if t.starts_with('{') { format!("[{}]", t) } else { t.to_string() };
             if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&arr_t) {
@@ -416,19 +426,20 @@ fn install_driver_blocking(inf_path: String) -> DriverInstallResult {
     #[cfg(target_os = "windows")]
     {
         // Appel direct à pnputil sans passer par cmd /C — élimine l'injection via cmd.exe
-        let o = Command::new("pnputil")
-            .args(["/add-driver", &inf_clean, "/install"])
-            .creation_flags(0x08000000)
-            .output();
+        let o = execute_system_command(
+            "pnputil",
+            &["/add-driver", &inf_clean, "/install"],
+            INSTALLATION,
+        );
 
         let duration = start.elapsed().as_secs();
         if let Ok(o) = o {
-            let stdout = decode_output(&o.stdout).to_string();
-            let stderr = decode_output(&o.stderr).to_string();
+            let stdout = o.stdout;
+            let stderr = o.stderr;
             let combined = if stderr.is_empty() { stdout } else { format!("{}\n{}", stdout, stderr) };
             return DriverInstallResult {
                 inf_path: inf_clean,
-                success: is_pnputil_success(o.status.code()),
+                success: is_pnputil_success(Some(o.exit_code)),
                 output: combined.chars().take(2000).collect(),
                 duration_secs: duration,
             };
@@ -491,9 +502,13 @@ try {
 "#;
     #[cfg(target_os = "windows")]
     {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",ps]).creation_flags(0x08000000).output();
+        let o = execute_system_command(
+            "powershell",
+            &["-NoProfile", "-NonInteractive", "-Command", ps],
+            LECTURE,
+        );
         if let Ok(o) = o {
-            let t = String::from_utf8_lossy(&o.stdout);
+            let t = o.stdout;
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(t.trim()) {
                 let updates = v["updates"].as_array().map(|arr| arr.iter().map(|u| WuDriverUpdate {
                     title: u["title"].as_str().unwrap_or("").to_string(),
@@ -570,13 +585,15 @@ try {{
     let start = std::time::Instant::now();
     #[cfg(target_os = "windows")]
     {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",&ps]).creation_flags(0x08000000).output();
+        let o = execute_system_command(
+            "powershell",
+            &["-NoProfile", "-NonInteractive", "-Command", &ps],
+            INSTALLATION,
+        );
         let dur = start.elapsed().as_secs();
         if let Ok(o) = o {
-            let stdout = decode_output(&o.stdout).to_string();
-            let stderr = decode_output(&o.stderr).to_string();
-            let combined = if stderr.is_empty() { stdout } else { format!("{}\n{}", stdout, stderr) };
-            return DriverInstallResult { inf_path: uid, success: o.status.success(), output: combined.chars().take(2000).collect(), duration_secs: dur };
+            let combined = if o.stderr.is_empty() { o.stdout } else { format!("{}\n{}", o.stdout, o.stderr) };
+            return DriverInstallResult { inf_path: uid, success: o.success, output: combined.chars().take(2000).collect(), duration_secs: dur };
         }
     }
     DriverInstallResult { inf_path: uid, ..Default::default() }
@@ -621,13 +638,15 @@ try {
     let start = std::time::Instant::now();
     #[cfg(target_os = "windows")]
     {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",ps]).creation_flags(0x08000000).output();
+        let o = execute_system_command(
+            "powershell",
+            &["-NoProfile", "-NonInteractive", "-Command", ps],
+            INSTALLATION,
+        );
         let dur = start.elapsed().as_secs();
         if let Ok(o) = o {
-            let stdout = decode_output(&o.stdout).to_string();
-            let stderr = decode_output(&o.stderr).to_string();
-            let combined = if stderr.is_empty() { stdout } else { format!("{}\n{}", stdout, stderr) };
-            return DriverInstallResult { inf_path: "Windows Update — All".to_string(), success: o.status.success(), output: combined.chars().take(3000).collect(), duration_secs: dur };
+            let combined = if o.stderr.is_empty() { o.stdout } else { format!("{}\n{}", o.stdout, o.stderr) };
+            return DriverInstallResult { inf_path: "Windows Update — All".to_string(), success: o.success, output: combined.chars().take(3000).collect(), duration_secs: dur };
         }
     }
     DriverInstallResult::default()
@@ -650,9 +669,13 @@ fn get_all_hardware_ids_blocking() -> Vec<String> {
 "#;
     #[cfg(target_os = "windows")]
     {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",ps]).creation_flags(0x08000000).output();
+        let o = execute_system_command(
+            "powershell",
+            &["-NoProfile", "-NonInteractive", "-Command", ps],
+            LECTURE,
+        );
         if let Ok(o) = o {
-            let t = String::from_utf8_lossy(&o.stdout); let t = t.trim();
+            let t = o.stdout; let t = t.trim();
             let arr_t = if t.starts_with('"') { format!("[{}]",t) } else { t.to_string() };
             if let Ok(arr) = serde_json::from_str::<Vec<String>>(&arr_t) {
                 return arr;

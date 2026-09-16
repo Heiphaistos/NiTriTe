@@ -1,6 +1,16 @@
 use serde::Serialize;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+
+use crate::maintenance::commands::execute_system_command;
+
+// Un demon Docker qui ne repond pas (Docker Desktop en train de demarrer, ou
+// plante) faisait pendre ces appels SANS LIMITE : `Command::output()` attend la
+// fin du processus, point. Tout passe donc par `execute_system_command`, qui
+// tue le processus au bout du delai. Meme famille de bugs que `monitor.rs`.
+//
+// 20 s pour une lecture, 60 s pour une action : `docker stop` attend par defaut
+// dix secondes que le conteneur s'arrete tout seul avant de le tuer.
+const LECTURE: u64 = 20;
+const ACTION: u64 = 60;
 
 // ─── Docker Manager ───────────────────────────────────────────────────────────
 
@@ -40,13 +50,11 @@ pub async fn get_docker_info() -> Result<DockerInfo, String> {
 }
 
 fn get_docker_info_blocking() -> Result<DockerInfo, String> {
-    let version_out = std::process::Command::new("docker")
-        .args(["version", "--format", "{{.Server.Version}}"])
-        .creation_flags(0x08000000)
-        .output();
+    let version_out =
+        execute_system_command("docker", &["version", "--format", "{{.Server.Version}}"], LECTURE);
 
     let (available, version) = match version_out {
-        Ok(o) if o.status.success() => (true, String::from_utf8_lossy(&o.stdout).trim().to_string()),
+        Ok(o) if o.success => (true, o.stdout.trim().to_string()),
         _ => return Ok(DockerInfo { available: false, version: String::new(), containers: vec![], images: vec![] }),
     };
 
@@ -57,12 +65,13 @@ fn get_docker_info_blocking() -> Result<DockerInfo, String> {
 }
 
 fn parse_docker_ps() -> Vec<DockerContainer> {
-    let out = std::process::Command::new("docker")
-        .args(["ps", "-a", "--format", "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}\t{{.CreatedAt}}"])
-        .creation_flags(0x08000000)
-        .output()
-        .ok();
-    let text = out.map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
+    let out = execute_system_command(
+        "docker",
+        &["ps", "-a", "--format", "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}\t{{.CreatedAt}}"],
+        LECTURE,
+    )
+    .ok();
+    let text = out.map(|o| o.stdout).unwrap_or_default();
     text.lines().filter(|l| !l.is_empty()).map(|line| {
         let parts: Vec<&str> = line.splitn(6, '\t').collect();
         DockerContainer {
@@ -77,12 +86,13 @@ fn parse_docker_ps() -> Vec<DockerContainer> {
 }
 
 fn parse_docker_images() -> Vec<DockerImage> {
-    let out = std::process::Command::new("docker")
-        .args(["images", "--format", "{{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}"])
-        .creation_flags(0x08000000)
-        .output()
-        .ok();
-    let text = out.map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
+    let out = execute_system_command(
+        "docker",
+        &["images", "--format", "{{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}"],
+        LECTURE,
+    )
+    .ok();
+    let text = out.map(|o| o.stdout).unwrap_or_default();
     text.lines().filter(|l| !l.is_empty()).map(|line| {
         let parts: Vec<&str> = line.splitn(5, '\t').collect();
         DockerImage {
@@ -108,12 +118,9 @@ fn docker_container_action_blocking(container_id: String, action: String) -> Res
     if !valid_actions.contains(&action.as_str()) {
         return Err(format!("Action invalide: {}", action));
     }
-    let out = std::process::Command::new("docker")
-        .args([action.as_str(), &container_id])
-        .creation_flags(0x08000000)
-        .output()
+    let out = execute_system_command("docker", &[action.as_str(), &container_id], ACTION)
         .map_err(|e| e.to_string())?;
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    Ok(out.stdout.trim().to_string())
 }
 
 // Anti-freeze : docker CLI est bloquant — jamais inline sur le thread de commande.
@@ -125,12 +132,9 @@ pub async fn docker_image_remove(image_id: String) -> Result<String, String> {
 }
 
 fn docker_image_remove_blocking(image_id: String) -> Result<String, String> {
-    let out = std::process::Command::new("docker")
-        .args(["rmi", &image_id])
-        .creation_flags(0x08000000)
-        .output()
+    let out = execute_system_command("docker", &["rmi", &image_id], ACTION)
         .map_err(|e| e.to_string())?;
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    Ok(out.stdout.trim().to_string())
 }
 
 // Anti-freeze : docker CLI est bloquant — jamais inline sur le thread de commande.
@@ -143,12 +147,11 @@ pub async fn docker_container_logs(container_id: String, lines: u32) -> Result<S
 
 fn docker_container_logs_blocking(container_id: String, lines: u32) -> Result<String, String> {
     let n = lines.min(500).to_string();
-    let out = std::process::Command::new("docker")
-        .args(["logs", "--tail", &n, "--timestamps", &container_id])
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| e.to_string())?;
-    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-    Ok(if stdout.is_empty() { stderr } else { stdout })
+    let out = execute_system_command(
+        "docker",
+        &["logs", "--tail", &n, "--timestamps", &container_id],
+        LECTURE,
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(if out.stdout.is_empty() { out.stderr } else { out.stdout })
 }
