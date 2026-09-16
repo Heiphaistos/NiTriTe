@@ -188,11 +188,15 @@ def signer(chemin):
     return lire_sig(chemin + ".sig")
 
 
-def manifeste(v, url, signature):
+def manifeste(v, url, signature, notes):
+    # `notes` s'affiche DANS la fenetre de proposition, juste sous la ligne qui
+    # annonce deja la version. Y remettre le numero (« Nitrite 8.218.0 »)
+    # n'apprenait rien a personne et faisait doublon a l'ecran. On n'ecrit ici
+    # que ce qui a une valeur pour l'utilisateur, ou rien.
     return json.dumps(
         {
             "version": v,
-            "notes": "Nitrite %s" % v,
+            "notes": notes,
             "pub_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "platforms": {"windows-x86_64": {"signature": signature, "url": url}},
         },
@@ -208,7 +212,7 @@ def sha256(chemin):
     return h.hexdigest()
 
 
-def etape_canal(v):
+def etape_canal(v, notes):
     c = verifier_build(v)
     prep = os.path.join(SORTIE, "_canal")
     if os.path.exists(prep):
@@ -229,9 +233,9 @@ def etape_canal(v):
     sig_port = signer(cible_port)
 
     with io.open(os.path.join(prep, "latest.json"), "w", encoding="utf-8", newline="\n") as f:
-        f.write(manifeste(v, "%s/%s" % (BASE_URL, nom_inst), sig_inst))
+        f.write(manifeste(v, "%s/%s" % (BASE_URL, nom_inst), sig_inst, notes))
     with io.open(os.path.join(prep, "latest-portable.json"), "w", encoding="utf-8", newline="\n") as f:
-        f.write(manifeste(v, "%s/%s" % (BASE_URL, nom_port), sig_port))
+        f.write(manifeste(v, "%s/%s" % (BASE_URL, nom_port), sig_port, notes))
 
     print("  empreinte du binaire portable : %s..." % sha256(cible_port)[:16])
     print("[canal] televersement vers %s:%s" % (VPS, VPS_DIR))
@@ -243,13 +247,19 @@ def etape_canal(v):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--etape", choices=["sfx", "canal", "tout"], default="tout")
+    p.add_argument(
+        "--notes",
+        default="",
+        help="une phrase affichee dans la fenetre de proposition de mise a jour ; "
+        "vide par defaut, le numero de version y figure deja",
+    )
     a = p.parse_args()
     v = version()
     print("Nitrite %s" % v)
     if a.etape in ("sfx", "tout"):
         etape_sfx(v)
     if a.etape in ("canal", "tout"):
-        etape_canal(v)
+        etape_canal(v, a.notes)
     return 0
 
 
