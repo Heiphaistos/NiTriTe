@@ -395,28 +395,46 @@ pub async fn download_server(
     let dest_dir = format!("{}\\logiciel\\AI", exe_dir);
     std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
 
-    // 1. Récupérer la dernière release GitHub
+    // 1. Récupérer les dernières releases GitHub.
+    //
+    // Surtout PAS `/releases/latest` : chez ggml-org/llama.cpp il renvoie le tag
+    // `v0.4.1`, un marqueur qui ne porte qu'un `nightly-tag.txt` — zéro binaire.
+    // Les builds vivent dans les releases `bXXXXX`, qui ne sont jamais marquées
+    // « latest ». Le code d'avant cherchait donc `win-cpu-x64` dans une release
+    // à un seul fichier texte et échouait à tous les coups sur
+    // « Asset win-cpu-x64 introuvable » (vérifié en direct sur l'API).
     emit_fn(DownloadProgress { name: "llama-server.exe".into(), downloaded_mb: 0.0, total_mb: 0.0, percent: 0, done: false, error: None });
-    let release: serde_json::Value = client
-        .get("https://api.github.com/repos/ggml-org/llama.cpp/releases/latest")
+    let releases: Vec<serde_json::Value> = client
+        .get("https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=10")
         .send().await.map_err(|e| format!("GitHub API: {}", e))?
         .json().await.map_err(|e| format!("Parse release: {}", e))?;
 
-    // 2. Trouver l'asset win-cpu-x64.zip
-    let assets = release["assets"].as_array().ok_or("Aucun asset dans la release")?;
-    let asset = assets.iter()
+    // 2. La release la plus récente qui porte réellement l'asset win-cpu-x64.zip
+    let asset = releases.iter()
+        .filter_map(|r| r["assets"].as_array())
+        .flatten()
         .find(|a| a["name"].as_str().map(|n| n.contains("win-cpu-x64")).unwrap_or(false))
-        .ok_or("Asset win-cpu-x64 introuvable")?;
+        .ok_or("Asset win-cpu-x64 introuvable dans les 10 dernières releases")?;
 
     let url       = asset["browser_download_url"].as_str().ok_or("URL invalide")?.to_string();
     let total_size = asset["size"].as_u64().unwrap_or(0);
     let zip_path  = format!("{}\\llama-tmp.zip", dest_dir);
 
+    // Empreinte publiée par GitHub, au format « sha256:<hex> ». C'est elle qui
+    // rend le téléchargement vérifiable : sans elle, on exécutait un binaire
+    // venu du réseau sur la seule foi de son URL (OWASP A08).
+    let attendu = asset["digest"].as_str()
+        .and_then(|d| d.strip_prefix("sha256:"))
+        .map(|h| h.to_ascii_lowercase());
+    if attendu.is_none() {
+        tracing::warn!("llama.cpp : la release ne publie pas d'empreinte, téléchargement non vérifiable");
+    }
+
     // Validation de l'URL avant téléchargement (domaine autorisé, HTTPS)
     validate_download_url(&url).map_err(|e| format!("URL de téléchargement rejetée: {}", e))?;
 
     // 3. Télécharger le ZIP (atomique : .tmp → renommage final)
-    download_with_progress(&client, &url, &zip_path, total_size, "llama-server.exe", &emit_fn).await
+    download_with_progress(&client, &url, &zip_path, total_size, "llama-server.exe", attendu.as_deref(), &emit_fn).await
         .map_err(|e| format!("Téléchargement: {}", e))?;
 
     // 4. Extraire TOUS les fichiers (exe + DLLs) → 100% portable, zéro dépendance
@@ -462,7 +480,8 @@ pub async fn download_model_file(
             .and_then(|s| s.parse::<u64>().ok()))
         .unwrap_or(0);
 
-    download_with_progress(&client, url, &dest, total_size, safe_filename, &emit_fn).await
+    // HuggingFace ne publie pas d'empreinte exploitable ici : rien a comparer.
+    download_with_progress(&client, url, &dest, total_size, safe_filename, None, &emit_fn).await
         .map_err(|e| format!("Téléchargement: {}", e))?;
 
     emit_fn(DownloadProgress { name: safe_filename.into(), downloaded_mb: 0.0, total_mb: 0.0, percent: 100, done: true, error: None });
@@ -482,6 +501,8 @@ async fn download_with_progress(
     dest: &str,
     total_size: u64,
     name: &str,
+    // Empreinte SHA-256 attendue, quand la source en publie une.
+    attendu: Option<&str>,
     emit_fn: &impl Fn(DownloadProgress),
 ) -> Result<(), String> {
     let tmp_path = format!("{}.tmp", dest);
@@ -511,11 +532,21 @@ async fn download_with_progress(
         file.flush().await.map_err(|e| e.to_string())?;
         drop(file);
 
-        // Vérification d'intégrité SHA-256 (si un hash attendu est fourni dans la release)
-        // TODO: comparer avec le hash officiel de la release GitHub quand disponible.
-        // Pour l'instant, on calcule et log le hash pour permettre une vérification manuelle.
+        // Vérification d'intégrité SHA-256. Quand la source publie une empreinte
+        // (c'est le cas des releases GitHub), un fichier qui ne correspond pas
+        // n'atteint JAMAIS sa destination finale : il reste en .tmp et le bloc
+        // d'erreur ci-dessous le supprime.
         let computed = sha256_file(std::path::Path::new(&tmp_path))?;
-        tracing::info!("Téléchargement '{}' terminé. SHA-256: {}", name, computed);
+        match attendu {
+            Some(attendu) if !computed.eq_ignore_ascii_case(attendu) => {
+                return Err(format!(
+                    "empreinte SHA-256 de '{}' incorrecte : attendu {}, obtenu {}",
+                    name, attendu, computed
+                ));
+            }
+            Some(_) => tracing::info!("Téléchargement '{}' vérifié (SHA-256 conforme).", name),
+            None => tracing::info!("Téléchargement '{}' terminé, sans empreinte à comparer. SHA-256: {}", name, computed),
+        }
 
         // Renommage atomique .tmp → destination finale
         std::fs::rename(&tmp_path, dest)
