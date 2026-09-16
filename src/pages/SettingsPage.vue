@@ -582,7 +582,7 @@ const tabs: { id: Tab; label: string; icon: Component }[] = [
             <div class="about-row"><span>Stack</span><span>Tauri v2 + Rust + Vue 3 + TypeScript</span></div>
             <div class="about-row"><span>Auteur</span><span>Momo (Heiphaistos)</span></div>
             <div class="about-row"><span>Site web</span><a class="about-link" href="https://nitrite.heiphaistos.org" target="_blank">nitrite.heiphaistos.org</a></div>
-            <div class="about-row"><span>GitHub</span><a class="about-link" href="https://github.com/Heiphaistos/NiTriTe-v8-AppWindows" target="_blank">github.com/Heiphaistos/NiTriTe-v8-AppWindows</a></div>
+            <div class="about-row"><span>GitHub</span><a class="about-link" href="https://github.com/Heiphaistos/NiTriTe" target="_blank">github.com/Heiphaistos/NiTriTe</a></div>
             <div class="about-row"><span>Contact</span><a class="about-link" href="mailto:contactnitrite@gmail.com">contactnitrite@gmail.com</a></div>
             <div class="about-row"><span>Données</span><span style="color:var(--success)">✓ 100% local — aucune télémétrie, aucune collecte de données</span></div>
             <div class="about-row"><span>Propriété</span><span>© {{ new Date().getFullYear() }} Nitrite — Reproduction interdite sans autorisation</span></div>

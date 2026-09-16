@@ -31,22 +31,17 @@ async fn get_system_info(state: tauri::State<'_, AppState>) -> Result<serde_json
     Ok(json)
 }
 
-/// Vrai quand cette copie porte son propre contenu : les dossiers `Drivers` et
-/// `Script Windows` sont a cote de l'executable (version portable, ou SFX
-/// complet `Nitrite_vX_full.exe`).
+/// Comment cette copie a-t-elle ete posee : `"installee"` (installeur NSIS) ou
+/// `"portable"` ?
 ///
-/// L'installeur NSIS ne pose QUE l'executable. Proposer la mise a jour
-/// automatique a une copie portable installerait donc une SECONDE copie dans
-/// Program Files, amputee des 733 Mo de `logiciel\` et des pilotes -- pendant
-/// que la copie d'origine, celle que l utilisateur lance vraiment, resterait a son
-/// ancienne version. Ces copies-la se mettent a jour en retelechargeant le SFX.
-///
-/// `logiciel\` n'est PAS un temoin fiable : `paths::portables_dir()` le cree a
-/// vide des le premier usage, y compris sur une installation NSIS.
+/// Les deux se mettent a jour, mais pas par le meme chemin : l'installee passe
+/// par le plugin officiel de Tauri, la portable par `updater_portable` qui
+/// remplace l'executable sur place. Le temoin est `uninstall.exe`, ecrit par
+/// NSIS et par lui seul -- `Drivers\` et `logiciel\` ne peuvent plus servir de
+/// temoin depuis que les DEUX versions embarquent le contenu complet.
 #[tauri::command]
-fn is_portable_install() -> bool {
-    let root = crate::utils::paths::app_root_dir();
-    root.join("Drivers").is_dir() || root.join("Script Windows").is_dir()
+fn est_installee() -> bool {
+    crate::updater_portable::est_installee()
 }
 
 #[tauri::command]

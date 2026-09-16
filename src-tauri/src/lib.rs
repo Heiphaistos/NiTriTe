@@ -8,6 +8,7 @@ pub mod backup;
 pub mod ai;
 pub mod scripts;
 pub mod logging;
+pub mod updater_portable;
 use std::sync::atomic::Ordering;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -111,6 +112,9 @@ pub fn run() {
     utils::logger::init_logger();
     logging::init_log_dir();
     logging::log_internal("INFO", "SYSTEM", "NiTriTe démarré — init logging", None);
+    // Depouille de la mise a jour portable precedente : un .exe en cours ne peut
+    // etre qu'ecarte, jamais supprime. C'est ici qu'il disparait.
+    updater_portable::balayer_ancien();
     tracing::info!("Demarrage NiTriTe {}", env!("CARGO_PKG_VERSION"));
 
     let config = AppConfig::load();
@@ -131,7 +135,9 @@ pub fn run() {
             // Systeme
             get_system_info,
             get_platform_info,
-            is_portable_install,
+            est_installee,
+            updater_portable::portable_maj_verifier,
+            updater_portable::portable_maj_appliquer,
             // Monitoring
             start_monitoring,
             stop_monitoring,
