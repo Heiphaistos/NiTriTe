@@ -36,6 +36,7 @@ pub enum NiTriTeError {
     Tauri(String),
 }
 
+#[cfg(windows)]
 impl From<wmi::WMIError> for NiTriTeError {
     fn from(e: wmi::WMIError) -> Self {
         NiTriTeError::Wmi(e.to_string())

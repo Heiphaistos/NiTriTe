@@ -173,8 +173,33 @@ async fn detect_shells() -> Result<Vec<maintenance::terminal::ShellInfo>, NiTriT
         .map_err(|e| NiTriTeError::System(e.to_string()))
 }
 
+/// Commandes « rapides » de TerminalPage.vue (QUICK_COMMANDS), en lecture
+/// seule : elles s'exécutent sans confirmation. Toute autre chaîne passe par
+/// une boîte de dialogue NATIVE (hors WebView, donc impossible à valider depuis
+/// un script injecté) qui affiche la commande exacte avant de la lancer avec les
+/// droits administrateur de l'application.
+const TERMINAL_READONLY_COMMANDS: &[&str] = &[
+    "ipconfig /all",
+    "ping -n 4 8.8.8.8",
+    "tasklist /fo table",
+    "wmic logicaldisk get caption,freespace,size",
+    "wmic /namespace:\\\\root\\wmi PATH MSAcpi_ThermalZoneTemperature get CurrentTemperature",
+    "net statistics workstation | findstr /i statistics",
+    "netstat -ano | findstr LISTENING",
+    "set",
+    "sc query type= all state= running",
+    "wevtutil qe System /c:5 /rd:true /f:text",
+];
+
+fn terminal_needs_confirmation(command: &str) -> bool {
+    !TERMINAL_READONLY_COMMANDS.contains(&command.trim())
+}
+
+/// Terminal voulu par l'utilisateur (page Terminal : il tape ses propres
+/// commandes), donc pas réductible à une liste blanche. Garde-fou : toute
+/// commande hors de la liste ci-dessus exige une confirmation native.
 #[tauri::command]
-async fn run_in_shell(shell_id: String, command: String) -> Result<maintenance::terminal::ShellResult, NiTriTeError> {
+async fn run_in_shell(app: tauri::AppHandle, shell_id: String, command: String) -> Result<maintenance::terminal::ShellResult, NiTriTeError> {
     // Sécurité : longueur maximale de la commande pour éviter les abus
     if command.len() > 8192 {
         return Err(NiTriTeError::System("Commande trop longue (max 8192 caractères)".into()));
@@ -183,7 +208,25 @@ async fn run_in_shell(shell_id: String, command: String) -> Result<maintenance::
     if command.contains('\0') {
         return Err(NiTriTeError::System("Commande contient des caractères nuls invalides".into()));
     }
-    tokio::task::spawn_blocking(move || maintenance::terminal::run_in_shell(&shell_id, &command, 120))
+    tokio::task::spawn_blocking(move || {
+        if terminal_needs_confirmation(&command) {
+            use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+            let apercu: String = command.chars().take(800).collect();
+            let ok = app
+                .dialog()
+                .message(format!(
+                    "Exécuter cette commande avec les droits administrateur ({shell_id}) ?\n\n{apercu}"
+                ))
+                .title("NiTriTe — confirmation du terminal")
+                .kind(MessageDialogKind::Warning)
+                .buttons(MessageDialogButtons::OkCancelCustom("Exécuter".into(), "Annuler".into()))
+                .blocking_show();
+            if !ok {
+                return Err(NiTriTeError::CommandDenied("Commande annulée par l'utilisateur".into()));
+            }
+        }
+        maintenance::terminal::run_in_shell(&shell_id, &command, 120)
+    })
         .await
         .map_err(|e| NiTriTeError::System(e.to_string()))?
 }
@@ -482,6 +525,17 @@ async fn list_backups() -> Result<Vec<backup::collector::BackupEntryInfo>, NiTri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terminal_asks_confirmation_for_anything_but_the_readonly_quick_commands() {
+        assert!(!terminal_needs_confirmation("ipconfig /all"));
+        assert!(!terminal_needs_confirmation(
+            "wmic /namespace:\\\\root\\wmi PATH MSAcpi_ThermalZoneTemperature get CurrentTemperature"
+        ));
+        assert!(terminal_needs_confirmation("ipconfig /all & del /q C:\\x"));
+        assert!(terminal_needs_confirmation("powershell -EncodedCommand AAAA"));
+        assert!(terminal_needs_confirmation(""));
+    }
 
     #[test]
     fn blocked_commands_are_rejected() {
