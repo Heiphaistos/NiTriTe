@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: "MasterInstallPage" });
-import { ref, computed, onMounted, type Component } from "vue";
+import { ref, computed, onMounted, onUnmounted, type Component } from "vue";
 import { invoke, invokeRaw } from "@/utils/invoke";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { cachedInvoke } from "@/composables/useCachedInvoke";
@@ -14,297 +14,255 @@ import NModal from "@/components/ui/NModal.vue";
 import NSpinner from "@/components/ui/NSpinner.vue";
 import { useNotificationStore } from "@/stores/notifications";
 import {
+  buildCategories, matchesSearch, normalizeStr, primaryMethod, METHOD_LABEL,
+  PROFILES, profileApps, runQueue, formatEta, type CatalogApp, type InstallProfile,
+} from "@/utils/installCatalog";
+import {
   Download, CheckSquare, Square, Package,
   Globe, Shield, Code, Image, MessageSquare,
   FileText, Music, Video, Wrench,
   Cpu, Monitor, Printer, Archive,
   Bot, Users, Cloud, Star, Lock, Play,
   ChevronDown, ChevronRight, Layers, FileCode, Eye,
-  RotateCcw, Trash2,
+  RotateCcw, Trash2, Gauge, HardDrive, Database, Server, XCircle, RefreshCw, Stethoscope,
 } from "lucide-vue-next";
 
 const notifications = useNotificationStore();
 const search = ref("");
-const installing = ref(false);
 const exportingScript = ref(false);
 
-// ── Dry run ────────────────────────────────────────────────────
-const showDryRun = ref(false);
-const dryRunApps = computed(() => apps.value.filter(a => a.checked && !a.installed));
-
-// ── Résumé installation ────────────────────────────────────────
-interface InstallResult { name: string; success: boolean; message: string; manualUrl?: string }
-const showSummary = ref(false);
-const installResults = ref<InstallResult[]>([]);
-
-// Profils prédéfinis
-interface Profile { id: string; label: string; icon: Component; color: string; wingetIds: string[] }
-const PROFILES: Profile[] = [
-  { id: "essential", label: "Essentiels", icon: Star, color: "#f97316",
-    wingetIds: ["7zip.7zip", "Google.Chrome", "Mozilla.Firefox", "Notepad++.Notepad++", "VideoLAN.VLC", "Microsoft.PowerShell"] },
-  { id: "office", label: "Bureau", icon: FileText, color: "#3b82f6",
-    wingetIds: ["Microsoft.Office", "Adobe.Acrobat.Reader.64-bit", "TheDocumentFoundation.LibreOffice", "Zoom.Zoom", "Microsoft.Teams"] },
-  { id: "dev", label: "Dev", icon: Code, color: "#22c55e",
-    wingetIds: ["Microsoft.VisualStudioCode", "Git.Git", "Python.Python.3.12", "OpenJS.NodeJS", "JetBrains.IntelliJIDEA.Community", "Docker.DockerDesktop"] },
-  { id: "gaming", label: "Gaming", icon: Play, color: "#a855f7",
-    wingetIds: ["Valve.Steam", "Discord.Discord", "EpicGames.EpicGamesLauncher", "Nvidia.GeForceExperience", "Parsec.Parsec"] },
-  { id: "security", label: "Sécurité", icon: Shield, color: "#ef4444",
-    wingetIds: ["Malwarebytes.Malwarebytes", "WiresharkFoundation.Wireshark", "KeePassXCTeam.KeePassXC", "Bitwarden.Bitwarden"] },
-  { id: "creative", label: "Créatif", icon: Image, color: "#ec4899",
-    wingetIds: ["Inkscape.Inkscape", "GIMP.GIMP", "HandBrake.HandBrake", "OBSProject.OBSStudio", "Audacity.Audacity", "Blender.Blender"] },
-];
-const currentApp = ref("");
-const installProgress = ref(0);
-const installTotal = ref(0);
-const installIndex = ref(0);
-const installStartTime = ref<number | null>(null);
-const installEtaLabel = ref("");
-
-function formatEta(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return "";
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
-  return m > 0 ? `~${m} min ${s}s restantes` : `~${s}s restantes`;
-}
-const collapsedCategories = ref<Set<string>>(new Set());
-
-interface AppItem {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  winget_id?: string | null;
-  choco_id?: string | null;
-  url?: string | null;
-  icon?: string;
+interface AppItem extends CatalogApp {
   checked: boolean;
   installed: boolean;
 }
 
 const apps = ref<AppItem[]>([]);
 
-// Categories avec icônes — correspondent aux valeurs exactes de programs.json
-const CATEGORIES: { id: string; label: string; icon: Component }[] = [
-  { id: "Outils Essentiels", label: "Outils Essentiels", icon: Star },
-  { id: "Navigateurs", label: "Navigateurs", icon: Globe },
-  { id: "Securite", label: "Sécurité", icon: Shield },
-  { id: "Antivirus", label: "Antivirus", icon: Shield },
-  { id: "Desinstallateurs Antivirus", label: "Désinstallateurs Antivirus", icon: Lock },
-  { id: "Developpement", label: "Développement", icon: Code },
-  { id: "Multimedia", label: "Multimédia", icon: Video },
-  { id: "Streaming Video", label: "Streaming Vidéo", icon: Play },
-  { id: "Streaming Audio", label: "Streaming Audio", icon: Music },
-  { id: "Communication", label: "Communication", icon: MessageSquare },
-  { id: "Reseaux Sociaux", label: "Réseaux Sociaux", icon: Users },
-  { id: "Bureautique", label: "Bureautique", icon: FileText },
-  { id: "PDF et Documents", label: "PDF & Documents", icon: FileText },
-  { id: "Suites Professionnelles", label: "Suites Pro", icon: Cpu },
-  { id: "Productivite", label: "Productivité", icon: CheckSquare },
-  { id: "IA & Assistants", label: "IA & Assistants", icon: Bot },
-  { id: "Utilitaires", label: "Utilitaires", icon: Wrench },
-  { id: "Utilitaires Systeme", label: "Utilitaires Système", icon: Monitor },
-  { id: "Stockage Cloud", label: "Stockage Cloud", icon: Cloud },
-  { id: "Compression", label: "Compression", icon: Archive },
-  { id: "Internet", label: "Internet", icon: Globe },
-  { id: "Jeux", label: "Jeux", icon: Play },
-  { id: "Imprimantes & Scan", label: "Imprimantes & Scan", icon: Printer },
-  { id: "Services Apple", label: "Services Apple", icon: Package },
-];
-
-const categoryTabs = [
-  { id: "all", label: "Tout" },
-  ...CATEGORIES.map(c => ({ id: c.id, label: c.label })),
-];
-
-const activeCategory = ref("all");
-
-function normalizeStr(s: string) {
-  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+// ── Détection des apps déjà installées ─────────────────────────
+// Sans elle, « Installé » et le bouton Désinstaller n'apparaissaient qu'après
+// avoir installé l'app dans la session : impossible de désinstaller en un
+// clic une app déjà présente sur le poste.
+const detecting = ref(false);
+async function detectInstalled() {
+  detecting.value = true;
+  try {
+    const ids = new Set(await invokeRaw<string[]>("detect_installed_catalog_apps"));
+    for (const a of apps.value) {
+      a.installed = ids.has(a.id);
+      if (a.installed && busyMode.value !== "uninstall") a.checked = false;
+    }
+  } catch {
+    notifications.warning("Détection des applications installées impossible", "Les statuts « Installé » peuvent être incomplets.");
+  } finally {
+    detecting.value = false;
+  }
 }
 
-const filteredApps = computed(() => {
-  const q = search.value.toLowerCase();
-  return apps.value.filter((a) => {
-    const matchSearch = !q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q);
-    const matchCat = activeCategory.value === "all" || normalizeStr(a.category) === normalizeStr(activeCategory.value);
-    return matchSearch && matchCat;
-  });
-});
+// ── Filtres ────────────────────────────────────────────────────
+type StatusFilter = "all" | "installed" | "missing";
+const statusFilter = ref<StatusFilter>("all");
+const activeCategory = ref("all");
+
+const ICONS: Record<string, Component> = {
+  "Outils Essentiels": Star, "Navigateurs": Globe, "Securite": Shield, "Antivirus": Shield,
+  "Desinstallateurs Antivirus": Lock, "Developpement": Code, "Multimedia": Video,
+  "Streaming Video": Play, "Streaming Audio": Music, "Communication": MessageSquare,
+  "Reseaux Sociaux": Users, "Bureautique": FileText, "PDF et Documents": FileText,
+  "Suites Professionnelles": Cpu, "Productivite": CheckSquare, "IA & Assistants": Bot,
+  "Utilitaires": Wrench, "Utilitaires Systeme": Monitor, "Stockage Cloud": Cloud,
+  "Compression": Archive, "Internet": Globe, "Jeux": Play, "Imprimantes & Scan": Printer,
+  "Services Apple": Package, "Benchmarks et Tests": Gauge, "Partition et Disque": HardDrive,
+  "Récupération de Données": Database, "Désinstallateurs Propres": Trash2, "Virtualisation": Server,
+};
+const PROFILE_ICONS: Record<string, Component> = {
+  essential: Star, technician: Stethoscope, office: FileText, dev: Code,
+  gaming: Play, security: Shield, creative: Image,
+};
+
+const categories = computed(() => buildCategories(apps.value));
+const categoryTabs = computed(() => [
+  { id: "all", label: "Tout" },
+  ...categories.value.map((c) => ({ id: c.id, label: c.label })),
+]);
+
+const filteredApps = computed(() => apps.value.filter((a) => {
+  if (!matchesSearch(a, search.value)) return false;
+  if (statusFilter.value === "installed" && !a.installed) return false;
+  if (statusFilter.value === "missing" && a.installed) return false;
+  return activeCategory.value === "all" || normalizeStr(a.category) === normalizeStr(activeCategory.value);
+}));
 
 const groupedApps = computed(() => {
   const groups: Record<string, AppItem[]> = {};
-  const cats = activeCategory.value === "all"
-    ? CATEGORIES.map(c => c.id)
-    : [activeCategory.value];
-
-  for (const catId of cats) {
-    const items = filteredApps.value.filter((a) => normalizeStr(a.category) === normalizeStr(catId));
-    if (items.length > 0) groups[catId] = items;
+  const byCat = new Map<string, AppItem[]>();
+  for (const a of filteredApps.value) {
+    const k = normalizeStr(a.category);
+    if (!byCat.has(k)) byCat.set(k, []);
+    byCat.get(k)!.push(a);
+  }
+  for (const c of categories.value) {
+    const items = byCat.get(normalizeStr(c.id));
+    if (items?.length) groups[c.id] = items;
   }
   return groups;
 });
 
 const totalCount = computed(() => apps.value.length);
-const selectedCount = computed(() => apps.value.filter((a) => a.checked).length);
+const installedCount = computed(() => apps.value.filter((a) => a.installed).length);
+const toInstall = computed(() => apps.value.filter((a) => a.checked && !a.installed));
+const toUninstall = computed(() => apps.value.filter((a) => a.checked && a.installed));
+const selectedCount = computed(() => toInstall.value.length + toUninstall.value.length);
 
-function selectAll() {
-  filteredApps.value.forEach((a) => (a.checked = true));
+function selectAllVisible() {
+  filteredApps.value.forEach((a) => { if (!a.installed) a.checked = true; });
 }
-
 function deselectAll() {
   apps.value.forEach((a) => (a.checked = false));
 }
-
 function toggleApp(app: AppItem) {
-  if (!app.installed) app.checked = !app.checked;
+  if (busy.value) return;
+  app.checked = !app.checked;
 }
 
+const collapsedCategories = ref<Set<string>>(new Set());
 function toggleCategory(catId: string) {
-  if (collapsedCategories.value.has(catId)) {
-    collapsedCategories.value.delete(catId);
-  } else {
-    collapsedCategories.value.add(catId);
-  }
-  collapsedCategories.value = new Set(collapsedCategories.value);
+  const next = new Set(collapsedCategories.value);
+  if (next.has(catId)) next.delete(catId); else next.add(catId);
+  collapsedCategories.value = next;
 }
-
 function getCategoryInfo(id: string) {
-  return CATEGORIES.find((c) => c.id === id) ?? { id, label: id, icon: Package };
+  const c = categories.value.find((x) => x.id === id);
+  return { label: c?.label ?? id, icon: ICONS[id] ?? Package };
 }
-
-function selectCategory(catId: string) {
-  const catApps = apps.value.filter((a) => a.category === catId && !a.installed);
+function allCatChecked(catId: string): boolean {
+  const catApps = (groupedApps.value[catId] ?? []).filter((a) => !a.installed);
+  return catApps.length > 0 && catApps.every((a) => a.checked);
+}
+function toggleSelectCategory(catId: string) {
+  const catApps = (groupedApps.value[catId] ?? []).filter((a) => !a.installed);
   const allChecked = catApps.every((a) => a.checked);
   catApps.forEach((a) => (a.checked = !allChecked));
 }
 
-function applyProfile(profile: Profile) {
-  // Sélectionner les apps du profil qui ne sont pas encore installées
-  let matched = 0;
-  apps.value.forEach((a) => {
-    if (profile.wingetIds.includes(a.winget_id ?? "") && !a.installed) {
-      a.checked = true;
-      matched++;
-    }
-  });
-  if (matched === 0) notifications.warning(`Profil "${profile.label}" : aucune app correspondante trouvée`);
-  else notifications.success(`Profil "${profile.label}" : ${matched} app(s) sélectionnée(s)`);
+function applyProfile(profile: InstallProfile) {
+  const matched = profileApps(profile, apps.value);
+  const missing = matched.filter((a) => !a.installed);
+  missing.forEach((a) => (a.checked = true));
+  if (matched.length === 0) notifications.warning(`Profil "${profile.label}" : aucune app correspondante`);
+  else if (missing.length === 0) notifications.info(`Profil "${profile.label}" : tout est déjà installé`);
+  else notifications.success(`Profil "${profile.label}" : ${missing.length} app(s) sélectionnée(s)`);
 }
 
-function allCatChecked(catId: string): boolean {
-  const catApps = apps.value.filter(a => a.category === catId && !a.installed);
-  return catApps.length > 0 && catApps.every(a => a.checked);
-}
+// ── File d'installation / désinstallation ──────────────────────
+interface OpResult { id: string; name: string; success: boolean; message: string; manualUrl?: string }
+type BusyMode = "install" | "uninstall" | null;
 
-function toggleSelectCategory(catId: string) {
-  const catApps = apps.value.filter(a => a.category === catId && !a.installed);
-  const allChecked = catApps.every(a => a.checked);
-  catApps.forEach(a => (a.checked = !allChecked));
-}
+const busyMode = ref<BusyMode>(null);
+const busy = computed(() => busyMode.value !== null);
+const cancelRequested = ref(false);
+const currentApp = ref("");
+const queueIndex = ref(0);
+const queueTotal = ref(0);
+const etaLabel = ref("");
+const lastLogLine = ref("");
+const results = ref<OpResult[]>([]);
+const resultsMode = ref<BusyMode>(null);
+const showSummary = ref(false);
+const showDryRun = ref(false);
+const queueProgress = computed(() => queueTotal.value ? Math.round(((queueIndex.value - 1) / queueTotal.value) * 100) : 0);
 
-async function exportDeployScript() {
-  const selected = apps.value.filter((a) => a.checked && !a.installed && a.winget_id);
-  if (!selected.length) { notifications.warning("Aucune app avec WinGet ID sélectionnée"); return; }
-  exportingScript.value = true;
-  const lines = [
-    "@echo off",
-    ":: Script de déploiement généré par NiTriTe",
-    `:: ${new Date().toLocaleString("fr-FR")}`,
-    "",
-    ":: Vérification des droits administrateur",
-    "NET SESSION >nul 2>&1",
-    "IF %ERRORLEVEL% NEQ 0 (",
-    "    echo ERREUR : Ce script doit etre execute en tant qu'administrateur.",
-    "    echo Clic droit sur le fichier ^> Executer en tant qu'administrateur.",
-    "    pause",
-    "    exit /b 1",
-    ")",
-    "",
-    "echo === Installation des logiciels ===",
-    "",
-  ];
-  for (const app of selected) {
-    lines.push(`echo Installation de ${app.name}...`);
-    lines.push(`winget install --id ${app.winget_id} --silent --accept-package-agreements --accept-source-agreements`);
-    lines.push("");
-  }
-  lines.push("echo === Terminé ===", "pause");
-  const content = lines.join("\r\n");
+async function installOne(app: AppItem): Promise<OpResult> {
   try {
-    await invoke("save_export_file", { filename: "deploy_nitrite.bat", content });
-    notifications.success("Script exporté", "deploy_nitrite.bat");
-  } catch {
-    try {
-      await navigator.clipboard.writeText(content);
-      notifications.info("Script copié dans le presse-papier");
-    } catch { notifications.error("Export échoué"); }
+    // install_app tente en cascade winget -> Chocolatey -> Scoop ->
+    // téléchargement direct (backend), chaque étape vérifiée pour de vrai.
+    // invokeRaw (pas de timeout 30s) : le bootstrap Chocolatey/Scoop seul
+    // peut prendre plus d'une minute la première fois.
+    const r = await invokeRaw<{ success: boolean; message: string }>("install_app", {
+      appId: app.id, wingetId: app.winget_id ?? undefined,
+    });
+    if (r.success) { app.installed = true; app.checked = false; }
+    return { id: app.id, name: app.name, success: r.success, message: r.message, manualUrl: r.success ? undefined : (app.url ?? undefined) };
+  } catch (e: unknown) {
+    return { id: app.id, name: app.name, success: false, message: (e instanceof Error ? e.message : String(e)).slice(0, 200), manualUrl: app.url ?? undefined };
   }
-  exportingScript.value = false;
 }
 
-async function installSelection() {
-  const selected = apps.value.filter((a) => a.checked && !a.installed);
-  if (selected.length === 0) {
-    notifications.warning("Aucune application sélectionnée");
-    return;
+async function uninstallOne(app: AppItem): Promise<OpResult> {
+  try {
+    const r = await invokeRaw<{ success: boolean; message: string }>("uninstall_app", {
+      appId: app.id, wingetId: app.winget_id ?? undefined,
+    });
+    if (r.success) { app.installed = false; app.checked = false; }
+    return { id: app.id, name: app.name, success: r.success, message: r.message };
+  } catch (e: unknown) {
+    return { id: app.id, name: app.name, success: false, message: (e instanceof Error ? e.message : String(e)).slice(0, 200) };
   }
+}
 
-  installing.value = true;
-  installTotal.value = selected.length;
-  installIndex.value = 0;
-  installResults.value = [];
-  installStartTime.value = Date.now();
-  installEtaLabel.value = "";
-
-  for (const app of selected) {
-    installIndex.value++;
-    currentApp.value = app.name;
-    installProgress.value = Math.round((installIndex.value / installTotal.value) * 100);
-    if (installIndex.value > 1 && installStartTime.value) {
-      const elapsedSec = (Date.now() - installStartTime.value) / 1000;
-      const avgPerApp = elapsedSec / (installIndex.value - 1);
-      const remaining = installTotal.value - installIndex.value + 1;
-      installEtaLabel.value = formatEta(avgPerApp * remaining);
-    }
-
-    try {
-      // install_app tente en cascade winget -> chocolatey -> scoop ->
-      // telechargement direct (backend), pas seulement winget — couvre les
-      // apps du catalogue sans winget_id (~48%, Office retail, portables...).
-      // invokeRaw (pas de timeout 30s) : le bootstrap Chocolatey/Scoop seul
-      // peut prendre plus d'une minute la premiere fois.
-      const result = await invokeRaw<{ success: boolean; app_id: string; message: string }>("install_app", {
-        appId: app.id,
-        wingetId: app.winget_id ?? undefined,
-      });
-      installResults.value.push({ name: app.name, success: result.success, message: result.message, manualUrl: !result.success ? (app.url ?? undefined) : undefined });
-      if (!result.success) {
-        notifications.warning(`${app.name}: ${result.message}`);
-      } else {
-        notifications.success(`${app.name} installé`);
-        // Ne marquer installé/décoché qu'en cas de succès réel : sinon une
-        // installation échouée disparaît de la liste et ne peut plus être relancée.
-        app.installed = true;
-        app.checked = false;
-      }
-    } catch (e: unknown) {
-      const errMsg = (e instanceof Error ? e.message : String(e)).slice(0, 120);
-      installResults.value.push({ name: app.name, success: false, message: errMsg });
-      notifications.error(`Échec: ${app.name}`, errMsg);
-    }
-  }
-
-  installing.value = false;
+async function runBatch(mode: "install" | "uninstall", items: AppItem[]) {
+  if (!items.length || busy.value) return;
+  busyMode.value = mode;
+  cancelRequested.value = false;
+  results.value = [];
+  resultsMode.value = mode;
+  lastLogLine.value = "";
+  const worker = mode === "install" ? installOne : uninstallOne;
+  const outcome = await runQueue(items, worker, {
+    shouldStop: () => cancelRequested.value,
+    onProgress: (p) => {
+      currentApp.value = p.item.name;
+      queueIndex.value = p.index;
+      queueTotal.value = p.total;
+      etaLabel.value = formatEta(p.etaSeconds);
+    },
+  });
+  results.value = outcome.results.map((r) => r.result);
+  const ok = results.value.filter((r) => r.success).length;
+  const ko = results.value.length - ok;
+  const verb = mode === "install" ? "installée(s)" : "désinstallée(s)";
+  if (outcome.cancelled) notifications.warning(`File annulée — ${ok} app(s) ${verb}, ${items.length - results.value.length} ignorée(s)`);
+  else if (ko === 0) notifications.success(`${ok} app(s) ${verb}`);
+  else notifications.warning(`${ok} app(s) ${verb}, ${ko} échec(s)`);
+  busyMode.value = null;
   currentApp.value = "";
-  installProgress.value = 0;
-  installEtaLabel.value = "";
-  installStartTime.value = null;
+  etaLabel.value = "";
+  queueIndex.value = 0;
+  queueTotal.value = 0;
   showSummary.value = true;
 }
 
-// ── Vérifier MAJ / Désinstaller (par app) ───────────────────────
+async function installSelection() {
+  if (!toInstall.value.length) { notifications.warning("Aucune application à installer dans la sélection"); return; }
+  await runBatch("install", [...toInstall.value]);
+}
+
+async function uninstallSelection() {
+  const list = [...toUninstall.value];
+  if (!list.length) { notifications.warning("Aucune application installée dans la sélection"); return; }
+  const names = list.slice(0, 12).map((a) => `• ${a.name}`).join("\n") + (list.length > 12 ? `\n… et ${list.length - 12} autre(s)` : "");
+  const ok = await confirm(`Désinstaller ${list.length} application(s) ?\n\n${names}`, { title: "Nitrite", kind: "warning" });
+  if (ok) await runBatch("uninstall", list);
+}
+
+async function uninstallApp(app: AppItem) {
+  const ok = await confirm(`Désinstaller ${app.name} ?\n\nCette action supprimera l'application de votre système.`, { title: "Nitrite", kind: "warning" });
+  if (ok) await runBatch("uninstall", [app]);
+}
+
+async function installApp(app: AppItem) {
+  await runBatch("install", [app]);
+}
+
+function retryFailed() {
+  const failedIds = new Set(results.value.filter((r) => !r.success).map((r) => r.id));
+  const items = apps.value.filter((a) => failedIds.has(a.id));
+  showSummary.value = false;
+  if (resultsMode.value === "uninstall") void runBatch("uninstall", items);
+  else void runBatch("install", items);
+}
+
+// ── Vérifier MAJ (par app) ─────────────────────────────────────
 const checkingUpdateIds = ref<Set<string>>(new Set());
-const uninstallingIds = ref<Set<string>>(new Set());
 
 async function checkAppUpdate(app: AppItem) {
   if (!app.winget_id) { notifications.warning(`Vérification indisponible pour ${app.name} (pas d'ID WinGet)`); return; }
@@ -317,59 +275,90 @@ async function checkAppUpdate(app: AppItem) {
     const out = result?.stdout ?? "";
     const low = out.toLowerCase();
     // winget renvoie un exit code non-zéro même quand l'app est déjà à jour
-    // (quirk winget confirmé en direct sur cette machine : "upgrade --id Git.Git"
-    // à jour → exit -1978335189) — seul le texte distingue les 3 issues réelles.
-    // Sur Windows FR, winget répond "Mise à niveau disponible introuvable." /
-    // "Aucune version de package plus récente n'est disponible...", pas la string
-    // anglaise "No applicable upgrade" attendue jusqu'ici (jamais présente en FR
-    // → cette branche succès n'était jamais atteinte sur un poste francophone).
+    // (quirk winget : "upgrade --id Git.Git" à jour → exit -1978335189) —
+    // seul le texte distingue les 3 issues réelles. Sur Windows FR, winget
+    // répond "Mise à niveau disponible introuvable." / "Aucune version de
+    // package plus récente n'est disponible...".
     const upToDate = out.includes("No applicable upgrade")
       || low.includes("disponible introuvable")
       || low.includes("n'est disponible à partir des sources");
     const notFound = low.includes("ne correspond aux critères") || low.includes("no installed package found");
-    if (upToDate) {
-      notifications.success(`${app.name} est à jour`);
-    } else if (notFound) {
-      notifications.error(`${app.name} introuvable via WinGet`, "L'ID WinGet ne correspond à aucun package installé.");
-    } else if (out.trim()) {
-      notifications.info(`MAJ disponible pour ${app.name}`, out.split("\n").slice(0, 3).join(" "));
-    } else {
-      notifications.info(`Vérification terminée pour ${app.name}`);
-    }
+    if (upToDate) notifications.success(`${app.name} est à jour`);
+    else if (notFound) notifications.error(`${app.name} introuvable via WinGet`, "L'ID WinGet ne correspond à aucun package installé.");
+    else if (out.trim()) notifications.info(`MAJ disponible pour ${app.name}`, out.split("\n").slice(0, 3).join(" "));
+    else notifications.info(`Vérification terminée pour ${app.name}`);
   } catch (e: unknown) {
     notifications.error(`Impossible de vérifier MAJ pour ${app.name}`, String(e));
   }
   checkingUpdateIds.value = new Set([...checkingUpdateIds.value].filter((id) => id !== app.id));
 }
 
-async function uninstallApp(app: AppItem) {
-  const confirmed = await confirm(`Désinstaller ${app.name} ?\n\nCette action supprimera l'application de votre système.`, { title: "Nitrite", kind: "warning" });
-  if (!confirmed) return;
-  uninstallingIds.value = new Set([...uninstallingIds.value, app.id]);
-  try {
-    // Même cascade que l'install (winget -> chocolatey -> scoop), vérifiée
-    // pour de vrai côté backend (le registre ne doit plus contenir l'app).
-    const result = await invokeRaw<{ success: boolean; message: string }>("uninstall_app", {
-      appId: app.id,
-      wingetId: app.winget_id ?? undefined,
-    });
-    if (!result.success) throw new Error(result.message);
-    app.installed = false;
-    notifications.success(`${app.name} désinstallé`);
-  } catch (e: unknown) {
-    notifications.error(`Erreur désinstallation ${app.name}`, String(e));
+// ── Export script de déploiement ───────────────────────────────
+async function exportDeployScript() {
+  const selected = toInstall.value.filter((a) => a.winget_id);
+  const skipped = toInstall.value.length - selected.length;
+  if (!selected.length) { notifications.warning("Aucune app avec WinGet ID sélectionnée"); return; }
+  exportingScript.value = true;
+  const lines = [
+    "@echo off",
+    "chcp 65001 >nul",
+    ":: Script de déploiement généré par NiTriTe",
+    `:: ${new Date().toLocaleString("fr-FR")}`,
+    "",
+    ":: Vérification des droits administrateur",
+    "NET SESSION >nul 2>&1",
+    "IF %ERRORLEVEL% NEQ 0 (",
+    "    echo ERREUR : Ce script doit etre execute en tant qu'administrateur.",
+    "    echo Clic droit sur le fichier ^> Executer en tant qu'administrateur.",
+    "    pause",
+    "    exit /b 1",
+    ")",
+    "",
+    "set FAILED=0",
+    "echo === Installation des logiciels ===",
+    "",
+  ];
+  for (const app of selected) {
+    lines.push(`echo Installation de ${app.name.replace(/[&|<>^%]/g, "")}...`);
+    lines.push(`winget install --id ${app.winget_id} --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity || set /a FAILED+=1`);
+    lines.push("");
   }
-  uninstallingIds.value = new Set([...uninstallingIds.value].filter((id) => id !== app.id));
+  lines.push("echo === Terminé : %FAILED% échec(s) ===", "pause");
+  const content = lines.join("\r\n");
+  try {
+    await invoke("save_export_file", { filename: "deploy_nitrite.bat", content });
+    notifications.success("Script exporté", skipped ? `deploy_nitrite.bat — ${skipped} app(s) sans WinGet ID ignorée(s)` : "deploy_nitrite.bat");
+  } catch {
+    try {
+      await navigator.clipboard.writeText(content);
+      notifications.info("Script copié dans le presse-papier");
+    } catch { notifications.error("Export échoué"); }
+  }
+  exportingScript.value = false;
 }
+
+// ── Journal en direct (événements backend) ─────────────────────
+let unlistenLog: (() => void) | null = null;
 
 onMounted(async () => {
   try {
-    const result = await cachedInvoke<Omit<AppItem, 'checked' | 'installed'>[]>("get_apps");
+    const result = await cachedInvoke<CatalogApp[]>("get_apps");
     apps.value = result.map((a) => ({ ...a, checked: false, installed: false }));
   } catch {
     notifications.warning("Impossible de charger la base de données");
+    return;
   }
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    unlistenLog = await listen<{ line?: string }>("install-log", (e) => {
+      const line = e.payload?.line?.trim();
+      if (line && busy.value) lastLogLine.value = line.slice(0, 160);
+    });
+  } catch { /* hors Tauri */ }
+  void detectInstalled();
 });
+
+onUnmounted(() => { unlistenLog?.(); });
 </script>
 
 <template>
@@ -379,46 +368,39 @@ onMounted(async () => {
       <div>
         <h1>Master Install</h1>
         <p class="page-subtitle">
-          Base de données de <strong>{{ totalCount }}</strong> applications — installation groupée via WinGet
+          <strong>{{ totalCount }}</strong> applications —
+          <span v-if="detecting" class="detecting"><NSpinner :size="10" /> détection des apps installées…</span>
+          <template v-else><strong>{{ installedCount }}</strong> déjà installée(s)</template>
+          — installation et désinstallation en un clic (WinGet → Chocolatey → Scoop → téléchargement direct)
         </p>
       </div>
       <div class="header-actions">
-        <NButton variant="ghost" size="sm" @click="selectAll">
+        <NButton variant="ghost" size="sm" :disabled="busy" @click="selectAllVisible">
           <CheckSquare :size="14" />
           Tout sélectionner
         </NButton>
-        <NButton variant="ghost" size="sm" @click="deselectAll">
+        <NButton variant="ghost" size="sm" :disabled="busy || selectedCount === 0" @click="deselectAll">
           <Square :size="14" />
-          Tout déselectionner
+          Désélectionner
         </NButton>
-        <NButton
-          variant="ghost"
-          size="sm"
-          :disabled="selectedCount === 0"
-          @click="showDryRun = true"
-        >
+        <NButton variant="ghost" size="sm" :loading="detecting" :disabled="busy" title="Relancer la détection des apps installées" @click="detectInstalled">
+          <RefreshCw :size="14" />
+        </NButton>
+        <NButton variant="ghost" size="sm" :disabled="toInstall.length === 0" @click="showDryRun = true">
           <Eye :size="14" />
           Prévisualiser
         </NButton>
-        <NButton
-          variant="ghost"
-          size="sm"
-          :loading="exportingScript"
-          :disabled="selectedCount === 0"
-          @click="exportDeployScript"
-        >
+        <NButton variant="ghost" size="sm" :loading="exportingScript" :disabled="toInstall.length === 0" @click="exportDeployScript">
           <FileCode :size="14" />
           Export .bat
         </NButton>
-        <NButton
-          variant="primary"
-          size="sm"
-          :loading="installing"
-          :disabled="selectedCount === 0"
-          @click="installSelection"
-        >
+        <NButton v-if="toUninstall.length" variant="danger" size="sm" :disabled="busy" @click="uninstallSelection">
+          <Trash2 :size="14" />
+          Désinstaller ({{ toUninstall.length }})
+        </NButton>
+        <NButton variant="primary" size="sm" :loading="busyMode === 'install'" :disabled="busy || toInstall.length === 0" @click="installSelection">
           <Download :size="14" />
-          Installer ({{ selectedCount }})
+          Installer ({{ toInstall.length }})
         </NButton>
       </div>
     </div>
@@ -438,34 +420,47 @@ onMounted(async () => {
           :key="profile.id"
           class="profile-card"
           :style="{ '--p-color': profile.color }"
+          :disabled="busy"
           @click="applyProfile(profile)"
         >
-          <component :is="profile.icon" :size="20" :style="{ color: profile.color }" />
+          <component :is="PROFILE_ICONS[profile.id] ?? Star" :size="20" :style="{ color: profile.color }" />
           <span class="profile-label">{{ profile.label }}</span>
           <span class="profile-count">{{ profile.wingetIds.length }} apps</span>
         </button>
       </div>
     </NCard>
 
-    <!-- Search -->
-    <NSearchBar v-model="search" placeholder="Rechercher une application..." />
+    <!-- Recherche + filtre de statut -->
+    <div class="filter-row">
+      <NSearchBar v-model="search" placeholder="Rechercher une application, une catégorie, un ID WinGet…" class="filter-search" />
+      <div class="status-filter" role="group" aria-label="Filtrer par statut">
+        <button :class="{ active: statusFilter === 'all' }" @click="statusFilter = 'all'">Toutes</button>
+        <button :class="{ active: statusFilter === 'missing' }" @click="statusFilter = 'missing'">Non installées</button>
+        <button :class="{ active: statusFilter === 'installed' }" @click="statusFilter = 'installed'">Installées ({{ installedCount }})</button>
+      </div>
+    </div>
 
-    <!-- Barre progression globale visible pendant install -->
-    <NCard v-if="installing" class="progress-card">
+    <!-- Progression globale -->
+    <NCard v-if="busy" class="progress-card">
       <div class="install-progress-global">
         <div class="install-status-row">
           <NSpinner :size="14" />
           <span class="install-label">
-            Installation de <strong>{{ currentApp }}</strong>
+            {{ busyMode === 'install' ? 'Installation' : 'Désinstallation' }} de <strong>{{ currentApp }}</strong>
           </span>
-          <NBadge variant="info">{{ installIndex }}/{{ installTotal }}</NBadge>
-          <NBadge v-if="installEtaLabel" variant="neutral">{{ installEtaLabel }}</NBadge>
+          <NBadge variant="info">{{ queueIndex }}/{{ queueTotal }}</NBadge>
+          <NBadge v-if="etaLabel" variant="neutral">{{ etaLabel }}</NBadge>
+          <NButton variant="ghost" size="sm" :disabled="cancelRequested" @click="cancelRequested = true">
+            <XCircle :size="14" />
+            {{ cancelRequested ? 'Arrêt après cette app…' : 'Annuler la suite' }}
+          </NButton>
         </div>
-        <NProgress :value="installProgress" :max="100" size="lg" :show-label="true" :glow="true" />
+        <NProgress :value="queueProgress" :max="100" size="lg" :show-label="true" :glow="true" />
+        <div v-if="lastLogLine" class="live-log" :title="lastLogLine">{{ lastLogLine }}</div>
       </div>
     </NCard>
 
-    <!-- Category Tabs -->
+    <!-- Catégories -->
     <NTabs :tabs="categoryTabs" v-model="activeCategory" wrap>
       <template #default>
         <div v-if="Object.keys(groupedApps).length === 0" class="empty-state">
@@ -475,15 +470,15 @@ onMounted(async () => {
 
         <div v-else class="categories-list">
           <template v-for="(catApps, catId) in groupedApps" :key="catId">
-            <NCard>
+            <NCard class="category-card">
               <template #header>
                 <div class="section-header" @click="toggleCategory(catId as string)">
                   <component :is="getCategoryInfo(catId as string).icon" :size="16" />
                   <span>{{ getCategoryInfo(catId as string).label }}</span>
                   <NBadge variant="neutral">{{ catApps.length }}</NBadge>
                   <span class="spacer" />
-                  <button class="select-cat-btn" @click.stop="toggleSelectCategory(catId as string)">
-                    {{ allCatChecked(catId as string) ? 'Tout déselectionner' : 'Tout sélectionner' }}
+                  <button class="select-cat-btn" :disabled="busy" @click.stop="toggleSelectCategory(catId as string)">
+                    {{ allCatChecked(catId as string) ? 'Tout désélectionner' : 'Tout sélectionner' }}
                   </button>
                   <component
                     :is="collapsedCategories.has(catId as string) ? ChevronRight : ChevronDown"
@@ -498,11 +493,11 @@ onMounted(async () => {
                   v-for="app in catApps"
                   :key="app.id"
                   class="app-item"
-                  :class="{ 'app-item--checked': app.checked, 'app-item--installed': app.installed }"
+                  :class="{ 'app-item--checked': app.checked, 'app-item--installed': app.installed, 'app-item--remove': app.checked && app.installed }"
                   @click="toggleApp(app)"
                 >
                   <div class="app-checkbox">
-                    <CheckSquare v-if="app.checked || app.installed" :size="18" class="check-on" />
+                    <CheckSquare v-if="app.checked" :size="18" :class="app.installed ? 'check-remove' : 'check-on'" />
                     <Square v-else :size="18" class="check-off" />
                   </div>
                   <div class="app-info">
@@ -513,8 +508,8 @@ onMounted(async () => {
                     <NBadge variant="success">Installé</NBadge>
                     <button
                       class="app-action-btn"
-                      title="Vérifier MAJ"
-                      :disabled="checkingUpdateIds.has(app.id)"
+                      title="Vérifier les mises à jour"
+                      :disabled="checkingUpdateIds.has(app.id) || !app.winget_id"
                       @click.stop="checkAppUpdate(app)"
                     >
                       <NSpinner v-if="checkingUpdateIds.has(app.id)" :size="12" />
@@ -523,15 +518,25 @@ onMounted(async () => {
                     <button
                       class="app-action-btn app-action-btn--danger"
                       title="Désinstaller"
-                      :disabled="uninstallingIds.has(app.id)"
+                      :disabled="busy"
                       @click.stop="uninstallApp(app)"
                     >
-                      <NSpinner v-if="uninstallingIds.has(app.id)" :size="12" />
-                      <Trash2 v-else :size="12" />
+                      <Trash2 :size="12" />
                     </button>
                   </template>
-                  <NBadge v-else-if="app.winget_id" variant="info" class="winget-badge">WinGet</NBadge>
-                  <NBadge v-else-if="app.url" variant="warning" class="winget-badge">URL</NBadge>
+                  <template v-else>
+                    <NBadge :variant="primaryMethod(app) === 'winget' ? 'info' : primaryMethod(app) === 'auto' ? 'neutral' : 'warning'" class="winget-badge" :title="METHOD_LABEL[primaryMethod(app)]">
+                      {{ primaryMethod(app) === 'winget' ? 'WinGet' : primaryMethod(app) === 'choco' ? 'Choco' : primaryMethod(app) === 'direct' ? 'URL' : 'Auto' }}
+                    </NBadge>
+                    <button
+                      class="app-action-btn app-action-btn--install"
+                      title="Installer maintenant"
+                      :disabled="busy"
+                      @click.stop="installApp(app)"
+                    >
+                      <Download :size="12" />
+                    </button>
+                  </template>
                 </div>
               </div>
             </NCard>
@@ -541,45 +546,49 @@ onMounted(async () => {
     </NTabs>
   </div>
 
-  <!-- Modal Dry Run -->
-  <NModal :open="showDryRun" @close="showDryRun = false" title="Prévisualisation — Apps sélectionnées">
-    <div v-if="dryRunApps.length === 0" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">
+  <!-- Modal Prévisualisation -->
+  <NModal :open="showDryRun" @close="showDryRun = false" title="Prévisualisation — Apps à installer">
+    <div v-if="toInstall.length === 0" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">
       Aucune application sélectionnée.
     </div>
     <div v-else style="display:flex;flex-direction:column;gap:6px;max-height:420px;overflow-y:auto">
-      <div v-for="app in dryRunApps" :key="app.id" class="dryrun-item">
+      <div v-for="app in toInstall" :key="app.id" class="dryrun-item">
         <div class="dryrun-name">{{ app.name }}</div>
-        <code v-if="app.winget_id" class="dryrun-cmd">
-          winget install --id {{ app.winget_id }} --silent ...
-        </code>
-        <span v-else class="dryrun-nowinget">Pas de WinGet ID — sera ignoré</span>
+        <code v-if="app.winget_id" class="dryrun-cmd">winget install --id {{ app.winget_id }} --exact --silent</code>
+        <span v-else class="dryrun-nowinget">{{ METHOD_LABEL[primaryMethod(app)] }} (repli automatique si échec)</span>
       </div>
     </div>
     <template #footer>
-      <NBadge variant="neutral" style="margin-right:auto">{{ dryRunApps.length }} app(s)</NBadge>
+      <NBadge variant="neutral" style="margin-right:auto">{{ toInstall.length }} app(s)</NBadge>
       <NButton variant="ghost" @click="showDryRun = false">Fermer</NButton>
+      <NButton variant="primary" :disabled="busy || toInstall.length === 0" @click="showDryRun = false; installSelection()">
+        <Download :size="14" /> Installer
+      </NButton>
     </template>
   </NModal>
 
-  <!-- Modal Résumé installation -->
-  <NModal :open="showSummary" @close="showSummary = false" title="Résumé de l'installation">
+  <!-- Modal Résumé -->
+  <NModal :open="showSummary" @close="showSummary = false" :title="resultsMode === 'uninstall' ? 'Résumé de la désinstallation' : 'Résumé de l\'installation'">
     <div style="display:flex;flex-direction:column;gap:6px;max-height:420px;overflow-y:auto">
-      <div v-for="r in installResults" :key="r.name" class="summary-item" :class="r.success ? 'summary-ok' : 'summary-fail'">
+      <div v-for="r in results" :key="r.id" class="summary-item" :class="r.success ? 'summary-ok' : 'summary-fail'">
         <span class="summary-status">{{ r.success ? '✓' : '✗' }}</span>
         <div class="summary-info">
           <span class="summary-name">{{ r.name }}</span>
-          <span v-if="!r.success" class="summary-msg">{{ r.message }}</span>
+          <span class="summary-msg" :class="{ 'summary-msg--ok': r.success }">{{ r.message }}</span>
         </div>
-        <a v-if="r.manualUrl" :href="r.manualUrl" target="_blank" class="summary-manual-link">Télécharger</a>
+        <a v-if="r.manualUrl" :href="r.manualUrl" target="_blank" rel="noopener" class="summary-manual-link">Télécharger</a>
       </div>
     </div>
     <template #footer>
       <NBadge variant="success" style="margin-right:auto">
-        {{ installResults.filter(r => r.success).length }} succès
+        {{ results.filter(r => r.success).length }} succès
       </NBadge>
-      <NBadge v-if="installResults.some(r => !r.success)" variant="danger">
-        {{ installResults.filter(r => !r.success).length }} échec(s)
+      <NBadge v-if="results.some(r => !r.success)" variant="danger">
+        {{ results.filter(r => !r.success).length }} échec(s)
       </NBadge>
+      <NButton v-if="results.some(r => !r.success)" variant="secondary" @click="retryFailed" style="margin-left:8px">
+        <RotateCcw :size="14" /> Réessayer les échecs
+      </NButton>
       <NButton variant="primary" @click="showSummary = false" style="margin-left:8px">Fermer</NButton>
     </template>
   </NModal>
@@ -670,12 +679,13 @@ onMounted(async () => {
 
 .app-item:hover { background: var(--bg-tertiary); }
 .app-item--checked { background: var(--accent-muted); }
-.app-item--installed { cursor: default; }
+.app-item--remove { background: var(--danger-muted); }
 .app-item--installed .app-name, .app-item--installed .app-desc { opacity: 0.6; }
 
 .app-checkbox { flex-shrink: 0; display: flex; }
 .check-on { color: var(--accent-primary); }
 .check-off { color: var(--text-muted); }
+.check-remove { color: var(--danger); }
 
 .app-info { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
 
@@ -715,6 +725,7 @@ onMounted(async () => {
 .app-action-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
 .app-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .app-action-btn--danger:hover { color: var(--danger); border-color: var(--danger); }
+.app-action-btn--install:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
 
 .empty-state {
   text-align: center;
@@ -750,7 +761,8 @@ onMounted(async () => {
 .summary-info { display: flex; flex-direction: column; gap: 2px; }
 .summary-name { font-size: 12px; font-weight: 500; color: var(--text-primary); }
 .summary-msg { font-size: 11px; color: var(--danger); font-family: "JetBrains Mono", monospace; }
-.summary-manual-link { margin-left: auto; align-self: center; font-size: 11px; color: var(--primary); text-decoration: underline; white-space: nowrap; flex-shrink: 0; }
+.summary-msg--ok { color: var(--text-muted); }
+.summary-manual-link { margin-left: auto; align-self: center; font-size: 11px; color: var(--accent-primary); text-decoration: underline; white-space: nowrap; flex-shrink: 0; }
 
 .profiles-grid {
   display: grid;
@@ -771,4 +783,26 @@ onMounted(async () => {
 }
 .profile-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .profile-count { font-size: 11px; color: var(--text-muted); }
+.profile-card:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Filtres ──────────────────────────────────────── */
+.detecting { display: inline-flex; align-items: center; gap: 4px; }
+.filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.filter-search { flex: 1; min-width: 240px; }
+.status-filter { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+.status-filter button {
+  padding: 6px 12px; font-size: 12px; background: var(--bg-secondary); color: var(--text-secondary);
+  border: none; cursor: pointer; font-family: inherit;
+}
+.status-filter button + button { border-left: 1px solid var(--border); }
+.status-filter button.active { background: var(--accent-muted); color: var(--accent-primary); font-weight: 600; }
+
+.live-log {
+  font-size: 11px; color: var(--text-muted); font-family: "JetBrains Mono", monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Les catégories hors écran ne sont ni mises en page ni peintes : 700+ apps
+   restent fluides sur les petites configurations. */
+.category-card { content-visibility: auto; contain-intrinsic-size: auto 320px; }
 </style>

@@ -8,3 +8,4 @@ pub mod script_generator;
 pub mod favorites;
 pub mod scoop;
 pub mod smart_install;
+pub mod app_match;

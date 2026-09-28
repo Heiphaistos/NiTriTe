@@ -144,6 +144,20 @@ async fn uninstall_app(app_id: Option<String>, winget_id: Option<String>) -> Res
         .map_err(|e| NiTriTeError::System(e.to_string()))?
 }
 
+/// Ids du catalogue deja installes sur ce poste (registre + winget export).
+/// Appele une fois a l'ouverture de Master Install : permet d'afficher
+/// « Installe » et le bouton de desinstallation sans avoir a reinstaller
+/// l'app dans la session.
+#[tauri::command]
+async fn detect_installed_catalog_apps() -> Result<Vec<String>, NiTriTeError> {
+    tokio::task::spawn_blocking(|| {
+        let apps = installer::manager::get_default_apps();
+        installer::smart_install::detect_installed(&apps)
+    })
+    .await
+    .map_err(|e| NiTriTeError::System(e.to_string()))
+}
+
 #[tauri::command]
 async fn check_winget() -> Result<bool, NiTriTeError> {
     Ok(installer::winget::check_winget())

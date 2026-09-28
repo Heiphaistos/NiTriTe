@@ -84,7 +84,7 @@
     "name": "Office 2007",
     "description": "Microsoft Office 2007 - Suite bureautique (Word, Excel, PowerPoint)",
     "category": "Outils Essentiels",
-    "winget_id": "Microsoft.Office",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "star"
@@ -161,18 +161,8 @@
   },
   {
     "id": "office-365-home",
-    "name": "Office 365 Home",
+    "name": "Microsoft 365 (Office)",
     "description": "Microsoft 365 Famille - 6 utilisateurs",
-    "category": "Bureautique",
-    "winget_id": "Microsoft.Office",
-    "choco_id": null,
-    "url": null,
-    "icon": "file-text"
-  },
-  {
-    "id": "office-365-personal",
-    "name": "Office 365 Personal",
-    "description": "Microsoft 365 Personnel - 1 utilisateur",
     "category": "Bureautique",
     "winget_id": "Microsoft.Office",
     "choco_id": null,
@@ -204,7 +194,7 @@
     "name": "Google Chrome",
     "description": "Navigateur web rapide et sécurisé de Google",
     "category": "Navigateurs",
-    "winget_id": null,
+    "winget_id": "Google.Chrome",
     "choco_id": null,
     "url": "https://dl.google.com/chrome/install/chrome_installer.exe",
     "icon": "globe"
@@ -214,7 +204,7 @@
     "name": "Microsoft Edge",
     "description": "Navigateur moderne de Microsoft basé sur Chromium",
     "category": "Navigateurs",
-    "winget_id": null,
+    "winget_id": "Microsoft.Edge",
     "choco_id": null,
     "url": "https://go.microsoft.com/fwlink/?linkid=2108834",
     "icon": "globe"
@@ -234,7 +224,7 @@
     "name": "Opera",
     "description": "Navigateur avec VPN gratuit et bloqueur de publicités",
     "category": "Navigateurs",
-    "winget_id": null,
+    "winget_id": "Opera.Opera",
     "choco_id": null,
     "url": "https://net.geo.opera.com/opera/stable/windows",
     "icon": "globe"
@@ -244,7 +234,7 @@
     "name": "Vivaldi",
     "description": "Navigateur hautement personnalisable pour les power users",
     "category": "Navigateurs",
-    "winget_id": "VivaldiTechnologies.Vivaldi",
+    "winget_id": "Vivaldi.Vivaldi",
     "choco_id": null,
     "url": "https://downloads.vivaldi.com/stable/Vivaldi.6.5.3206.63.x64.exe",
     "icon": "globe"
@@ -364,7 +354,7 @@
     "name": "Comodo Dragon",
     "description": "Navigateur sécurisé basé sur Chromium",
     "category": "Navigateurs",
-    "winget_id": "Comodo.Dragon",
+    "winget_id": "Comodo.ComodoDragon",
     "choco_id": null,
     "url": "https://www.comodo.com/home/browsers-toolbars/browser.php",
     "icon": "globe"
@@ -384,7 +374,7 @@
     "name": "Avast Secure Browser",
     "description": "Navigateur sécurisé avec protection Avast",
     "category": "Navigateurs",
-    "winget_id": "Avast.SecureBrowser",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.avast.com/secure-browser",
     "icon": "globe"
@@ -404,7 +394,7 @@
     "name": "Midori",
     "description": "Navigateur léger et rapide",
     "category": "Navigateurs",
-    "winget_id": "Midori.Midori",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://astian.org/midori-browser/download/",
     "icon": "globe"
@@ -424,7 +414,7 @@
     "name": "Basilisk",
     "description": "Fork de Firefox avec interface XUL classique",
     "category": "Navigateurs",
-    "winget_id": null,
+    "winget_id": "Basilisk.Basilisk",
     "choco_id": null,
     "url": "https://www.basilisk-browser.org/download.shtml",
     "icon": "globe"
@@ -434,7 +424,7 @@
     "name": "K-Meleon",
     "description": "Navigateur léger basé sur Gecko",
     "category": "Navigateurs",
-    "winget_id": null,
+    "winget_id": "kmeleonbrowser.K-Meleon",
     "choco_id": null,
     "url": "http://kmeleonbrowser.org/download.php",
     "icon": "globe"
@@ -494,7 +484,7 @@
     "name": "Avast Free Antivirus",
     "description": "Antivirus gratuit avec protection en temps réel",
     "category": "Antivirus",
-    "winget_id": "XPDC2RH70K22MN",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "shield"
@@ -504,7 +494,7 @@
     "name": "AVG AntiVirus Free",
     "description": "Antivirus gratuit populaire (Avast company)",
     "category": "Antivirus",
-    "winget_id": "AVG.AntiVirusFree",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://bits.avcdn.net/productfamily_ANTIVIRUS/insttype_FREE/platform_WIN/installertype_ONLINE/build_RELEASE",
     "icon": "shield"
@@ -534,7 +524,7 @@
     "name": "Norton 360",
     "description": "Suite de sécurité complète (version d'essai)",
     "category": "Antivirus",
-    "winget_id": "NortonLifeLock.Norton360",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "shield"
@@ -544,7 +534,7 @@
     "name": "ESET NOD32",
     "description": "Antivirus léger et efficace d'ESET",
     "category": "Antivirus",
-    "winget_id": "ESET.NOD32",
+    "winget_id": "ESET.Nod32",
     "choco_id": null,
     "url": "https://download.eset.com/com/eset/apps/home/eav/windows/latest/eav_nt64.exe",
     "icon": "shield"
@@ -564,7 +554,7 @@
     "name": "Sophos Home",
     "description": "Protection antivirus professionnelle pour particuliers",
     "category": "Antivirus",
-    "winget_id": "Sophos.SophosHome",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://download.sophos.com/home/SophosInstall.exe",
     "icon": "shield"
@@ -584,7 +574,7 @@
     "name": "Panda Free Antivirus",
     "description": "Antivirus cloud léger de Panda Security",
     "category": "Antivirus",
-    "winget_id": "PandaSecurity.PandaDome",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.pandasecurity.com/en/homeusers/free-antivirus/",
     "icon": "shield"
@@ -594,7 +584,7 @@
     "name": "Avira Free Antivirus",
     "description": "Antivirus gratuit performant d'Avira",
     "category": "Antivirus",
-    "winget_id": "Avira.Avira",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.avira.com/en/free-antivirus-windows",
     "icon": "shield"
@@ -614,7 +604,7 @@
     "name": "Emsisoft Anti-Malware",
     "description": "Anti-malware performant avec double protection",
     "category": "Antivirus",
-    "winget_id": "Emsisoft.EmisoftAntiMalware",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://dl.emsisoft.com/EmsisoftAntiMalwareSetup.exe",
     "icon": "shield"
@@ -624,7 +614,7 @@
     "name": "Comodo Antivirus",
     "description": "Antivirus gratuit avec sandbox intégré",
     "category": "Antivirus",
-    "winget_id": "Comodo.ComodoInternetSecurity",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://download.comodo.com/cis/download/installs/2000/partners/cav_installer.exe",
     "icon": "shield"
@@ -634,7 +624,7 @@
     "name": "360 Total Security",
     "description": "Suite de sécurité gratuite multi-moteurs",
     "category": "Antivirus",
-    "winget_id": "360.TotalSecurity",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://free.360totalsecurity.com/totalsecurity/360TS_Setup.exe",
     "icon": "shield"
@@ -644,7 +634,7 @@
     "name": "ZoneAlarm Free Antivirus",
     "description": "Antivirus avec pare-feu intégré",
     "category": "Antivirus",
-    "winget_id": "CheckPoint.ZoneAlarmFreeAntivirus",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://download.zonealarm.com/bin/free/1000/zavSetup_133_000_000_0000.exe",
     "icon": "shield"
@@ -654,7 +644,7 @@
     "name": "Immunet",
     "description": "Antivirus cloud léger et gratuit (Cisco)",
     "category": "Antivirus",
-    "winget_id": "Cisco.Immunet",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.immunet.com/index",
     "icon": "shield"
@@ -704,7 +694,7 @@
     "name": "FortiClient",
     "description": "Client de sécurité Fortinet avec antivirus",
     "category": "Antivirus",
-    "winget_id": "Fortinet.FortiClientVPN",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://links.fortinet.com/forticlient/win/vpnagent",
     "icon": "shield"
@@ -714,7 +704,7 @@
     "name": "Microsoft Safety Scanner",
     "description": "Outil de scan antivirus portable Microsoft",
     "category": "Antivirus",
-    "winget_id": null,
+    "winget_id": "Microsoft.SafetyScanner",
     "choco_id": null,
     "url": "https://go.microsoft.com/fwlink/?LinkId=212732",
     "icon": "shield"
@@ -754,7 +744,7 @@
     "name": "CCleaner",
     "description": "Nettoyage et optimisation du système",
     "category": "Securite",
-    "winget_id": null,
+    "winget_id": "Piriform.CCleaner",
     "choco_id": null,
     "url": "https://download.ccleaner.com/ccsetup604.exe",
     "icon": "shield"
@@ -774,7 +764,7 @@
     "name": "Comodo Firewall",
     "description": "Firewall gratuit et puissant",
     "category": "Securite",
-    "winget_id": "COMODO.ComodoFirewall",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.comodo.com/home/internet-security/firewall.php",
     "icon": "shield"
@@ -814,7 +804,7 @@
     "name": "Avira Free Security",
     "description": "Suite de sécurité gratuite",
     "category": "Securite",
-    "winget_id": "Avira.Avira",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "shield"
@@ -844,7 +834,7 @@
     "name": "Kaspersky VPN",
     "description": "VPN sécurisé de Kaspersky",
     "category": "Securite",
-    "winget_id": "Kaspersky.VPN",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.kaspersky.com/vpn-secure-connection",
     "icon": "shield"
@@ -864,7 +854,7 @@
     "name": "CyberGhost VPN",
     "description": "VPN avec serveurs dans le monde entier",
     "category": "Securite",
-    "winget_id": "CyberGhost.CyberGhostVPN",
+    "winget_id": "CyberGhost.CyberGhost",
     "choco_id": null,
     "url": "https://download.cyberghostvpn.com/windows/CyberGhostVPNSetup.exe",
     "icon": "shield"
@@ -884,7 +874,7 @@
     "name": "Hotspot Shield",
     "description": "VPN gratuit avec protection avancée",
     "category": "Securite",
-    "winget_id": "AnchorFree.HotspotShield",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.hotspotshield.com/download/",
     "icon": "shield"
@@ -964,7 +954,7 @@
     "name": "Roboform",
     "description": "Gestionnaire de mots de passe et remplissage automatique",
     "category": "Securite",
-    "winget_id": "Siber.RoboForm",
+    "winget_id": "SiberSystems.RoboForm",
     "choco_id": null,
     "url": "https://www.roboform.com/",
     "icon": "shield"
@@ -974,7 +964,7 @@
     "name": "Sticky Password",
     "description": "Gestionnaire de mots de passe sécurisé",
     "category": "Securite",
-    "winget_id": null,
+    "winget_id": "LamantineSoftware.StickyPassword",
     "choco_id": null,
     "url": "https://www.stickypassword.com/",
     "icon": "shield"
@@ -994,7 +984,7 @@
     "name": "Enpass",
     "description": "Gestionnaire de mots de passe local et cloud",
     "category": "Securite",
-    "winget_id": "Enpass.Enpass",
+    "winget_id": "Sinew.Enpass",
     "choco_id": null,
     "url": "https://www.enpass.io/downloads/",
     "icon": "shield"
@@ -1014,7 +1004,7 @@
     "name": "Spybot Anti-Beacon",
     "description": "Bloquer les télémétries Windows",
     "category": "Securite",
-    "winget_id": null,
+    "winget_id": "SaferNetworking.SpybotAntiBeacon",
     "choco_id": null,
     "url": "https://www.safer-networking.org/spybot-anti-beacon/",
     "icon": "shield"
@@ -1034,7 +1024,7 @@
     "name": "Proton VPN",
     "description": "VPN sécurisé suisse avec version gratuite",
     "category": "Securite",
-    "winget_id": "ProtonTechnologies.ProtonVPN",
+    "winget_id": "Proton.ProtonVPN",
     "choco_id": null,
     "url": "https://protonvpn.com/download-windows",
     "icon": "shield"
@@ -1047,26 +1037,6 @@
     "winget_id": "TheDocumentFoundation.LibreOffice",
     "choco_id": null,
     "url": "https://www.libreoffice.org/download/download/",
-    "icon": "file-text"
-  },
-  {
-    "id": "wps-office",
-    "name": "WPS Office",
-    "description": "Suite bureautique gratuite compatible MS Office",
-    "category": "Bureautique",
-    "winget_id": "Kingsoft.WPSOffice",
-    "choco_id": null,
-    "url": null,
-    "icon": "file-text"
-  },
-  {
-    "id": "foxit-reader",
-    "name": "Foxit Reader",
-    "description": "Lecteur PDF avancé avec annotations",
-    "category": "Bureautique",
-    "winget_id": "Foxit.FoxitReader",
-    "choco_id": null,
-    "url": null,
     "icon": "file-text"
   },
   {
@@ -1094,7 +1064,7 @@
     "name": "Evernote",
     "description": "Application de notes et organisation",
     "category": "Bureautique",
-    "winget_id": "evernote.evernote",
+    "winget_id": "Evernote.Evernote",
     "choco_id": null,
     "url": "https://evernote.com/download",
     "icon": "file-text"
@@ -1144,7 +1114,7 @@
     "name": "Microsoft OneNote",
     "description": "Application de prise de notes Microsoft",
     "category": "Bureautique",
-    "winget_id": "Microsoft.OneNote",
+    "winget_id": "XPFFZHVGQWWLHB",
     "choco_id": null,
     "url": null,
     "icon": "file-text"
@@ -1164,7 +1134,7 @@
     "name": "CherryTree",
     "description": "Éditeur de notes hiérarchique",
     "category": "Bureautique",
-    "winget_id": "GiuseppePenone.CherryTree",
+    "winget_id": "Giuspen.Cherrytree",
     "choco_id": null,
     "url": "https://www.giuspen.com/cherrytree/",
     "icon": "file-text"
@@ -1194,7 +1164,7 @@
     "name": "Money Manager Ex",
     "description": "Gestionnaire de finances personnelles open source",
     "category": "Bureautique",
-    "winget_id": "MoneyManagerEx.MoneyManagerEx",
+    "winget_id": "moneymanagerex.moneymanagerex",
     "choco_id": null,
     "url": "https://github.com/moneymanagerex/moneymanagerex/releases/latest",
     "icon": "file-text"
@@ -1204,7 +1174,7 @@
     "name": "HomeBank",
     "description": "Gestion finances personnelles simple et efficace",
     "category": "Bureautique",
-    "winget_id": null,
+    "winget_id": "HomeBank.HomeBank",
     "choco_id": null,
     "url": "http://homebank.free.fr/downloads.php",
     "icon": "file-text"
@@ -1214,7 +1184,7 @@
     "name": "PDFtk Free",
     "description": "Outil pour manipuler des fichiers PDF",
     "category": "Bureautique",
-    "winget_id": null,
+    "winget_id": "PDFLabs.PDFtk.Free",
     "choco_id": null,
     "url": "https://www.pdflabs.com/tools/pdftk-the-pdf-toolkit/pdftk_free-2.02-win-setup.exe",
     "icon": "file-text"
@@ -1224,7 +1194,7 @@
     "name": "GanttProject",
     "description": "Outil de gestion de projets avec diagrammes de Gantt",
     "category": "Bureautique",
-    "winget_id": null,
+    "winget_id": "GanttProject.GanttProject",
     "choco_id": null,
     "url": "https://github.com/bardsoftware/ganttproject/releases/latest",
     "icon": "file-text"
@@ -1234,7 +1204,7 @@
     "name": "Gramps",
     "description": "Logiciel de généalogie open source",
     "category": "Bureautique",
-    "winget_id": "GrampsProject.Gramps",
+    "winget_id": "Gramps.Gramps",
     "choco_id": null,
     "url": "https://github.com/gramps-project/gramps/releases/latest",
     "icon": "file-text"
@@ -1244,7 +1214,7 @@
     "name": "CutePDF Writer",
     "description": "Créateur de PDF gratuit (imprimante virtuelle)",
     "category": "Bureautique",
-    "winget_id": null,
+    "winget_id": "AcroSoftware.CutePDFWriter",
     "choco_id": null,
     "url": "https://www.cutepdf.com/download/CuteWriter.exe",
     "icon": "file-text"
@@ -1284,7 +1254,7 @@
     "name": "Scrivener",
     "description": "Outil d'écriture pour auteurs professionnels",
     "category": "Bureautique",
-    "winget_id": null,
+    "winget_id": "LiteratureAndLatte.Scrivener",
     "choco_id": null,
     "url": "https://www.literatureandlatte.com/scrivener/download",
     "icon": "file-text"
@@ -1304,7 +1274,7 @@
     "name": "OBS Studio",
     "description": "Streaming et enregistrement d'écran",
     "category": "Multimedia",
-    "winget_id": null,
+    "winget_id": "OBSProject.OBSStudio",
     "choco_id": null,
     "url": "https://github.com/obsproject/obs-studio/releases/download/29.1.3/OBS-Studio-29.1.3-Full-Installer-x64.exe",
     "icon": "play"
@@ -1314,7 +1284,7 @@
     "name": "HandBrake",
     "description": "Convertisseur vidéo open source",
     "category": "Multimedia",
-    "winget_id": null,
+    "winget_id": "HandBrake.HandBrake",
     "choco_id": null,
     "url": "https://github.com/HandBrake/HandBrake/releases/download/1.7.2/HandBrake-1.7.2-x86_64-Win_GUI.exe",
     "icon": "play"
@@ -1324,7 +1294,7 @@
     "name": "GIMP",
     "description": "Éditeur d'images gratuit et puissant",
     "category": "Multimedia",
-    "winget_id": null,
+    "winget_id": "GIMP.GIMP",
     "choco_id": null,
     "url": "https://download.gimp.org/mirror/pub/gimp/v2.10/windows/gimp-2.10.36-setup.exe",
     "icon": "play"
@@ -1404,8 +1374,8 @@
     "name": "KMPlayer",
     "description": "Lecteur multimédia complet avec codecs intégrés",
     "category": "Multimedia",
-    "winget_id": "PandoraTV.KMPlayer",
-    "choco_id": null,
+    "winget_id": null,
+    "choco_id": "kmplayer",
     "url": null,
     "icon": "play"
   },
@@ -1494,7 +1464,7 @@
     "name": "LightShot",
     "description": "Capture d'écran rapide et partage instantané",
     "category": "Multimedia",
-    "winget_id": null,
+    "winget_id": "Skillbrains.Lightshot",
     "choco_id": null,
     "url": "https://app.prntscr.com/build/setup-lightshot.exe",
     "icon": "play"
@@ -1534,7 +1504,7 @@
     "name": "FastStone Image Viewer",
     "description": "Visionneuse d'images rapide et complète",
     "category": "Multimedia",
-    "winget_id": "FastStone.ImageViewer",
+    "winget_id": "FastStone.Viewer",
     "choco_id": null,
     "url": "https://www.faststone.org/FSViewerDownload.htm",
     "icon": "play"
@@ -1564,7 +1534,7 @@
     "name": "PhotoScape X",
     "description": "Éditeur photo tout-en-un gratuit",
     "category": "Multimedia",
-    "winget_id": "MooiiTech.PhotoScapeX",
+    "winget_id": null,
     "choco_id": null,
     "url": "http://x.photoscape.org/",
     "icon": "play"
@@ -1634,7 +1604,7 @@
     "name": "JetBrains PyCharm Community",
     "description": "IDE Python gratuit et professionnel",
     "category": "Developpement",
-    "winget_id": null,
+    "winget_id": "JetBrains.PyCharm.Community",
     "choco_id": null,
     "url": "https://download.jetbrains.com/python/pycharm-community-2023.2.4.exe",
     "icon": "code"
@@ -1644,7 +1614,7 @@
     "name": "Sublime Text",
     "description": "Éditeur de texte sophistiqué pour développeurs",
     "category": "Developpement",
-    "winget_id": null,
+    "winget_id": "SublimeHQ.SublimeText",
     "choco_id": null,
     "url": "https://download.sublimetext.com/sublime_text_build_4152_x64_setup.exe",
     "icon": "code"
@@ -1654,7 +1624,7 @@
     "name": "Atom",
     "description": "Éditeur de texte moderne et hackable",
     "category": "Developpement",
-    "winget_id": null,
+    "winget_id": "GitHub.Atom",
     "choco_id": null,
     "url": "https://github.com/atom/atom/releases/latest/download/AtomSetup-x64.exe",
     "icon": "code"
@@ -1672,12 +1642,12 @@
   {
     "id": "docker-desktop",
     "name": "Docker Desktop",
-    "description": "Plateforme de conteneurisation pour développeurs",
-    "category": "Developpement",
-    "winget_id": null,
-    "choco_id": null,
+    "description": "Conteneurisation d'applications. Inclut Docker Engine, Docker CLI et Docker Compose.",
+    "category": "Virtualisation",
+    "winget_id": "Docker.DockerDesktop",
+    "choco_id": "docker-desktop",
     "url": "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe",
-    "icon": "code"
+    "icon": "server"
   },
   {
     "id": "postman",
@@ -1734,8 +1704,8 @@
     "name": "Eclipse IDE",
     "description": "IDE populaire pour Java",
     "category": "Developpement",
-    "winget_id": "EclipseFoundation.EclipseIDE",
-    "choco_id": null,
+    "winget_id": null,
+    "choco_id": "eclipse",
     "url": "https://www.eclipse.org/downloads/",
     "icon": "code"
   },
@@ -1784,8 +1754,8 @@
     "name": "FileZilla Client",
     "description": "Client FTP/FTPS/SFTP open source",
     "category": "Developpement",
-    "winget_id": "TimKosse.FileZilla.Client",
-    "choco_id": null,
+    "winget_id": null,
+    "choco_id": "filezilla",
     "url": null,
     "icon": "code"
   },
@@ -1827,16 +1797,6 @@
     "winget_id": "JetBrains.WebStorm",
     "choco_id": null,
     "url": "https://download.jetbrains.com/webstorm/WebStorm-2023.3.3.exe",
-    "icon": "code"
-  },
-  {
-    "id": "pycharm-community",
-    "name": "PyCharm Community",
-    "description": "IDE Python de JetBrains",
-    "category": "Developpement",
-    "winget_id": "JetBrains.PyCharm.Community",
-    "choco_id": null,
-    "url": "https://download.jetbrains.com/python/pycharm-community-2023.3.3.exe",
     "icon": "code"
   },
   {
@@ -1894,7 +1854,7 @@
     "name": "TreeSize Free",
     "description": "Analyseur d'espace disque",
     "category": "Utilitaires",
-    "winget_id": null,
+    "winget_id": "JAMSoftware.TreeSize.Free",
     "choco_id": null,
     "url": "https://customers.jam-software.de/downloadTrial.php?language=EN&article_no=80",
     "icon": "package"
@@ -1932,52 +1892,42 @@
   {
     "id": "cpu-z",
     "name": "CPU-Z",
-    "description": "Informations détaillées sur le processeur",
-    "category": "Utilitaires",
+    "description": "Informations détaillées CPU, RAM, carte mère et cache. Benchmark monocœur/multicœur intégré.",
+    "category": "Benchmarks et Tests",
     "winget_id": "CPUID.CPU-Z",
-    "choco_id": null,
+    "choco_id": "cpu-z",
     "url": null,
-    "icon": "package"
+    "icon": "gauge"
   },
   {
     "id": "gpu-z",
     "name": "GPU-Z",
-    "description": "Informations détaillées carte graphique",
-    "category": "Utilitaires",
-    "winget_id": null,
-    "choco_id": null,
+    "description": "Informations détaillées GPU : architecture, VRAM, fréquences, température en temps réel.",
+    "category": "Benchmarks et Tests",
+    "winget_id": "TechPowerUp.GPU-Z",
+    "choco_id": "gpu-z",
     "url": "https://www.techpowerup.com/download/techpowerup-gpu-z/",
-    "icon": "package"
-  },
-  {
-    "id": "hwinfo64",
-    "name": "HWiNFO64",
-    "description": "Diagnostic matériel complet",
-    "category": "Utilitaires",
-    "winget_id": "REALiX.HWiNFO",
-    "choco_id": null,
-    "url": "https://www.hwinfo.com/download/",
-    "icon": "package"
+    "icon": "gauge"
   },
   {
     "id": "recuva",
     "name": "Recuva",
-    "description": "Récupération de fichiers supprimés",
-    "category": "Utilitaires",
+    "description": "Récupération de fichiers supprimés : disques, clés USB, cartes SD. Interface simple et efficace.",
+    "category": "Récupération de Données",
     "winget_id": "Piriform.Recuva",
-    "choco_id": null,
+    "choco_id": "recuva",
     "url": null,
-    "icon": "package"
+    "icon": "database"
   },
   {
     "id": "revo-uninstaller",
     "name": "Revo Uninstaller",
-    "description": "Désinstalleur avancé avec nettoyage de traces",
-    "category": "Utilitaires",
+    "description": "Désinstallation avancée avec scan des résidus après suppression. Analyse registre en profondeur.",
+    "category": "Désinstallateurs Propres",
     "winget_id": "RevoUninstaller.RevoUninstaller",
-    "choco_id": null,
+    "choco_id": "revo-uninstaller",
     "url": "https://www.revouninstaller.com/products/revo-uninstaller-free/",
-    "icon": "package"
+    "icon": "trash-2"
   },
   {
     "id": "glary-utilities",
@@ -1992,12 +1942,12 @@
   {
     "id": "iobit-uninstaller",
     "name": "IObit Uninstaller",
-    "description": "Désinstalleur avec suppression des résidus",
-    "category": "Utilitaires",
+    "description": "Désinstallation en lot, suppression des barres d'outils, nettoyage après désinstallation.",
+    "category": "Désinstallateurs Propres",
     "winget_id": "IObit.Uninstaller",
-    "choco_id": null,
+    "choco_id": "iobit-uninstaller",
     "url": "https://cdn.iobit.com/dl/iobituninstaller.exe",
-    "icon": "package"
+    "icon": "trash-2"
   },
   {
     "id": "bleachbit",
@@ -2032,22 +1982,22 @@
   {
     "id": "crystaldiskinfo",
     "name": "CrystalDiskInfo",
-    "description": "Surveillance de la santé des disques durs/SSD",
-    "category": "Utilitaires",
+    "description": "Surveillance santé des disques via S.M.A.R.T. Alerte en cas de secteurs défectueux.",
+    "category": "Partition et Disque",
     "winget_id": "CrystalDewWorld.CrystalDiskInfo",
-    "choco_id": null,
+    "choco_id": "crystaldiskinfo",
     "url": null,
-    "icon": "package"
+    "icon": "hard-drive"
   },
   {
     "id": "crystaldiskmark",
     "name": "CrystalDiskMark",
-    "description": "Benchmark de performance des disques",
-    "category": "Utilitaires",
+    "description": "Benchmark de disque (lecture/écriture séquentielle et aléatoire). Standard de l'industrie.",
+    "category": "Benchmarks et Tests",
     "winget_id": "CrystalDewWorld.CrystalDiskMark",
-    "choco_id": null,
+    "choco_id": "crystaldiskmark",
     "url": null,
-    "icon": "package"
+    "icon": "gauge"
   },
   {
     "id": "msi-afterburner",
@@ -2111,43 +2061,33 @@
   },
   {
     "id": "geek-uninstaller",
-    "name": "Geek Uninstaller",
-    "description": "Désinstalleur portable léger et efficace",
-    "category": "Utilitaires",
-    "winget_id": null,
-    "choco_id": null,
+    "name": "GeekUninstaller",
+    "description": "Désinstallateur portable ultra-rapide, nettoie automatiquement les clés de registre orphelines.",
+    "category": "Désinstallateurs Propres",
+    "winget_id": "GeekUninstaller.GeekUninstaller",
+    "choco_id": "geek-uninstaller",
     "url": "https://geekuninstaller.com/geek.zip",
-    "icon": "package"
+    "icon": "trash-2"
   },
   {
     "id": "speedfan",
     "name": "SpeedFan",
     "description": "Contrôle de vitesse des ventilateurs",
     "category": "Utilitaires",
-    "winget_id": null,
+    "winget_id": "Almico.SpeedFan",
     "choco_id": null,
     "url": "http://www.almico.com/sfdownload.php",
     "icon": "package"
   },
   {
-    "id": "aida64-extreme",
-    "name": "AIDA64 Extreme",
-    "description": "Informations système et diagnostic matériel",
-    "category": "Utilitaires",
-    "winget_id": null,
-    "choco_id": null,
-    "url": "https://www.aida64.com/downloads",
-    "icon": "package"
-  },
-  {
     "id": "hwinfo",
     "name": "HWiNFO",
-    "description": "Informations matérielles complètes",
-    "category": "Utilitaires",
+    "description": "Monitoring système complet : températures, voltages, fréquences de tous les composants.",
+    "category": "Benchmarks et Tests",
     "winget_id": "REALiX.HWiNFO",
-    "choco_id": null,
+    "choco_id": "hwinfo",
     "url": "https://www.hwinfo.com/download/",
-    "icon": "package"
+    "icon": "gauge"
   },
   {
     "id": "open-hardware-monitor",
@@ -2184,7 +2124,7 @@
     "name": "Skype",
     "description": "Messagerie et appels vidéo Microsoft",
     "category": "Communication",
-    "winget_id": "Microsoft.Skype",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.skype.com/en/get-skype/",
     "icon": "message-circle"
@@ -2224,7 +2164,7 @@
     "name": "WhatsApp Desktop",
     "description": "Application de messagerie WhatsApp pour PC",
     "category": "Communication",
-    "winget_id": "WhatsApp.WhatsApp",
+    "winget_id": "9NKSQGP7F2NH",
     "choco_id": null,
     "url": "https://web.whatsapp.com/desktop/windows/release/x64/WhatsAppSetup.exe",
     "icon": "message-circle"
@@ -2254,7 +2194,7 @@
     "name": "Franz",
     "description": "Gestionnaire regroupant plusieurs messageries",
     "category": "Communication",
-    "winget_id": "MeetFranz.Franz",
+    "winget_id": "StefanMalzner.Franz",
     "choco_id": null,
     "url": null,
     "icon": "message-circle"
@@ -2280,16 +2220,6 @@
     "icon": "message-circle"
   },
   {
-    "id": "signal-desktop",
-    "name": "Signal Desktop",
-    "description": "Messagerie chiffrée de bout en bout",
-    "category": "Communication",
-    "winget_id": "OpenWhisperSystems.Signal",
-    "choco_id": null,
-    "url": "https://updates.signal.org/desktop/signal-desktop-win-6.43.0.exe",
-    "icon": "message-circle"
-  },
-  {
     "id": "element",
     "name": "Element",
     "description": "Client Matrix pour messagerie décentralisée",
@@ -2304,7 +2234,7 @@
     "name": "Viber",
     "description": "Appels et messages gratuits",
     "category": "Communication",
-    "winget_id": "Viber.Viber",
+    "winget_id": "Rakuten.Viber",
     "choco_id": null,
     "url": "https://www.viber.com/download/",
     "icon": "message-circle"
@@ -2314,7 +2244,7 @@
     "name": "Line",
     "description": "Application de messagerie populaire en Asie",
     "category": "Communication",
-    "winget_id": "LINE.LINE",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://desktop.line-scdn.net/win/new/LineInst.exe",
     "icon": "message-circle"
@@ -2334,7 +2264,7 @@
     "name": "Messenger",
     "description": "Facebook Messenger pour PC",
     "category": "Communication",
-    "winget_id": "Facebook.Messenger",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.messenger.com/desktop",
     "icon": "message-circle"
@@ -2344,7 +2274,7 @@
     "name": "Google Meet",
     "description": "Solution de visioconférence Google",
     "category": "Communication",
-    "winget_id": "Google.GoogleMeet",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://meet.google.com/download",
     "icon": "message-circle"
@@ -2384,7 +2314,7 @@
     "name": "Trillian",
     "description": "Messagerie instantanée multi-réseaux",
     "category": "Communication",
-    "winget_id": null,
+    "winget_id": "CeruleanStudios.Trillian",
     "choco_id": null,
     "url": "https://www.trillian.im/get/windows/6.5/trillian-v6.5.0.22.msi",
     "icon": "message-circle"
@@ -2394,7 +2324,7 @@
     "name": "Mumble",
     "description": "VoIP open source pour gamers",
     "category": "Communication",
-    "winget_id": "Mumble.Mumble",
+    "winget_id": "Mumble.Mumble.Client",
     "choco_id": null,
     "url": "https://github.com/mumble-voip/mumble/releases/latest",
     "icon": "message-circle"
@@ -2514,7 +2444,7 @@
     "name": "Overwolf",
     "description": "Overlay et apps pour gaming",
     "category": "Jeux",
-    "winget_id": "Overwolf.Overwolf",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://download.overwolf.com/install/Download",
     "icon": "gamepad-2"
@@ -2544,7 +2474,7 @@
     "name": "Rockstar Games Launcher",
     "description": "Lanceur de jeux Rockstar Games",
     "category": "Jeux",
-    "winget_id": "Rockstar.Launcher",
+    "winget_id": "RockstarGames.Launcher",
     "choco_id": null,
     "url": "https://gamedownloads.rockstargames.com/public/installer/Rockstar-Games-Launcher.exe",
     "icon": "gamepad-2"
@@ -2600,21 +2530,11 @@
     "icon": "gamepad-2"
   },
   {
-    "id": "blizzard-battlenet",
-    "name": "Blizzard Battle.net",
-    "description": "Plateforme de jeux Blizzard",
-    "category": "Jeux",
-    "winget_id": "Blizzard.BattleNet",
-    "choco_id": null,
-    "url": "https://www.battle.net/download/getInstallerForGame?os=win&gameProgram=BATTLENET_APP",
-    "icon": "gamepad-2"
-  },
-  {
     "id": "bethesda-launcher",
     "name": "Bethesda Launcher",
     "description": "Lanceur de jeux Bethesda",
     "category": "Jeux",
-    "winget_id": null,
+    "winget_id": "Bethesda.Launcher",
     "choco_id": null,
     "url": "https://download.cdp.bethesda.net/BethesdaNetLauncher_Setup.exe",
     "icon": "gamepad-2"
@@ -2654,7 +2574,7 @@
     "name": "Cheat Engine",
     "description": "Modification de jeux et debugger de mémoire",
     "category": "Jeux",
-    "winget_id": "CheatEngine.CheatEngine",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://github.com/cheat-engine/cheat-engine/releases/latest",
     "icon": "gamepad-2"
@@ -2664,7 +2584,7 @@
     "name": "Razer Cortex",
     "description": "Optimisation PC pour le gaming",
     "category": "Jeux",
-    "winget_id": "Razer.Cortex",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.razer.com/cortex/boost",
     "icon": "gamepad-2"
@@ -2674,7 +2594,7 @@
     "name": "Humble App",
     "description": "Client Humble Bundle",
     "category": "Jeux",
-    "winget_id": null,
+    "winget_id": "HumbleBundle.HumbleApp",
     "choco_id": null,
     "url": "https://www.humblebundle.com/app",
     "icon": "gamepad-2"
@@ -2724,7 +2644,7 @@
     "name": "AVAST Uninstall Utility",
     "description": "Outil officiel pour désinstaller complètement Avast",
     "category": "Desinstallateurs Antivirus",
-    "winget_id": "Avast.Avast",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "shield"
@@ -2754,7 +2674,7 @@
     "name": "Norton Remove and Reinstall Tool",
     "description": "Outil officiel pour désinstaller complètement Norton",
     "category": "Desinstallateurs Antivirus",
-    "winget_id": "NortonLifeLock.NortonRemoveAndReinstall",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "shield"
@@ -2974,8 +2894,8 @@
     "name": "FileZilla",
     "description": "Client FTP open source populaire",
     "category": "Internet",
-    "winget_id": "TimKosse.FileZilla.Client",
-    "choco_id": null,
+    "winget_id": null,
+    "choco_id": "filezilla",
     "url": "https://filezilla-project.org/download.php?type=client",
     "icon": "package"
   },
@@ -3000,16 +2920,6 @@
     "icon": "package"
   },
   {
-    "id": "jdownloader",
-    "name": "JDownloader",
-    "description": "Gestionnaire de téléchargements",
-    "category": "Internet",
-    "winget_id": "AppWork.JDownloader",
-    "choco_id": null,
-    "url": null,
-    "icon": "package"
-  },
-  {
     "id": "internet-download-manager",
     "name": "Internet Download Manager",
     "description": "Gestionnaire de téléchargements rapide",
@@ -3024,7 +2934,7 @@
     "name": "Free Download Manager",
     "description": "Gestionnaire de téléchargements gratuit et puissant",
     "category": "Internet",
-    "winget_id": "FreeDownloadManager.FreeDownloadManager",
+    "winget_id": "SoftDeluxe.FreeDownloadManager",
     "choco_id": null,
     "url": "https://files2.freedownloadmanager.org/6/latest/fdm_x64_setup.exe",
     "icon": "package"
@@ -3034,8 +2944,8 @@
     "name": "uTorrent",
     "description": "Client BitTorrent léger",
     "category": "Internet",
-    "winget_id": "BitTorrent.uTorrent",
-    "choco_id": null,
+    "winget_id": null,
+    "choco_id": "utorrent",
     "url": null,
     "icon": "package"
   },
@@ -3094,7 +3004,7 @@
     "name": "FrostWire",
     "description": "Client P2P et gestionnaire de médias",
     "category": "Internet",
-    "winget_id": null,
+    "winget_id": "FrostWire.FrostWire",
     "choco_id": null,
     "url": "https://www.frostwire.com/download/",
     "icon": "package"
@@ -3104,7 +3014,7 @@
     "name": "eMule",
     "description": "Client P2P classique eDonkey",
     "category": "Internet",
-    "winget_id": "eMuleProject.eMule",
+    "winget_id": "eMule.eMule",
     "choco_id": null,
     "url": "https://www.emule-project.net/home/perl/general.cgi?l=1",
     "icon": "package"
@@ -3134,7 +3044,7 @@
     "name": "Ookla Speedtest",
     "description": "Test de vitesse internet officiel",
     "category": "Internet",
-    "winget_id": "Ookla.Speedtest",
+    "winget_id": "Ookla.Speedtest.Desktop",
     "choco_id": null,
     "url": "https://www.speedtest.net/apps/desktop",
     "icon": "package"
@@ -3184,7 +3094,7 @@
     "name": "Angry IP Scanner",
     "description": "Scanner d'adresses IP open source",
     "category": "Internet",
-    "winget_id": "AngryIPScanner.AngryIPScanner",
+    "winget_id": "angryziber.AngryIPScanner",
     "choco_id": null,
     "url": "https://angryip.org/download/",
     "icon": "package"
@@ -3204,7 +3114,7 @@
     "name": "Cyberduck",
     "description": "Client FTP/SFTP avec support cloud",
     "category": "Internet",
-    "winget_id": "iterate.Cyberduck",
+    "winget_id": "Iterate.Cyberduck",
     "choco_id": null,
     "url": "https://cyberduck.io/download/",
     "icon": "package"
@@ -3214,7 +3124,7 @@
     "name": "SmartFTP",
     "description": "Client FTP professionnel",
     "category": "Internet",
-    "winget_id": null,
+    "winget_id": "SmartSoft.SmartFTP",
     "choco_id": null,
     "url": "https://www.smartftp.com/download",
     "icon": "package"
@@ -3224,7 +3134,7 @@
     "name": "FlashFXP",
     "description": "Client FTP rapide et fiable",
     "category": "Internet",
-    "winget_id": null,
+    "winget_id": "OpenSight.FlashFXP",
     "choco_id": null,
     "url": "https://www.flashfxp.com/download",
     "icon": "package"
@@ -3234,7 +3144,7 @@
     "name": "Core FTP",
     "description": "Client FTP/SFTP gratuit",
     "category": "Internet",
-    "winget_id": null,
+    "winget_id": "CoreFTP.CoreFTP",
     "choco_id": null,
     "url": "http://www.coreftp.com/download.html",
     "icon": "package"
@@ -3254,7 +3164,7 @@
     "name": "GlassWire Lite",
     "description": "Pare-feu et moniteur réseau version lite",
     "category": "Internet",
-    "winget_id": null,
+    "winget_id": "GlassWire.GlassWire.Lite",
     "choco_id": null,
     "url": "https://www.glasswire.com/download/",
     "icon": "package"
@@ -3324,7 +3234,7 @@
     "name": "Twitch",
     "description": "Plateforme de streaming en direct",
     "category": "Reseaux Sociaux",
-    "winget_id": "Twitch.Twitch",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "wifi"
@@ -3424,7 +3334,7 @@
     "name": "Wavebox",
     "description": "Navigateur pour applications web et réseaux sociaux",
     "category": "Reseaux Sociaux",
-    "winget_id": "Wavebox.Wavebox",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://wavebox.io/",
     "icon": "wifi"
@@ -3434,7 +3344,7 @@
     "name": "Station",
     "description": "Application unique pour toutes vos apps web",
     "category": "Reseaux Sociaux",
-    "winget_id": null,
+    "winget_id": "Station.Station",
     "choco_id": null,
     "url": "https://getstation.com/",
     "icon": "wifi"
@@ -3444,7 +3354,7 @@
     "name": "Shift",
     "description": "Gestion multi-comptes pour apps web",
     "category": "Reseaux Sociaux",
-    "winget_id": null,
+    "winget_id": "Shift.Shift",
     "choco_id": null,
     "url": "https://tryshift.com/download/",
     "icon": "wifi"
@@ -3527,16 +3437,6 @@
     "winget_id": null,
     "choco_id": null,
     "url": "https://www.agorapulse.com/",
-    "icon": "wifi"
-  },
-  {
-    "id": "franz-desktop",
-    "name": "Franz Desktop",
-    "description": "Messagerie universelle pour réseaux sociaux desktop",
-    "category": "Reseaux Sociaux",
-    "winget_id": "MeetFranz.Franz",
-    "choco_id": null,
-    "url": "https://github.com/meetfranz/franz/releases/latest",
     "icon": "wifi"
   },
   {
@@ -3724,7 +3624,7 @@
     "name": "XSplit Broadcaster",
     "description": "Logiciel de streaming professionnel",
     "category": "Streaming Video",
-    "winget_id": null,
+    "winget_id": "SplitmediaLabs.XSplitBroadcaster",
     "choco_id": null,
     "url": "https://www.xsplit.com/download",
     "icon": "package"
@@ -3854,7 +3754,7 @@
     "name": "Qobuz",
     "description": "Streaming Hi-Res audio et téléchargements",
     "category": "Streaming Audio",
-    "winget_id": null,
+    "winget_id": "Qobuz.Qobuz",
     "choco_id": null,
     "url": "https://www.qobuz.com/us-en/discover",
     "icon": "package"
@@ -3884,7 +3784,7 @@
     "name": "Tidal",
     "description": "Streaming audio haute fidélité",
     "category": "Streaming Audio",
-    "winget_id": "TIDAL.TIDAL",
+    "winget_id": "TIDALMusicAS.TIDAL",
     "choco_id": null,
     "url": "https://download.tidal.com/desktop/TIDALSetup.exe",
     "icon": "package"
@@ -4000,22 +3900,12 @@
     "icon": "package"
   },
   {
-    "id": "foobar2000-2",
-    "name": "foobar2000",
-    "description": "Lecteur audio avancé et modulaire",
-    "category": "Streaming Audio",
-    "winget_id": "PeterPawlowski.foobar2000",
-    "choco_id": null,
-    "url": "https://www.foobar2000.org/download",
-    "icon": "package"
-  },
-  {
     "id": "musicbee",
     "name": "MusicBee",
     "description": "Gestionnaire de musique complet",
     "category": "Streaming Audio",
-    "winget_id": "MusicBee.MusicBee",
-    "choco_id": null,
+    "winget_id": null,
+    "choco_id": "musicbee",
     "url": "https://getmusicbee.com/downloads/",
     "icon": "package"
   },
@@ -4034,19 +3924,9 @@
     "name": "Dopamine",
     "description": "Lecteur audio élégant pour Windows",
     "category": "Streaming Audio",
-    "winget_id": null,
+    "winget_id": "Digimezzo.Dopamine",
     "choco_id": null,
     "url": "https://github.com/digimezzo/dopamine/releases",
-    "icon": "package"
-  },
-  {
-    "id": "spotify-desktop",
-    "name": "Spotify Desktop",
-    "description": "Application Spotify bureau complète",
-    "category": "Streaming Audio",
-    "winget_id": "Spotify.Spotify",
-    "choco_id": null,
-    "url": "https://download.scdn.co/SpotifySetup.exe",
     "icon": "package"
   },
   {
@@ -4054,7 +3934,7 @@
     "name": "ChatGPT",
     "description": "Application ChatGPT officielle",
     "category": "IA & Assistants",
-    "winget_id": "OpenAI.ChatGPT",
+    "winget_id": "9NT1R1C2HH7J",
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -4084,7 +3964,7 @@
     "name": "LM Studio",
     "description": "Interface pour modèles de langage locaux",
     "category": "IA & Assistants",
-    "winget_id": "LMStudio.LMStudio",
+    "winget_id": "ElementLabs.LMStudio",
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -4104,7 +3984,7 @@
     "name": "Waifu2x-Extension-GUI",
     "description": "Amélioration d'images avec IA",
     "category": "IA & Assistants",
-    "winget_id": "AaronFeng753.Waifu2x-Extension-GUI",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -4124,7 +4004,7 @@
     "name": "AnythingLLM",
     "description": "Interface tout-en-un pour LLMs",
     "category": "IA & Assistants",
-    "winget_id": "MintplexLabs.AnythingLLM",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -4134,7 +4014,7 @@
     "name": "Whisper Desktop",
     "description": "Transcription audio par IA (OpenAI Whisper)",
     "category": "IA & Assistants",
-    "winget_id": "Const-me.Whisper",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -4144,7 +4024,7 @@
     "name": "Stability Matrix",
     "description": "Gestionnaire pour Stable Diffusion et modèles IA",
     "category": "IA & Assistants",
-    "winget_id": "LykosAI.StabilityMatrix",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -4174,19 +4054,9 @@
     "name": "Perplexity",
     "description": "Moteur de recherche IA conversationnel",
     "category": "IA & Assistants",
-    "winget_id": null,
+    "winget_id": "Perplexity.Perplexity",
     "choco_id": null,
     "url": "https://www.perplexity.ai/",
-    "icon": "package"
-  },
-  {
-    "id": "notion-ai",
-    "name": "Notion AI",
-    "description": "Application Notion avec IA intégrée",
-    "category": "IA & Assistants",
-    "winget_id": "Notion.Notion",
-    "choco_id": null,
-    "url": "https://www.notion.so/desktop",
     "icon": "package"
   },
   {
@@ -4334,8 +4204,8 @@
     "name": "DS4Windows",
     "description": "Utiliser une manette PS4/PS5 sur PC",
     "category": "Utilitaires Systeme",
-    "winget_id": "Ryochan7.DS4Windows",
-    "choco_id": null,
+    "winget_id": null,
+    "choco_id": "ds4windows",
     "url": null,
     "icon": "settings"
   },
@@ -4345,16 +4215,6 @@
     "description": "Accès à distance VNC",
     "category": "Utilitaires Systeme",
     "winget_id": "GlavSoft.TightVNC",
-    "choco_id": null,
-    "url": null,
-    "icon": "settings"
-  },
-  {
-    "id": "speedtest-by-ookla",
-    "name": "Speedtest by Ookla",
-    "description": "Test de vitesse internet par Ookla",
-    "category": "Utilitaires Systeme",
-    "winget_id": "Ookla.Speedtest.Desktop",
     "choco_id": null,
     "url": null,
     "icon": "settings"
@@ -4414,7 +4274,7 @@
     "name": "SpaceSniffer",
     "description": "Visualisateur d'espace disque treemap",
     "category": "Utilitaires Systeme",
-    "winget_id": null,
+    "winget_id": "UderzoSoftware.SpaceSniffer",
     "choco_id": null,
     "url": "http://www.uderzo.it/main_products/space_sniffer/download.html",
     "icon": "settings"
@@ -4454,8 +4314,8 @@
     "name": "PrivaZer",
     "description": "Protection et nettoyage vie privée",
     "category": "Utilitaires Systeme",
-    "winget_id": "Goversoft.PrivaZer",
-    "choco_id": null,
+    "winget_id": null,
+    "choco_id": "privazer",
     "url": null,
     "icon": "settings"
   },
@@ -4464,7 +4324,7 @@
     "name": "Sysinternals Suite",
     "description": "Suite complète d'outils système Microsoft",
     "category": "Utilitaires Systeme",
-    "winget_id": null,
+    "winget_id": "Microsoft.Sysinternals.Suite",
     "choco_id": null,
     "url": "https://download.sysinternals.com/files/SysinternalsSuite.zip",
     "icon": "settings"
@@ -4474,7 +4334,7 @@
     "name": "Process Lasso",
     "description": "Optimisation et automatisation des processus",
     "category": "Utilitaires Systeme",
-    "winget_id": "Bitsum.ProcessLasso",
+    "winget_id": "BitSum.ProcessLasso",
     "choco_id": null,
     "url": "https://dl.bitsum.com/files/processlassosetup64.exe",
     "icon": "settings"
@@ -4494,7 +4354,7 @@
     "name": "Auslogics BoostSpeed",
     "description": "Accélération et nettoyage PC",
     "category": "Utilitaires Systeme",
-    "winget_id": null,
+    "winget_id": "Auslogics.BoostSpeed",
     "choco_id": null,
     "url": "https://downloads.auslogics.com/en/boost-speed/boost-speed-setup.exe",
     "icon": "settings"
@@ -4574,7 +4434,7 @@
     "name": "ShutUp10++",
     "description": "Contrôle confidentialité Windows 10/11",
     "category": "Utilitaires Systeme",
-    "winget_id": null,
+    "winget_id": "OO-Software.ShutUp10",
     "choco_id": null,
     "url": "https://dl5.oo-software.com/files/ooshutup10/OOSU10.exe",
     "icon": "settings"
@@ -4604,7 +4464,7 @@
     "name": "TreeSize Professional",
     "description": "Analyseur d'espace disque professionnel",
     "category": "Utilitaires Systeme",
-    "winget_id": "JAMSoftware.TreeSize.Free",
+    "winget_id": "JAMSoftware.TreeSize",
     "choco_id": null,
     "url": "https://www.jam-software.de/treesize_free/TreeSizeFreeSetup.exe",
     "icon": "settings"
@@ -4614,7 +4474,7 @@
     "name": "Glary Utilities Pro",
     "description": "Suite d'optimisation système pro",
     "category": "Utilitaires Systeme",
-    "winget_id": "Glarysoft.GlaryUtilities",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://download.glarysoft.com/gu5setup.exe",
     "icon": "settings"
@@ -4624,7 +4484,7 @@
     "name": "HWMonitor Pro",
     "description": "Surveillance température et voltages pro",
     "category": "Utilitaires Systeme",
-    "winget_id": "CPUID.HWMonitor",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.cpuid.com/downloads/hwmonitor/hwmonitor_1.52.exe",
     "icon": "settings"
@@ -4654,7 +4514,7 @@
     "name": "Brother iPrint&Scan",
     "description": "Application Brother pour impression mobile",
     "category": "Imprimantes & Scan",
-    "winget_id": null,
+    "winget_id": "Brother.iPrintScan",
     "choco_id": null,
     "url": "https://support.brother.com/g/b/downloadlist.aspx?c=us&lang=en&prod=group2&os=10013",
     "icon": "package"
@@ -4674,7 +4534,7 @@
     "name": "PaperScan",
     "description": "Logiciel de numérisation avec OCR",
     "category": "Imprimantes & Scan",
-    "winget_id": "ORPALIS.PaperScan",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -4814,7 +4674,7 @@
     "name": "WinScan2PDF",
     "description": "Scanner vers PDF rapidement",
     "category": "Imprimantes & Scan",
-    "winget_id": null,
+    "winget_id": "SoftwareOK.WinScan2PDF",
     "choco_id": null,
     "url": "http://www.softwareok.com/Download/WinScan2PDF.zip",
     "icon": "package"
@@ -4834,7 +4694,7 @@
     "name": "NovaPDF",
     "description": "Créateur PDF avec OCR",
     "category": "Imprimantes & Scan",
-    "winget_id": null,
+    "winget_id": "Softland.novaPDF",
     "choco_id": null,
     "url": "https://www.novapdf.com/download.html",
     "icon": "package"
@@ -4964,7 +4824,7 @@
     "name": "Bonjour Print Services",
     "description": "Services d'impression réseau Apple",
     "category": "Services Apple",
-    "winget_id": null,
+    "winget_id": "Apple.BonjourPrintServices",
     "choco_id": null,
     "url": "https://support.apple.com/kb/DL999",
     "icon": "package"
@@ -4974,7 +4834,7 @@
     "name": "5KPlayer",
     "description": "Lecteur avec support AirPlay",
     "category": "Services Apple",
-    "winget_id": "DearMob.5KPlayer",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.5kplayer.com/download/5kplayer.exe",
     "icon": "package"
@@ -5064,7 +4924,7 @@
     "name": "iBackupBot",
     "description": "Gestionnaire de sauvegardes iTunes",
     "category": "Services Apple",
-    "winget_id": null,
+    "winget_id": "VOWSoft.iBackupBot",
     "choco_id": null,
     "url": "http://www.icopybot.com/download.htm",
     "icon": "package"
@@ -5100,21 +4960,11 @@
     "icon": "package"
   },
   {
-    "id": "adobe-acrobat-reader",
-    "name": "Adobe Acrobat Reader",
-    "description": "Lecteur PDF Adobe Acrobat Reader",
-    "category": "Suites Professionnelles",
-    "winget_id": "Adobe.Acrobat.Reader.64-bit",
-    "choco_id": null,
-    "url": null,
-    "icon": "package"
-  },
-  {
     "id": "autodesk-desktop-app",
     "name": "Autodesk Desktop App",
     "description": "Gestionnaire des applications Autodesk",
     "category": "Suites Professionnelles",
-    "winget_id": "Autodesk.AutodeskDesktopApp",
+    "winget_id": "Autodesk.DesktopApp",
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -5124,7 +4974,7 @@
     "name": "Autodesk AutoCAD",
     "description": "Logiciel de conception assistée par ordinateur",
     "category": "Suites Professionnelles",
-    "winget_id": "Autodesk.AutoCAD",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -5144,7 +4994,7 @@
     "name": "CorelDRAW Graphics Suite",
     "description": "Suite graphique professionnelle",
     "category": "Suites Professionnelles",
-    "winget_id": "Corel.CorelDRAW",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -5181,30 +5031,10 @@
   },
   {
     "id": "affinity-designer",
-    "name": "Affinity Designer",
-    "description": "Logiciel de design graphique vectoriel",
+    "name": "Affinity (Designer, Photo, Publisher)",
+    "description": "Suite créative Affinity tout-en-un, gratuite (Canva)",
     "category": "Suites Professionnelles",
-    "winget_id": "SerifEurope.AffinityDesigner2",
-    "choco_id": null,
-    "url": null,
-    "icon": "package"
-  },
-  {
-    "id": "affinity-photo",
-    "name": "Affinity Photo",
-    "description": "Éditeur photo professionnel",
-    "category": "Suites Professionnelles",
-    "winget_id": "SerifEurope.AffinityPhoto2",
-    "choco_id": null,
-    "url": null,
-    "icon": "package"
-  },
-  {
-    "id": "affinity-publisher",
-    "name": "Affinity Publisher",
-    "description": "Publication assistée par ordinateur",
-    "category": "Suites Professionnelles",
-    "winget_id": "SerifEurope.AffinityPublisher2",
+    "winget_id": "Canva.Affinity",
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -5250,16 +5080,6 @@
     "icon": "package"
   },
   {
-    "id": "mondaycom-desktop",
-    "name": "Monday.com Desktop",
-    "description": "Plateforme de gestion de travail",
-    "category": "Suites Professionnelles",
-    "winget_id": "Monday.Monday",
-    "choco_id": null,
-    "url": "https://monday.com/",
-    "icon": "package"
-  },
-  {
     "id": "asana-desktop",
     "name": "Asana Desktop",
     "description": "Gestion de projets et tâches",
@@ -5284,7 +5104,7 @@
     "name": "Smartsheet",
     "description": "Gestion de projets et collaboration",
     "category": "Suites Professionnelles",
-    "winget_id": null,
+    "winget_id": "Smartsheet.Smartsheet",
     "choco_id": null,
     "url": "https://www.smartsheet.com/",
     "icon": "package"
@@ -5304,7 +5124,7 @@
     "name": "Basecamp",
     "description": "Gestion de projets et communication d'équipe",
     "category": "Suites Professionnelles",
-    "winget_id": null,
+    "winget_id": "37signals.Basecamp",
     "choco_id": null,
     "url": "https://basecamp.com/downloads",
     "icon": "package"
@@ -5314,7 +5134,7 @@
     "name": "Airtable",
     "description": "Base de données collaborative",
     "category": "Suites Professionnelles",
-    "winget_id": "Airtable.Airtable",
+    "winget_id": "Formagrid.Airtable",
     "choco_id": null,
     "url": "https://www.airtable.com/downloads",
     "icon": "package"
@@ -5404,7 +5224,7 @@
     "name": "Trello",
     "description": "Gestion de projets par tableaux Kanban",
     "category": "Productivite",
-    "winget_id": "Trello.Trello",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -5424,7 +5244,7 @@
     "name": "Monday.com",
     "description": "Plateforme de gestion de projet collaborative",
     "category": "Productivite",
-    "winget_id": "Monday.Monday",
+    "winget_id": "monday.monday",
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -5440,21 +5260,11 @@
     "icon": "package"
   },
   {
-    "id": "simplenote-2",
-    "name": "Simplenote",
-    "description": "Prise de notes simple et gratuite",
-    "category": "Productivite",
-    "winget_id": "Automattic.Simplenote",
-    "choco_id": null,
-    "url": null,
-    "icon": "package"
-  },
-  {
     "id": "roam-research",
     "name": "Roam Research",
     "description": "Outil de prise de notes en réseau",
     "category": "Productivite",
-    "winget_id": null,
+    "winget_id": "RoamResearch.RoamResearch",
     "choco_id": null,
     "url": "https://roamresearch.com/#/download",
     "icon": "package"
@@ -5484,7 +5294,7 @@
     "name": "Any.do",
     "description": "To-do liste et calendrier",
     "category": "Productivite",
-    "winget_id": null,
+    "winget_id": "Anydo.Anydo",
     "choco_id": null,
     "url": "https://www.any.do/",
     "icon": "package"
@@ -5564,7 +5374,7 @@
     "name": "RescueTime",
     "description": "Suivi automatique du temps et productivité",
     "category": "Productivite",
-    "winget_id": "RescueTime.RescueTime",
+    "winget_id": "RescueTime.DesktopApp",
     "choco_id": null,
     "url": "https://www.rescuetime.com/installers/RescueTimeInstaller.exe",
     "icon": "package"
@@ -5630,16 +5440,6 @@
     "icon": "package"
   },
   {
-    "id": "joplin-desktop",
-    "name": "Joplin Desktop",
-    "description": "Application de notes open source desktop",
-    "category": "Productivite",
-    "winget_id": "Joplin.Joplin",
-    "choco_id": null,
-    "url": "https://joplinapp.org/download/",
-    "icon": "package"
-  },
-  {
     "id": "google-drive",
     "name": "Google Drive",
     "description": "Stockage cloud Google 15GB gratuit",
@@ -5684,7 +5484,7 @@
     "name": "pCloud Drive",
     "description": "Stockage cloud sécurisé suisse",
     "category": "Stockage Cloud",
-    "winget_id": "pCloud.pCloudDrive",
+    "winget_id": "pCloudAG.pCloudDrive",
     "choco_id": null,
     "url": "https://www.pcloud.com/download-free-online-cloud-file-storage.html",
     "icon": "package"
@@ -5764,7 +5564,7 @@
     "name": "Seafile",
     "description": "Plateforme de synchronisation fichiers open source",
     "category": "Stockage Cloud",
-    "winget_id": null,
+    "winget_id": "Seafile.Seafile",
     "choco_id": null,
     "url": "https://www.seafile.com/en/download/",
     "icon": "package"
@@ -5774,7 +5574,7 @@
     "name": "Resilio Sync",
     "description": "Synchronisation P2P sans cloud",
     "category": "Stockage Cloud",
-    "winget_id": "Resilio.ResilioSync",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.resilio.com/individuals/",
     "icon": "package"
@@ -5824,7 +5624,7 @@
     "name": "Internxt Drive",
     "description": "Stockage cloud privé et sécurisé",
     "category": "Stockage Cloud",
-    "winget_id": null,
+    "winget_id": "Internxt.Drive",
     "choco_id": null,
     "url": "https://internxt.com/drive",
     "icon": "package"
@@ -5844,7 +5644,7 @@
     "name": "Backblaze",
     "description": "Backup cloud illimité",
     "category": "Stockage Cloud",
-    "winget_id": "Backblaze.Backblaze",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.backblaze.com/download.htm",
     "icon": "package"
@@ -5864,7 +5664,7 @@
     "name": "IDrive",
     "description": "Backup cloud et synchronisation",
     "category": "Stockage Cloud",
-    "winget_id": null,
+    "winget_id": "IDrive.IDrive",
     "choco_id": null,
     "url": "https://www.idrive.com/",
     "icon": "package"
@@ -5874,7 +5674,7 @@
     "name": "SugarSync",
     "description": "Synchronisation cloud multi-appareils",
     "category": "Stockage Cloud",
-    "winget_id": null,
+    "winget_id": "IPVanish.SugarSync",
     "choco_id": null,
     "url": "https://www.sugarsync.com/sync_downloads.html",
     "icon": "package"
@@ -5924,7 +5724,7 @@
     "name": "CrashPlan",
     "description": "Backup cloud pour entreprises et particuliers",
     "category": "Stockage Cloud",
-    "winget_id": null,
+    "winget_id": "CrashPlan.CrashPlan",
     "choco_id": null,
     "url": "https://www.crashplan.com/en-us/download/",
     "icon": "package"
@@ -5994,7 +5794,7 @@
     "name": "LibreOffice Draw",
     "description": "Éditeur de dessins et diagrammes",
     "category": "PDF et Documents",
-    "winget_id": "TheDocumentFoundation.LibreOffice.Draw",
+    "winget_id": null,
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -6004,7 +5804,7 @@
     "name": "PDF Arranger",
     "description": "Réorganiser, fusionner et diviser des PDF",
     "category": "PDF et Documents",
-    "winget_id": null,
+    "winget_id": "PDFArranger.PDFArranger",
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -6114,7 +5914,7 @@
     "name": "PDF Architect",
     "description": "Suite PDF modulaire",
     "category": "PDF et Documents",
-    "winget_id": null,
+    "winget_id": "Avanquestpdfforge.PDFArchitect",
     "choco_id": null,
     "url": "https://www.pdfforge.org/pdfarchitect/download",
     "icon": "package"
@@ -6124,7 +5924,7 @@
     "name": "Bluebeam Revu",
     "description": "PDF pour professionnels AEC",
     "category": "PDF et Documents",
-    "winget_id": null,
+    "winget_id": "Bluebeam.Revu",
     "choco_id": null,
     "url": "https://www.bluebeam.com/download/",
     "icon": "package"
@@ -6144,7 +5944,7 @@
     "name": "Xodo PDF Reader",
     "description": "Lecteur et éditeur PDF gratuit",
     "category": "PDF et Documents",
-    "winget_id": null,
+    "winget_id": "Apryse.XodoPDFReader",
     "choco_id": null,
     "url": "https://www.xodo.com/app/",
     "icon": "package"
@@ -6194,7 +5994,7 @@
     "name": "PDFelement",
     "description": "Éditeur PDF tout-en-un Wondershare",
     "category": "PDF et Documents",
-    "winget_id": null,
+    "winget_id": "Wondershare.PDFelement",
     "choco_id": null,
     "url": "https://pdf.wondershare.com/pdfelement/",
     "icon": "package"
@@ -6264,7 +6064,7 @@
     "name": "IZArc",
     "description": "Gestionnaire d'archives gratuit",
     "category": "Compression",
-    "winget_id": null,
+    "winget_id": "IZArc.IZArc",
     "choco_id": null,
     "url": "https://www.izarc.org/",
     "icon": "package"
@@ -6314,7 +6114,7 @@
     "name": "ExtractNow",
     "description": "Extracteur simple et rapide",
     "category": "Compression",
-    "winget_id": null,
+    "winget_id": "NathanMoinvaziri.ExtractNow",
     "choco_id": null,
     "url": "https://www.extractnow.com/",
     "icon": "package"
@@ -6334,7 +6134,7 @@
     "name": "PowerArchiver",
     "description": "Archiveur professionnel complet",
     "category": "Compression",
-    "winget_id": null,
+    "winget_id": "ConeXware.PowerArchiver",
     "choco_id": null,
     "url": "https://www.powerarchiver.com/download/",
     "icon": "package"
@@ -6444,7 +6244,7 @@
     "name": "DISM++",
     "description": "Interface graphique pour DISM - gestion et nettoyage Windows",
     "category": "Outils Essentiels",
-    "winget_id": "ChuYu.DISM++",
+    "winget_id": "ChuyuTeam.DISM++",
     "choco_id": null,
     "url": "https://github.com/Chuyu-Team/Dism-Multi-language/releases/latest",
     "icon": "star"
@@ -6454,7 +6254,7 @@
     "name": "NTLite",
     "description": "Personnalisation et allègement d'images Windows",
     "category": "Outils Essentiels",
-    "winget_id": "NTLite.NTLite",
+    "winget_id": "Nlitesoft.NTLite",
     "choco_id": null,
     "url": "https://www.ntlite.com/download/",
     "icon": "star"
@@ -6484,7 +6284,7 @@
     "name": "WindowsSpyBlocker",
     "description": "Bloquer espionnage et télémétrie Windows",
     "category": "Outils Essentiels",
-    "winget_id": null,
+    "winget_id": "CrazyMax.WindowsSpyBlocker",
     "choco_id": null,
     "url": "https://github.com/crazy-max/WindowsSpyBlocker/releases/latest",
     "icon": "star"
@@ -6504,7 +6304,7 @@
     "name": "UltraVNC",
     "description": "Logiciel bureau à distance VNC pour Windows",
     "category": "Outils Essentiels",
-    "winget_id": "uvnc.uvnc",
+    "winget_id": "uvncbvba.UltraVNC",
     "choco_id": null,
     "url": "https://uvnc.com/downloads/ultravnc.html",
     "icon": "star"
@@ -6514,7 +6314,7 @@
     "name": "MediaCreationTool",
     "description": "Outil officiel Microsoft pour créer supports d'installation Windows",
     "category": "Outils Essentiels",
-    "winget_id": null,
+    "winget_id": "Microsoft.MediaCreationTool",
     "choco_id": null,
     "url": "https://go.microsoft.com/fwlink/?LinkId=691209",
     "icon": "star"
@@ -6554,7 +6354,7 @@
     "name": "Macrium Reflect Free",
     "description": "Sauvegarde et clonage de disque gratuit",
     "category": "Outils Essentiels",
-    "winget_id": "Macrium.Reflect",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://www.macrium.com/reflectfree.aspx",
     "icon": "star"
@@ -6574,7 +6374,7 @@
     "name": "DBeaver Community",
     "description": "Gestionnaire de bases de données universel open source",
     "category": "Developpement",
-    "winget_id": "dbeaver.dbeaver",
+    "winget_id": "DBeaver.DBeaver.Community",
     "choco_id": null,
     "url": "https://dbeaver.io/download/",
     "icon": "code"
@@ -6624,7 +6424,7 @@
     "name": "Zed",
     "description": "Éditeur de code hautes performances en Rust",
     "category": "Developpement",
-    "winget_id": "Zed.Zed",
+    "winget_id": "ZedIndustries.Zed",
     "choco_id": null,
     "url": "https://zed.dev/download",
     "icon": "code"
@@ -6662,12 +6462,12 @@
   {
     "id": "vagrant",
     "name": "Vagrant",
-    "description": "Gestion d'environnements de développement virtuels",
-    "category": "Developpement",
+    "description": "Gestion de machines virtuelles via fichiers de config. Intégration VirtualBox/VMware/Hyper-V.",
+    "category": "Virtualisation",
     "winget_id": "Hashicorp.Vagrant",
-    "choco_id": null,
+    "choco_id": "vagrant",
     "url": "https://www.vagrantup.com/downloads",
-    "icon": "code"
+    "icon": "server"
   },
   {
     "id": "kdenlive",
@@ -6684,7 +6484,7 @@
     "name": "MKVToolNix",
     "description": "Création et édition de fichiers MKV",
     "category": "Multimedia",
-    "winget_id": "MKVToolNix.MKVToolNix",
+    "winget_id": "MoritzBunkus.MKVToolNix",
     "choco_id": null,
     "url": "https://mkvtoolnix.download/downloads.html#windows",
     "icon": "play"
@@ -6694,7 +6494,7 @@
     "name": "fre:ac",
     "description": "Convertisseur audio et extracteur de CD gratuit",
     "category": "Multimedia",
-    "winget_id": "freac.freac",
+    "winget_id": "enzo1982.freac",
     "choco_id": null,
     "url": "https://www.freac.org/downloads-mainmenu-33",
     "icon": "play"
@@ -6724,7 +6524,7 @@
     "name": "Natron",
     "description": "Composition vidéo open source (After Effects alternative)",
     "category": "Multimedia",
-    "winget_id": null,
+    "winget_id": "Natron.Natron",
     "choco_id": null,
     "url": "https://natrongithub.github.io/",
     "icon": "play"
@@ -6774,7 +6574,7 @@
     "name": "MarkText",
     "description": "Éditeur Markdown simple et élégant",
     "category": "Bureautique",
-    "winget_id": "marktext.marktext",
+    "winget_id": "MarkText.MarkText",
     "choco_id": null,
     "url": "https://github.com/marktext/marktext/releases/latest",
     "icon": "file-text"
@@ -6784,7 +6584,7 @@
     "name": "Typora",
     "description": "Éditeur Markdown minimaliste WYSIWYG",
     "category": "Bureautique",
-    "winget_id": "Typora.Typora",
+    "winget_id": "appmakes.Typora",
     "choco_id": null,
     "url": "https://typora.io/",
     "icon": "file-text"
@@ -6824,7 +6624,7 @@
     "name": "XMind",
     "description": "Carte mentale et brainstorming",
     "category": "Bureautique",
-    "winget_id": "XMind.XMind",
+    "winget_id": "Xmind.Xmind",
     "choco_id": null,
     "url": "https://www.xmind.net/download/",
     "icon": "file-text"
@@ -6834,7 +6634,7 @@
     "name": "Bulk Rename Utility",
     "description": "Renommage de fichiers en masse avancé",
     "category": "Utilitaires",
-    "winget_id": "TGRMN.BulkRenameUtility",
+    "winget_id": "TGRMNSoftware.BulkRenameUtility",
     "choco_id": null,
     "url": "https://www.bulkrenameutility.co.uk/Download.php",
     "icon": "package"
@@ -6854,7 +6654,7 @@
     "name": "XYplorer",
     "description": "Gestionnaire de fichiers portable et personnalisable",
     "category": "Utilitaires",
-    "winget_id": "XYplorer.XYplorer",
+    "winget_id": "CologneCodeCompany.XYplorer",
     "choco_id": null,
     "url": "https://www.xyplorer.com/free.php",
     "icon": "package"
@@ -6874,7 +6674,7 @@
     "name": "FolderSizes",
     "description": "Analyse taille dossiers et fichiers avec rapports",
     "category": "Utilitaires",
-    "winget_id": null,
+    "winget_id": "KeyMetricSoftware.FolderSizes",
     "choco_id": null,
     "url": "https://www.foldersizes.com/",
     "icon": "package"
@@ -6904,7 +6704,7 @@
     "name": "Multi Commander",
     "description": "Gestionnaire de fichiers multi-fonctionnel",
     "category": "Utilitaires",
-    "winget_id": "MultiCommander.MultiCommander",
+    "winget_id": "MathiasSvensson.MultiCommander",
     "choco_id": null,
     "url": "https://multicommander.com/downloads",
     "icon": "package"
@@ -7000,21 +6800,11 @@
     "icon": "gamepad-2"
   },
   {
-    "id": "playnite-desktop",
-    "name": "Playnite Desktop",
-    "description": "Bibliothèque unifiée tous launchers jeux",
-    "category": "Jeux",
-    "winget_id": "Playnite.Playnite",
-    "choco_id": null,
-    "url": "https://playnite.link/download.html",
-    "icon": "gamepad-2"
-  },
-  {
     "id": "mame",
     "name": "MAME",
     "description": "Émulateur d'arcade multi-plateforme",
     "category": "Jeux",
-    "winget_id": "MAME.MAME",
+    "winget_id": "MAMEdev.MAME",
     "choco_id": null,
     "url": "https://www.mamedev.org/release.php",
     "icon": "gamepad-2"
@@ -7024,7 +6814,7 @@
     "name": "Dolphin Emulator",
     "description": "Émulateur GameCube et Wii",
     "category": "Jeux",
-    "winget_id": "DolphinEmu.DolphinEmu",
+    "winget_id": "DolphinEmulator.Dolphin",
     "choco_id": null,
     "url": "https://dolphin-emu.org/download/",
     "icon": "gamepad-2"
@@ -7034,7 +6824,7 @@
     "name": "PPSSPP",
     "description": "Émulateur PSP pour PC",
     "category": "Jeux",
-    "winget_id": "PPSSPP.PPSSPP",
+    "winget_id": "PPSSPPTeam.PPSSPP",
     "choco_id": null,
     "url": "https://www.ppsspp.org/downloads.html",
     "icon": "gamepad-2"
@@ -7044,7 +6834,7 @@
     "name": "RPCS3",
     "description": "Émulateur PlayStation 3 open source",
     "category": "Jeux",
-    "winget_id": "RPCS3.RPCS3",
+    "winget_id": null,
     "choco_id": null,
     "url": "https://rpcs3.net/download",
     "icon": "gamepad-2"
@@ -7064,7 +6854,7 @@
     "name": "Wire",
     "description": "Messagerie chiffrée pour équipes et particuliers",
     "category": "Communication",
-    "winget_id": "Wire.Wire",
+    "winget_id": "wire.wire",
     "choco_id": null,
     "url": "https://wire.com/en/download/",
     "icon": "message-circle"
@@ -7104,7 +6894,7 @@
     "name": "Cisco Webex",
     "description": "Visioconférence et collaboration Cisco",
     "category": "Communication",
-    "winget_id": "Cisco.WebexMeetings",
+    "winget_id": "Cisco.Webex",
     "choco_id": null,
     "url": "https://www.webex.com/downloads.html",
     "icon": "message-circle"
@@ -7154,43 +6944,289 @@
     "name": "Beyond Compare",
     "description": "Comparaison et synchronisation de fichiers avancée",
     "category": "Developpement",
-    "winget_id": "ScooterSoftware.BeyondCompare4",
+    "winget_id": "ScooterSoftware.BeyondCompare.5",
     "choco_id": null,
     "url": "https://www.scootersoftware.com/download.php",
     "icon": "code"
   },
-
-  { "id": "bulk-crap-uninstaller", "name": "Bulk Crap Uninstaller", "description": "Désinstallateur massif : supprime les résidus registre, fichiers et services. Équivalent open source de Revo.", "category": "Désinstallateurs Propres", "winget_id": "MarekOtulakowski.BulkCrapUninstaller", "choco_id": "bulk-crap-uninstaller", "url": null, "icon": "trash-2" },
-  { "id": "revo-uninstaller", "name": "Revo Uninstaller", "description": "Désinstallation avancée avec scan des résidus après suppression. Analyse registre en profondeur.", "category": "Désinstallateurs Propres", "winget_id": "RevoUninstaller.RevoUninstaller", "choco_id": "revo-uninstaller", "url": null, "icon": "trash-2" },
-  { "id": "geek-uninstaller", "name": "GeekUninstaller", "description": "Désinstallateur portable ultra-rapide, nettoie automatiquement les clés de registre orphelines.", "category": "Désinstallateurs Propres", "winget_id": null, "choco_id": "geek-uninstaller", "url": "https://geekuninstaller.com/geek.zip", "icon": "trash-2" },
-  { "id": "hibit-uninstaller", "name": "HiBit Uninstaller", "description": "Désinstallation propre + gestionnaire de démarrage + nettoyeur de résidus intégré.", "category": "Désinstallateurs Propres", "winget_id": null, "choco_id": null, "url": "https://hibitsoft.ir/Uninstaller.html", "icon": "trash-2" },
-  { "id": "wise-uninstaller", "name": "Wise Program Uninstaller", "description": "Supprime les apps avec analyse des restes. Interface simple et efficace.", "category": "Désinstallateurs Propres", "winget_id": null, "choco_id": "wise-program-uninstaller", "url": null, "icon": "trash-2" },
-  { "id": "total-uninstall", "name": "Total Uninstall", "description": "Surveille les installations pour désinstaller proprement. Profils de désinstallation complets.", "category": "Désinstallateurs Propres", "winget_id": null, "choco_id": null, "url": "https://www.martau.com/uninstaller.html", "icon": "trash-2" },
-  { "id": "iobit-uninstaller", "name": "IObit Uninstaller", "description": "Désinstallation en lot, suppression des barres d'outils, nettoyage après désinstallation.", "category": "Désinstallateurs Propres", "winget_id": "IObit.IObitUninstaller", "choco_id": "iobit-uninstaller", "url": null, "icon": "trash-2" },
-
-  { "id": "recuva", "name": "Recuva", "description": "Récupération de fichiers supprimés : disques, clés USB, cartes SD. Interface simple et efficace.", "category": "Récupération de Données", "winget_id": "Piriform.Recuva", "choco_id": "recuva", "url": null, "icon": "database" },
-  { "id": "testdisk", "name": "TestDisk / PhotoRec", "description": "Récupération de partitions et fichiers perdus. Puissant, open source, supporte 400+ formats.", "category": "Récupération de Données", "winget_id": "CGSecurity.TestDisk", "choco_id": "testdisk", "url": null, "icon": "database" },
-  { "id": "disk-drill", "name": "Disk Drill", "description": "Récupération de données avec interface moderne. Supporte HDD, SSD, USB, cartes mémoire.", "category": "Récupération de Données", "winget_id": "Cleverfiles.DiskDrill", "choco_id": "disk-drill", "url": null, "icon": "database" },
-  { "id": "minitool-data-recovery", "name": "MiniTool Power Data Recovery", "description": "Récupération de fichiers supprimés, formatage, ou disque corrompu. Version gratuite 1GB.", "category": "Récupération de Données", "winget_id": null, "choco_id": null, "url": "https://www.minitool.com/data-recovery-software/", "icon": "database" },
-  { "id": "getdataback", "name": "GetDataBack NTFS", "description": "Récupération spécialisée pour partitions NTFS endommagées ou effacées.", "category": "Récupération de Données", "winget_id": null, "choco_id": null, "url": "https://www.runtime.org/data-recovery-software.htm", "icon": "database" },
-
-  { "id": "crystaldiskmark", "name": "CrystalDiskMark", "description": "Benchmark de disque (lecture/écriture séquentielle et aléatoire). Standard de l'industrie.", "category": "Benchmarks et Tests", "winget_id": "CrystalDewWorld.CrystalDiskMark", "choco_id": "crystaldiskmark", "url": null, "icon": "gauge" },
-  { "id": "cpu-z", "name": "CPU-Z", "description": "Informations détaillées CPU, RAM, carte mère et cache. Benchmark monocœur/multicœur intégré.", "category": "Benchmarks et Tests", "winget_id": "CPUID.CPU-Z", "choco_id": "cpu-z", "url": null, "icon": "gauge" },
-  { "id": "gpu-z", "name": "GPU-Z", "description": "Informations détaillées GPU : architecture, VRAM, fréquences, température en temps réel.", "category": "Benchmarks et Tests", "winget_id": "TechPowerUp.GPU-Z", "choco_id": "gpu-z", "url": null, "icon": "gauge" },
-  { "id": "hwinfo", "name": "HWiNFO", "description": "Monitoring système complet : températures, voltages, fréquences de tous les composants.", "category": "Benchmarks et Tests", "winget_id": "REALiX.HWiNFO", "choco_id": "hwinfo", "url": null, "icon": "gauge" },
-  { "id": "cinebench", "name": "Cinebench R23", "description": "Benchmark CPU professionnel basé sur Cinema 4D. Référence pour comparer les performances.", "category": "Benchmarks et Tests", "winget_id": "Maxon.CinebenchR23", "choco_id": null, "url": null, "icon": "gauge" },
-  { "id": "furmark", "name": "FurMark", "description": "Test de stabilité GPU intensif. Détecte les overclocks instables et problèmes de refroidissement.", "category": "Benchmarks et Tests", "winget_id": "Geeks3D.FurMark", "choco_id": "furmark", "url": null, "icon": "gauge" },
-  { "id": "prime95", "name": "Prime95", "description": "Test de stabilité CPU sous charge maximale. Détecte les erreurs de calcul et overclocks instables.", "category": "Benchmarks et Tests", "winget_id": null, "choco_id": "prime95", "url": "https://www.mersenne.org/download/", "icon": "gauge" },
-  { "id": "aida64", "name": "AIDA64 Extreme", "description": "Diagnostic et benchmark complet : CPU, RAM, GPU, stockage, réseau. Rapport exportable.", "category": "Benchmarks et Tests", "winget_id": "FinalWire.AIDA64Extreme", "choco_id": "aida64-extreme", "url": null, "icon": "gauge" },
-
-  { "id": "virtualbox", "name": "VirtualBox", "description": "Hyperviseur open source pour créer des machines virtuelles. Supporte Windows, Linux, macOS.", "category": "Virtualisation", "winget_id": "Oracle.VirtualBox", "choco_id": "virtualbox", "url": null, "icon": "server" },
-  { "id": "vmware-player", "name": "VMware Workstation Player", "description": "Virtualisation gratuite pour usage personnel. Lance des VM Windows/Linux simplement.", "category": "Virtualisation", "winget_id": "VMware.WorkstationPlayer", "choco_id": "vmwareplayer", "url": null, "icon": "server" },
-  { "id": "docker-desktop", "name": "Docker Desktop", "description": "Conteneurisation d'applications. Inclut Docker Engine, Docker CLI et Docker Compose.", "category": "Virtualisation", "winget_id": "Docker.DockerDesktop", "choco_id": "docker-desktop", "url": null, "icon": "server" },
-  { "id": "vagrant", "name": "Vagrant", "description": "Gestion de machines virtuelles via fichiers de config. Intégration VirtualBox/VMware/Hyper-V.", "category": "Virtualisation", "winget_id": "Hashicorp.Vagrant", "choco_id": "vagrant", "url": null, "icon": "server" },
-
-  { "id": "minitool-partition", "name": "MiniTool Partition Wizard", "description": "Gestion avancée des partitions : redimensionner, déplacer, fusionner sans perte de données.", "category": "Partition et Disque", "winget_id": null, "choco_id": "minitool-partition-wizard-free", "url": "https://www.partitionwizard.com/", "icon": "hard-drive" },
-  { "id": "aomei-partition", "name": "AOMEI Partition Assistant", "description": "Outil complet de partitionnement. Conversion MBR/GPT, clonage disque, migration OS.", "category": "Partition et Disque", "winget_id": null, "choco_id": "aomei-partition-assistant", "url": "https://www.diskpart.com/", "icon": "hard-drive" },
-  { "id": "crystaldiskinfo", "name": "CrystalDiskInfo", "description": "Surveillance santé des disques via S.M.A.R.T. Alerte en cas de secteurs défectueux.", "category": "Partition et Disque", "winget_id": "CrystalDewWorld.CrystalDiskInfo", "choco_id": "crystaldiskinfo", "url": null, "icon": "hard-drive" },
-  { "id": "easeus-partition", "name": "EaseUS Partition Master", "description": "Partitionnement sécurisé, récupération de partitions supprimées, optimisation SSD.", "category": "Partition et Disque", "winget_id": null, "choco_id": null, "url": "https://www.easeus.com/partition-manager/", "icon": "hard-drive" },
-  { "id": "diskgenius", "name": "DiskGenius", "description": "Gestion disques + récupération de données + éditeur de partitions avancé en un seul outil.", "category": "Partition et Disque", "winget_id": null, "choco_id": null, "url": "https://www.diskgenius.com/", "icon": "hard-drive" }
+  {
+    "id": "bulk-crap-uninstaller",
+    "name": "Bulk Crap Uninstaller",
+    "description": "Désinstallateur massif : supprime les résidus registre, fichiers et services. Équivalent open source de Revo.",
+    "category": "Désinstallateurs Propres",
+    "winget_id": "Klocman.BulkCrapUninstaller",
+    "choco_id": "bulk-crap-uninstaller",
+    "url": null,
+    "icon": "trash-2"
+  },
+  {
+    "id": "hibit-uninstaller",
+    "name": "HiBit Uninstaller",
+    "description": "Désinstallation propre + gestionnaire de démarrage + nettoyeur de résidus intégré.",
+    "category": "Désinstallateurs Propres",
+    "winget_id": "HiBitSoftware.HiBitUninstaller",
+    "choco_id": null,
+    "url": "https://hibitsoft.ir/Uninstaller.html",
+    "icon": "trash-2"
+  },
+  {
+    "id": "wise-uninstaller",
+    "name": "Wise Program Uninstaller",
+    "description": "Supprime les apps avec analyse des restes. Interface simple et efficace.",
+    "category": "Désinstallateurs Propres",
+    "winget_id": "WiseCleaner.WiseProgramUninstaller",
+    "choco_id": "wise-program-uninstaller",
+    "url": null,
+    "icon": "trash-2"
+  },
+  {
+    "id": "total-uninstall",
+    "name": "Total Uninstall",
+    "description": "Surveille les installations pour désinstaller proprement. Profils de désinstallation complets.",
+    "category": "Désinstallateurs Propres",
+    "winget_id": null,
+    "choco_id": null,
+    "url": "https://www.martau.com/uninstaller.html",
+    "icon": "trash-2"
+  },
+  {
+    "id": "testdisk",
+    "name": "TestDisk / PhotoRec",
+    "description": "Récupération de partitions et fichiers perdus. Puissant, open source, supporte 400+ formats.",
+    "category": "Récupération de Données",
+    "winget_id": "CGSecurity.TestDisk",
+    "choco_id": "testdisk",
+    "url": null,
+    "icon": "database"
+  },
+  {
+    "id": "disk-drill",
+    "name": "Disk Drill",
+    "description": "Récupération de données avec interface moderne. Supporte HDD, SSD, USB, cartes mémoire.",
+    "category": "Récupération de Données",
+    "winget_id": "CleverFiles.DiskDrill",
+    "choco_id": "disk-drill",
+    "url": null,
+    "icon": "database"
+  },
+  {
+    "id": "minitool-data-recovery",
+    "name": "MiniTool Power Data Recovery",
+    "description": "Récupération de fichiers supprimés, formatage, ou disque corrompu. Version gratuite 1GB.",
+    "category": "Récupération de Données",
+    "winget_id": null,
+    "choco_id": null,
+    "url": "https://www.minitool.com/data-recovery-software/",
+    "icon": "database"
+  },
+  {
+    "id": "getdataback",
+    "name": "GetDataBack NTFS",
+    "description": "Récupération spécialisée pour partitions NTFS endommagées ou effacées.",
+    "category": "Récupération de Données",
+    "winget_id": null,
+    "choco_id": null,
+    "url": "https://www.runtime.org/data-recovery-software.htm",
+    "icon": "database"
+  },
+  {
+    "id": "cinebench",
+    "name": "Cinebench R23",
+    "description": "Benchmark CPU professionnel basé sur Cinema 4D. Référence pour comparer les performances.",
+    "category": "Benchmarks et Tests",
+    "winget_id": "Maxon.CinebenchR23",
+    "choco_id": null,
+    "url": null,
+    "icon": "gauge"
+  },
+  {
+    "id": "furmark",
+    "name": "FurMark",
+    "description": "Test de stabilité GPU intensif. Détecte les overclocks instables et problèmes de refroidissement.",
+    "category": "Benchmarks et Tests",
+    "winget_id": "Geeks3D.FurMark",
+    "choco_id": "furmark",
+    "url": null,
+    "icon": "gauge"
+  },
+  {
+    "id": "prime95",
+    "name": "Prime95",
+    "description": "Test de stabilité CPU sous charge maximale. Détecte les erreurs de calcul et overclocks instables.",
+    "category": "Benchmarks et Tests",
+    "winget_id": "mersenne.prime95",
+    "choco_id": "prime95",
+    "url": "https://www.mersenne.org/download/",
+    "icon": "gauge"
+  },
+  {
+    "id": "aida64",
+    "name": "AIDA64 Extreme",
+    "description": "Diagnostic et benchmark complet : CPU, RAM, GPU, stockage, réseau. Rapport exportable.",
+    "category": "Benchmarks et Tests",
+    "winget_id": "FinalWire.AIDA64.Extreme",
+    "choco_id": "aida64-extreme",
+    "url": null,
+    "icon": "gauge"
+  },
+  {
+    "id": "virtualbox",
+    "name": "VirtualBox",
+    "description": "Hyperviseur open source pour créer des machines virtuelles. Supporte Windows, Linux, macOS.",
+    "category": "Virtualisation",
+    "winget_id": "Oracle.VirtualBox",
+    "choco_id": "virtualbox",
+    "url": null,
+    "icon": "server"
+  },
+  {
+    "id": "vmware-player",
+    "name": "VMware Workstation Player",
+    "description": "Virtualisation gratuite pour usage personnel. Lance des VM Windows/Linux simplement.",
+    "category": "Virtualisation",
+    "winget_id": null,
+    "choco_id": "vmwareplayer",
+    "url": null,
+    "icon": "server"
+  },
+  {
+    "id": "minitool-partition",
+    "name": "MiniTool Partition Wizard",
+    "description": "Gestion avancée des partitions : redimensionner, déplacer, fusionner sans perte de données.",
+    "category": "Partition et Disque",
+    "winget_id": null,
+    "choco_id": "minitool-partition-wizard-free",
+    "url": "https://www.partitionwizard.com/",
+    "icon": "hard-drive"
+  },
+  {
+    "id": "aomei-partition",
+    "name": "AOMEI Partition Assistant",
+    "description": "Outil complet de partitionnement. Conversion MBR/GPT, clonage disque, migration OS.",
+    "category": "Partition et Disque",
+    "winget_id": "AOMEI.PartitionAssistant",
+    "choco_id": "aomei-partition-assistant",
+    "url": "https://www.diskpart.com/",
+    "icon": "hard-drive"
+  },
+  {
+    "id": "easeus-partition",
+    "name": "EaseUS Partition Master",
+    "description": "Partitionnement sécurisé, récupération de partitions supprimées, optimisation SSD.",
+    "category": "Partition et Disque",
+    "winget_id": "EaseUS.PartitionMaster",
+    "choco_id": null,
+    "url": "https://www.easeus.com/partition-manager/",
+    "icon": "hard-drive"
+  },
+  {
+    "id": "diskgenius",
+    "name": "DiskGenius",
+    "description": "Gestion disques + récupération de données + éditeur de partitions avancé en un seul outil.",
+    "category": "Partition et Disque",
+    "winget_id": "Eassos.DiskGenius",
+    "choco_id": null,
+    "url": "https://www.diskgenius.com/",
+    "icon": "hard-drive"
+  },
+  {
+    "id": "visual-studio-code",
+    "name": "Visual Studio Code",
+    "description": "Éditeur de code Microsoft, extensible",
+    "category": "Developpement",
+    "winget_id": "Microsoft.VisualStudioCode",
+    "choco_id": null,
+    "url": null,
+    "icon": "code"
+  },
+  {
+    "id": "powershell-7",
+    "name": "PowerShell 7",
+    "description": "Shell et langage de script moderne multiplateforme",
+    "category": "Developpement",
+    "winget_id": "Microsoft.PowerShell",
+    "choco_id": null,
+    "url": null,
+    "icon": "code"
+  },
+  {
+    "id": "vscodium",
+    "name": "VSCodium",
+    "description": "VS Code sans télémétrie Microsoft",
+    "category": "Developpement",
+    "winget_id": "VSCodium.VSCodium",
+    "choco_id": null,
+    "url": null,
+    "icon": "code"
+  },
+  {
+    "id": "keepassxc",
+    "name": "KeePassXC",
+    "description": "Gestionnaire de mots de passe open source hors ligne",
+    "category": "Securite",
+    "winget_id": "KeePassXCTeam.KeePassXC",
+    "choco_id": null,
+    "url": null,
+    "icon": "shield"
+  },
+  {
+    "id": "anydesk",
+    "name": "AnyDesk",
+    "description": "Bureau à distance rapide (version installée)",
+    "category": "Outils Essentiels",
+    "winget_id": "AnyDesk.AnyDesk",
+    "choco_id": null,
+    "url": null,
+    "icon": "star"
+  },
+  {
+    "id": "python-3-13",
+    "name": "Python 3.13",
+    "description": "Interpréteur Python 3.13",
+    "category": "Developpement",
+    "winget_id": "Python.Python.3.13",
+    "choco_id": null,
+    "url": null,
+    "icon": "code"
+  },
+  {
+    "id": "nodejs-lts",
+    "name": "Node.js LTS",
+    "description": "Runtime JavaScript, version support long terme",
+    "category": "Developpement",
+    "winget_id": "OpenJS.NodeJS.LTS",
+    "choco_id": null,
+    "url": null,
+    "icon": "code"
+  },
+  {
+    "id": "vcredist-2015-x64",
+    "name": "Visual C++ 2015-2022 (x64)",
+    "description": "Runtime Visual C++ requis par de nombreux logiciels et jeux",
+    "category": "Utilitaires Systeme",
+    "winget_id": "Microsoft.VCRedist.2015+.x64",
+    "choco_id": null,
+    "url": null,
+    "icon": "settings"
+  },
+  {
+    "id": "dotnet-desktop-8",
+    "name": ".NET Desktop Runtime 8",
+    "description": "Runtime .NET pour applications de bureau",
+    "category": "Utilitaires Systeme",
+    "winget_id": "Microsoft.DotNet.DesktopRuntime.8",
+    "choco_id": null,
+    "url": null,
+    "icon": "settings"
+  },
+  {
+    "id": "directx-runtime",
+    "name": "DirectX End-User Runtime",
+    "description": "Composants DirectX 9 requis par les anciens jeux",
+    "category": "Jeux",
+    "winget_id": "Microsoft.DirectX",
+    "choco_id": null,
+    "url": null,
+    "icon": "gamepad-2"
+  }
 ]
