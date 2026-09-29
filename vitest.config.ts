@@ -7,6 +7,8 @@ export default defineConfig({
   test: {
     environment: "happy-dom",
     globals: true,
+    // Laisse passer le CSS tel quel : les tests lisent themes.css en `?raw`.
+    css: { include: [/themes\.css/] },
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],

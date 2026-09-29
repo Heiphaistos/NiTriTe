@@ -97,7 +97,7 @@
 /* Glow pulse */
 @keyframes glow-pulse {
   0%, 100% { box-shadow: var(--accent-glow); }
-  50% { box-shadow: 0 0 30px rgba(249, 115, 22, 0.5); }
+  50% { box-shadow: 0 0 30px color-mix(in srgb, var(--accent-primary) 50%, transparent); }
 }
 
 .animate-glow {
