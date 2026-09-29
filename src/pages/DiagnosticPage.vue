@@ -263,6 +263,7 @@ async function loadTab(tab: string, force = false) {
 
 async function refreshTab() {
   const tab = activeTab.value;
+  if (!TAB_IDS.has(tab)) return;
   loadedTabs.value.delete(tab);
   tabLoadTime.value[tab] = 0;
   await loadTab(tab, true);
