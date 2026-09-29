@@ -1,0 +1,55 @@
+# Publication d'une version : poussez un tag vX.Y.Z (egal a la version de
+# agent/server/Cargo.toml). Le workflow compile, teste le vrai .exe sur
+# Windows, puis cree la release GitHub avec NiTriTe-Agent.exe et son SHA-256.
+name: Release NiTriTe Agent
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Version du tag = version de l'agent
+        shell: bash
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          have="$(grep -m1 '^version' agent/server/Cargo.toml | cut -d'"' -f2)"
+          [ "$want" = "$have" ] || { echo "Tag $GITHUB_REF_NAME mais agent/server/Cargo.toml = $have" >&2; exit 1; }
+      - run: bash scripts/sync-version.sh --check
+        shell: bash
+      - run: npm test
+      - run: npm run build
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - name: Tests + build release
+        working-directory: agent
+        run: |
+          cargo test -p tauri -p nitrite-agent
+          cargo build --release -p nitrite-agent
+      - name: Test de fumee (exe release)
+        shell: pwsh
+        run: ./scripts/smoke-test.ps1 -Exe agent/target/release/nitrite-agent.exe
+      - name: Publication
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force dist-release | Out-Null
+          Copy-Item agent/target/release/nitrite-agent.exe dist-release/NiTriTe-Agent.exe
+          $hash = (Get-FileHash dist-release/NiTriTe-Agent.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  NiTriTe-Agent.exe" | Set-Content -NoNewline dist-release/SHA256SUMS.txt
+          $notes = "NiTriTe Agent $env:GITHUB_REF_NAME`n`nTelechargez NiTriTe-Agent.exe et lancez-le : le panneau s'ouvre dans le navigateur.`n`nSHA-256 : $hash"
+          gh release create $env:GITHUB_REF_NAME dist-release/NiTriTe-Agent.exe dist-release/SHA256SUMS.txt --title "NiTriTe Agent $env:GITHUB_REF_NAME" --notes $notes

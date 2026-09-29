@@ -8,16 +8,21 @@
 
 ## Utilisation
 
-1. Lancer `NiTriTe-Agent.exe` (Windows demande les droits administrateur, comme NiTriTe).
-2. Le navigateur s'ouvre sur le panneau. Rien d'autre à installer.
-3. Pour arrêter : fermer l'onglet. L'agent s'arrête seul après 15 minutes sans onglet ouvert.
+1. Télécharger `NiTriTe-Agent.exe` depuis la page **Releases** du dépôt (le fichier `SHA256SUMS.txt` permet de vérifier son intégrité).
+2. Le lancer : Windows demande les droits administrateur, comme NiTriTe.
+3. Le navigateur s'ouvre sur le panneau. Rien d'autre à installer.
+4. Pour arrêter : menu **Agent** (en bas à droite) › *Arrêter l'agent*, ou simplement fermer l'onglet — l'agent s'arrête seul 15 minutes après la fermeture du dernier onglet.
 
-Relancer l'agent alors qu'il tourne déjà rouvre simplement l'onglet.
+Relancer l'agent alors qu'il tourne déjà rouvre simplement l'onglet. Les autres onglets (lien ouvert dans un nouvel onglet, favori, F5) restent connectés grâce au cookie de session.
+
+Le menu **Agent** indique l'état de la connexion, les versions de l'agent et de NiTriTe, le nombre d'onglets connectés, l'emplacement du journal, et signale une nouvelle version disponible.
 
 | Option | Effet |
 |---|---|
 | `--port N` | port d'écoute (défaut 7878, le suivant libre si occupé) |
 | `--no-browser` | ne pas ouvrir le navigateur |
+| `--app` | ouvrir le panneau dans une fenêtre d'application Edge (sans onglets ni barre d'adresse) |
+| `--no-update-check` | ne pas vérifier les nouvelles versions sur GitHub |
 | `--stay` | ne jamais s'arrêter tout seul |
 | `--idle-minutes N` | arrêt après N minutes sans onglet ouvert |
 | `--lan` | accès depuis un autre PC du réseau local (voir Sécurité) |
@@ -27,10 +32,16 @@ Relancer l'agent alors qu'il tourne déjà rouvre simplement l'onglet.
 L'agent exécute des commandes d'administration : il est verrouillé en conséquence.
 
 - Il n'écoute que sur `127.0.0.1` : invisible depuis le réseau (sauf `--lan`, explicite).
-- Chaque lancement génère un **jeton aléatoire de 256 bits**, transmis à l'onglet dans le fragment de l'URL (`#t=…`, jamais envoyé sur le réseau ni dans le Referer), puis effacé de la barre d'adresse. Toute l'API l'exige.
+- Chaque lancement génère un **jeton aléatoire de 256 bits**, transmis à l'onglet dans le fragment de l'URL (`#t=…`, jamais envoyé sur le réseau ni dans le Referer), puis effacé de la barre d'adresse et échangé contre un cookie de session `HttpOnly; SameSite=Strict` (illisible par les scripts de la page). Toute l'API l'exige.
+- **Content-Security-Policy stricte** : aucun script en ligne hormis celui d'amorce, autorisé par son empreinte SHA-256 ; pas d'intégration dans une iframe d'un autre site (*clickjacking*), pas de Referer.
 - L'en-tête `Host` est vérifié (parade au *DNS rebinding*) et toute requête d'une autre origine est refusée : un site web ouvert dans un autre onglet ne peut pas piloter l'agent.
 - Les confirmations d'administration du Terminal restent des **boîtes de dialogue Windows natives** : un script dans la page ne peut pas les valider.
 - En mode `--lan`, partagez le lien (jeton compris) uniquement avec des personnes de confiance ; les boîtes de confirmation s'affichent sur le PC où tourne l'agent.
+
+## Journal et mises à jour
+
+- Journal de l'agent : `%LOCALAPPDATA%\NiTriTe-WebPanel\agent.log` (1 Mo, puis `agent.log.old`). Le jeton n'y est jamais écrit. Journaux de NiTriTe lui-même : page **Logs** du panneau.
+- Au démarrage, l'agent consulte la dernière release GitHub et, si elle est plus récente, le signale dans le menu **Agent** (lien de téléchargement). Il ne télécharge ni n'exécute rien de lui-même.
 
 ## Architecture
 
@@ -57,7 +68,18 @@ powershell -ExecutionPolicy Bypass -File webpanel\scripts\build.ps1
 
 Développement de l'interface : lancer l'agent avec `--no-browser --stay`, puis `npm run dev` (port 5176, l'API est relayée vers l'agent) et ouvrir l'URL affichée par l'agent en remplaçant le port par 5176.
 
-Tests : `npm test` (cales JS) et `cargo test -p tauri -p nitrite-agent` (dans `agent/`).
+Tests :
+- `npm test` — cales JS et menu Agent ;
+- `cargo test -p tauri -p nitrite-agent` (dans `agent/`) — cale, routeur (jeton, cookie, Host/Origin, en-têtes de sécurité) ;
+- `pwsh -File scripts/smoke-test.ps1 -Exe agent\target\release\nitrite-agent.exe` — le vrai `.exe` sur Windows : sécurité, commandes WMI/registre, WebSocket, arrêt. Exécuté en CI à chaque build.
+
+## Publier une version
+
+1. Mettre à jour `version` dans `agent/server/Cargo.toml` et `CHANGELOG.md`.
+2. `git tag vX.Y.Z && git push --tags`.
+3. Le workflow **Release** compile, lance les tests et le test de fumée sur Windows, puis crée la release avec `NiTriTe-Agent.exe` et `SHA256SUMS.txt`. Les agents déjà installés signalent la nouvelle version dans leur menu.
+
+Dependabot tient à jour le sous-module `upstream/` (NiTriTe), les dépendances Rust/JS et les actions ; le CI refuse toute dépendance désalignée avec NiTriTe.
 
 ## Dépôt autonome
 

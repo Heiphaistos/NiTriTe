@@ -52,3 +52,39 @@ describe("path.join", () => {
     expect(await join("C:\\Users\\Bob\\", "Documents", "NiTriTe\\")).toBe("C:\\Users\\Bob\\Documents\\NiTriTe");
   });
 });
+
+describe("menu Agent", () => {
+  it("formate la durée d'activité", async () => {
+    const { formatUptime } = await import("../shims/agent-menu");
+    expect(formatUptime(59)).toBe("0 min");
+    expect(formatUptime(3 * 60)).toBe("3 min");
+    expect(formatUptime(2 * 3600 + 5 * 60)).toBe("2 h 5 min");
+  });
+
+  it("affiche la pastille et les infos de l'agent, dont la mise à jour", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      version: "1.1.0", nitriteVersion: "8.221.0", port: 7878, lan: false, clients: 1,
+      idleMinutes: 15, uptimeSeconds: 120, update: { version: "1.2.0", url: "https://example.test/r" }, logPath: "C:\\x\\agent.log",
+    }), { status: 200 }));
+    const { mountAgentMenu } = await import("../shims/agent-menu");
+    mountAgentMenu();
+    const pill = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Agent"))!;
+    expect(pill).toBeTruthy();
+    pill.click();
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeTruthy());
+    const text = document.querySelector('[role="dialog"]')!.textContent!;
+    expect(text).toContain("v1.1.0");
+    expect(text).toContain("v8.221.0");
+    expect(text).toContain("Nouvelle version disponible : v1.2.0");
+    expect((document.querySelector('[role="dialog"] a') as HTMLAnchorElement).rel).toContain("noopener");
+  });
+});
+
+describe("authentification par cookie", () => {
+  it("n'envoie pas d'en-tête de jeton quand l'onglet n'en a pas (cookie de session)", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("null", { status: 200 }));
+    await invoke("get_apps");
+    const init = spy.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>)["X-Nitrite-Token"]).toBeUndefined();
+  });
+});

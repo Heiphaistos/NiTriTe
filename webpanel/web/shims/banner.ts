@@ -3,6 +3,7 @@
  * du WebSocket. Charge des le premier import de la cale `core`.
  */
 import { agentStatus, keepAlive } from "./agent";
+import { mountAgentMenu } from "./agent-menu";
 
 const MESSAGES = {
   offline: "NiTriTe Agent ne répond plus. Relancez nitrite-agent.exe — la page se reconnectera automatiquement.",
@@ -25,8 +26,14 @@ function render(status: string): void {
 }
 
 agentStatus.on(render);
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => keepAlive());
-} else {
+
+function start(): void {
   keepAlive();
+  mountAgentMenu();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", start);
+} else {
+  start();
 }
