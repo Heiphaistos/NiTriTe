@@ -159,7 +159,11 @@ const {
 } = diagExport;
 
 // ── Tab loader ────────────────────────────────────────────────────────────────
+// Onglets connus : la clé sert d'index à tabLoadTime / tabError (pas de « __proto__ » venu de l'URL)
+const TAB_IDS = new Set(TABS.map(t => t.id));
+
 async function loadTab(tab: string, force = false) {
+  if (!TAB_IDS.has(tab)) return;
   const now = Date.now();
   const lastLoad = tabLoadTime.value[tab] ?? 0;
   const expired = now - lastLoad > TAB_TTL_MS;
