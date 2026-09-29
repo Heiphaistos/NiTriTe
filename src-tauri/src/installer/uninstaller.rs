@@ -109,7 +109,7 @@ pub fn uninstall_app_clean(
 ) -> UninstallResult {
     emit(window, "start", &app_name, "Désinstallation silencieuse en cours...");
 
-    let uninstall_ok = run_uninstall_silent(&app_name, &uninstall_string, window);
+    let uninstall_ok = run_uninstall_silent(&app_name, &uninstall_string);
 
     emit(window, "scan", &app_name, "Recherche des résidus...");
     let residuals = find_residuals(&app_name, &publisher);
@@ -147,7 +147,13 @@ fn emit(window: &tauri::Window, step: &str, app: &str, msg: &str) {
 //  4. Start-Process -Wait : attend la VRAIE fin du processus
 //  5. Vérification registre pour confirmer (pas de faux positif)
 //
-fn run_uninstall_silent(app_name: &str, uninstall_string: &str, _window: &tauri::Window) -> bool {
+/// Desinstallation silencieuse par la commande du registre, verifiee (l'entree
+/// doit avoir disparu). Utilisee aussi par la cascade de `smart_install`.
+pub fn uninstall_silent(app_name: &str, uninstall_string: &str) -> bool {
+    run_uninstall_silent(app_name, uninstall_string)
+}
+
+fn run_uninstall_silent(app_name: &str, uninstall_string: &str) -> bool {
     // ── Validation Rust de l'uninstall_string ────────────────────────────────
     // Refuse les strings qui ne correspondent pas à un désinstalleur légitime.
     // Bloque les commandes shell connues pour prévenir l'injection.

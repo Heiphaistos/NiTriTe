@@ -51,12 +51,20 @@ fn validate_download_url(url: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Calcule le SHA-256 d'un fichier sur disque (lecture synchrone).
+/// Calcule le SHA-256 d'un fichier sur disque (lecture synchrone, par blocs :
+/// les modeles GGUF font plusieurs Go, les charger en entier saturait la RAM).
 fn sha256_file(path: &Path) -> Result<String, String> {
-    let data = std::fs::read(path).map_err(|e| format!("Lecture pour SHA-256: {}", e))?;
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).map_err(|e| format!("Lecture pour SHA-256: {}", e))?;
     let mut hasher = Sha256::new();
-    hasher.update(&data);
-    Ok(format!("{:x}", hasher.finalize()))
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = file.read(&mut buf).map_err(|e| format!("Lecture pour SHA-256: {}", e))?;
+        if n == 0 { break; }
+        hasher.update(&buf[..n]);
+    }
+    // sha2 0.11 : le condensat n'implemente plus `LowerHex` ({:x}).
+    Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
 
@@ -666,6 +674,23 @@ fn parse_chat_completion(status: reqwest::StatusCode, result: serde_json::Value)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sha256_file_matches_known_vectors() {
+        let dir = std::env::temp_dir().join(format!("nitrite-sha-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("abc.txt");
+        std::fs::write(&p, b"abc").unwrap();
+        assert_eq!(sha256_file(&p).unwrap(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        // > 1 Mo : plusieurs blocs de lecture
+        let big = dir.join("big.bin");
+        std::fs::write(&big, vec![b'a'; 3 * (1 << 20) + 7]).unwrap();
+        let mut h = Sha256::new();
+        h.update(vec![b'a'; 3 * (1 << 20) + 7]);
+        let expected: String = h.finalize().iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(sha256_file(&big).unwrap(), expected);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn parse_chat_completion_extracts_content_on_success() {

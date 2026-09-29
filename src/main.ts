@@ -7,6 +7,7 @@ import "./assets/styles/main.css";
 import "./assets/styles/tab-styles.css";
 import "./assets/diagnostic.css";
 import { logger, setupGlobalErrorHandlers } from "./utils/logger";
+import { useAppStore } from "./stores/app";
 
 // ── Logger : intercepteurs globaux (window.onerror, unhandledrejection, console) ──
 setupGlobalErrorHandlers();
@@ -24,5 +25,9 @@ app.config.errorHandler = (err, _instance, info) => {
 
 app.use(pinia);
 app.use(router);
+
+// Profil de performance appliqué AVANT le premier rendu (splash compris) :
+// un PC modeste ne doit jamais payer les effets, même quelques secondes.
+useAppStore(pinia).loadPerfMode();
 
 app.mount("#app");

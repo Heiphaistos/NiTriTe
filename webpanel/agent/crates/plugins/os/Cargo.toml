@@ -1,0 +1,6 @@
+[package]
+name = "tauri-plugin-os"
+version = "2.0.0-webpanel"
+edition.workspace = true
+license.workspace = true
+publish = false

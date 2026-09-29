@@ -46,7 +46,7 @@ const currentPage = computed(() => {
   justify-content: space-between;
   padding: 0 24px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, var(--bg-secondary) 0%, rgba(9,9,11,0.95) 100%);
+  background: linear-gradient(180deg, var(--bg-secondary) 0%, color-mix(in srgb, var(--bg-primary) 95%, transparent) 100%);
   min-height: 52px;
   backdrop-filter: blur(20px) saturate(1.5);
   -webkit-backdrop-filter: blur(20px) saturate(1.5);

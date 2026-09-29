@@ -13,6 +13,7 @@ import {
   Palette, Trash2, Gauge, Server, Globe, Bug, TerminalSquare,
   Bluetooth, Sparkles, Copy, Database, Star, StarOff, User,
   Thermometer, PieChart, Files, FileSearch, Hash, Container, Radio, Network, Code2,
+  Rocket, ClipboardList,
 } from "lucide-vue-next";
 
 const props = withDefaults(defineProps<{
@@ -96,6 +97,7 @@ const iconMap: Record<string, Component> = {
   thermometer: Thermometer, "pie-chart": PieChart, files: Files,
   "file-search": FileSearch, hash: Hash, container: Container,
   radio: Radio, network: Network, "code-2": Code2,
+  rocket: Rocket, "clipboard-list": ClipboardList,
 };
 
 function getIcon(name: string) { return iconMap[name] ?? LayoutDashboard; }

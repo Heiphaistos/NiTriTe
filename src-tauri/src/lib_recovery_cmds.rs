@@ -654,6 +654,20 @@ async fn execute_tool(command: String, is_url: bool) -> Result<(), NiTriTeError>
     }
 }
 
+/// Lance un outil du catalogue par son nom (et sa section, les noms n'etant
+/// pas uniques d'une section a l'autre). La commande n'est jamais transmise
+/// par la webview : elle vient de `tools.json`, compile dans le binaire.
+#[tauri::command]
+async fn launch_tool(name: String, section: String, force_admin: Option<bool>) -> Result<(), NiTriTeError> {
+    let tool = installer::manager::get_tools()
+        .into_iter()
+        .find(|t| t.name == name && t.section == section)
+        .ok_or_else(|| NiTriTeError::CommandDenied(format!("Outil inconnu du catalogue: {name}")))?;
+    tokio::task::spawn_blocking(move || maintenance::tool_launcher::launch(&tool, force_admin.unwrap_or(false)))
+        .await
+        .map_err(|e| NiTriTeError::System(e.to_string()))?
+}
+
 // === Extended Info (BIOS, Batterie, Dossiers) ===
 
 #[tauri::command]

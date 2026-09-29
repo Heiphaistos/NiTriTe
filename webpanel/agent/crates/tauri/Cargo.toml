@@ -1,0 +1,16 @@
+[package]
+# Porte volontairement le nom `tauri` : le code de NiTriTe (`use tauri::Emitter`,
+# `#[tauri::command]`, `tauri::State`…) compile tel quel contre cette cale,
+# sans fenetre ni WebView. Voir README.md > Architecture.
+name = "tauri"
+version = "2.0.0-webpanel"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+tauri-macros = { path = "../tauri-macros", package = "nitrite-tauri-macros" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+inventory = "0.3"

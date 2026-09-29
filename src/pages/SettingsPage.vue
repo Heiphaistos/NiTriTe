@@ -6,7 +6,9 @@ import NButton from "@/components/ui/NButton.vue";
 import NInput from "@/components/ui/NInput.vue";
 import NToggle from "@/components/ui/NToggle.vue";
 import DiagBanner from "@/components/ui/DiagBanner.vue";
-import { useAppStore, type ThemeName } from "@/stores/app";
+import { useAppStore } from "@/stores/app";
+import { themeGallery, totalThemeCount } from "@/utils/themeCatalog";
+import { PERF_MODE_LABELS, PERF_MODE_DESCRIPTIONS, type PerfMode } from "@/utils/perfProfile";
 import { useNotificationStore } from "@/stores/notifications";
 import { useAiStore } from "@/stores/ai";
 import { checkForUpdate } from "@/composables/useAutoUpdate";
@@ -15,6 +17,8 @@ import {
   Save, RotateCcw, Wifi, CheckCircle, XCircle, FolderOpen,
   Upload, Zap, Bell,
 } from "lucide-vue-next";
+
+const PERF_MODES: PerfMode[] = ["auto", "full", "balanced", "light"];
 
 const appStore = useAppStore();
 const notify   = useNotificationStore();
@@ -63,33 +67,10 @@ const changed = ref(false);
 function markChanged() { changed.value = true; }
 
 // ── Thèmes ────────────────────────────────────────────────────
-const themes: { id: ThemeName; label: string; color: string }[] = [
-  { id: "nitrite-dark",   label: "Nitrite Dark",      color: "#f97316" },
-  { id: "cyber-blue",     label: "Cyber Blue",        color: "#3b82f6" },
-  { id: "matrix-green",   label: "Matrix Green",      color: "#22c55e" },
-  { id: "purple-haze",    label: "Purple Haze",       color: "#a855f7" },
-  { id: "red-alert",      label: "Red Alert",         color: "#ef4444" },
-  { id: "arctic-light",   label: "Arctic Light",      color: "#0ea5e9" },
-  { id: "midnight-gold",  label: "Midnight Gold",     color: "#eab308" },
-  { id: "neon-synthwave", label: "Neon Synthwave",    color: "#f0abfc" },
-  { id: "ocean-deep",     label: "Ocean Deep",        color: "#06b6d4" },
-  { id: "rose-quartz",    label: "Rose Quartz",       color: "#f43f5e" },
-  { id: "void-dark",      label: "Void Dark (AMOLED)", color: "#6366f1" },
-  { id: "forest-green",   label: "Forest Green",      color: "#16a34a" },
-  { id: "copper-rust",    label: "Copper Rust",       color: "#d97706" },
-  { id: "slate-steel",    label: "Slate Steel",       color: "#64748b" },
-  { id: "inferno",        label: "Inferno",           color: "#ff4500" },
-  { id: "aurora",         label: "Aurora Borealis",   color: "#00d4aa" },
-  { id: "moonlight",      label: "Moonlight",         color: "#7dd3fc" },
-  { id: "ember-glow",     label: "Ember Glow",        color: "#fb923c" },
-  { id: "cobalt-night",   label: "Cobalt Night",      color: "#2563eb" },
-  { id: "volcanic",       label: "Volcanic",          color: "#f97316" },
-  { id: "sakura",         label: "Sakura (Clair)",    color: "#ec4899" },
-  { id: "jade-temple",    label: "Jade Temple",       color: "#10b981" },
-  { id: "hacker",         label: "Hacker Terminal",   color: "#00ff41" },
-  { id: "ice-storm",      label: "Ice Storm (Clair)", color: "#0284c7" },
-  { id: "custom",         label: "Custom",            color: "#6b7280" },
-];
+// Galerie complète : thèmes Nitrite + tous les presets de l'éditeur
+// (Windows 11, éditeurs de code, nouveautés), appliqués et mémorisés.
+const themeGroups = themeGallery();
+const themeCount = totalThemeCount();
 
 // ── Chargement config ─────────────────────────────────────────
 onMounted(async () => {
@@ -277,19 +258,23 @@ const tabs: { id: Tab; label: string; icon: Component }[] = [
           <h2 class="tab-title"><Palette :size="16" /> Interface</h2>
 
           <div class="setting-group">
-            <p class="setting-label">Thème</p>
-            <div class="theme-grid">
-              <button
-                v-for="t in themes"
-                :key="t.id"
-                class="theme-btn"
-                :class="{ active: appStore.theme === t.id }"
-                @click="appStore.setTheme(t.id); markChanged()"
-              >
-                <div class="theme-swatch" :style="{ background: t.color, boxShadow: appStore.theme === t.id ? `0 0 10px ${t.color}80` : 'none' }"></div>
-                <span>{{ t.label }}</span>
-                <span v-if="appStore.theme === t.id" class="theme-check">✓</span>
-              </button>
+            <p class="setting-label">Thème <span class="setting-desc" style="display:inline">— {{ themeCount }} thèmes</span></p>
+            <div v-for="g in themeGroups" :key="g.label" class="theme-group">
+              <p class="theme-group-label">{{ g.label }}</p>
+              <div class="theme-grid">
+                <button
+                  v-for="t in g.themes"
+                  :key="t.id"
+                  class="theme-btn"
+                  :class="{ active: appStore.theme === t.id }"
+                  :title="t.label"
+                  @click="appStore.setTheme(t.id); markChanged()"
+                >
+                  <div class="theme-swatch" :style="{ background: `linear-gradient(135deg, ${t.background} 50%, ${t.accent} 50%)`, boxShadow: appStore.theme === t.id ? `0 0 10px ${t.accent}80` : 'none' }"></div>
+                  <span>{{ t.label }}</span>
+                  <span v-if="appStore.theme === t.id" class="theme-check">✓</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -336,6 +321,25 @@ const tabs: { id: Tab; label: string; icon: Component }[] = [
         <!-- ══ PERFORMANCE ══ -->
         <div v-else-if="activeTab === 'performance'" class="tab-section">
           <h2 class="tab-title"><Zap :size="16" /> Performance</h2>
+
+          <div class="setting-group">
+            <p class="setting-label">Profil de l'interface</p>
+            <p class="setting-desc">
+              Ce PC : {{ appStore.hardware.cores }} cœur(s) logique(s)<template v-if="appStore.hardware.memoryGb">, {{ appStore.hardware.memoryGb }} Go de RAM{{ appStore.hardware.memoryGb >= 8 ? ' ou plus' : '' }}</template>
+              — profil actif : <strong>{{ PERF_MODE_LABELS[appStore.perfTier] }}</strong>
+            </p>
+            <div class="btn-group" style="margin-top:6px">
+              <button
+                v-for="m in PERF_MODES"
+                :key="m"
+                class="size-btn"
+                :class="{ active: appStore.perfMode === m }"
+                :title="PERF_MODE_DESCRIPTIONS[m]"
+                @click="appStore.setPerfMode(m)"
+              >{{ PERF_MODE_LABELS[m] }}</button>
+            </div>
+            <p class="setting-desc" style="margin-top:6px">{{ PERF_MODE_DESCRIPTIONS[appStore.perfMode] }}. Les intervalles de démarrage et de monitoring s'appliquent au prochain lancement.</p>
+          </div>
 
           <div class="setting-group">
             <p class="setting-label">Intervalle de monitoring</p>

@@ -1,0 +1,14 @@
+[package]
+name = "nitrite-tauri-macros"
+version = "2.0.0-webpanel"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"

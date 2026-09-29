@@ -57,11 +57,16 @@ async fn get_platform_info() -> Result<PlatformInfo, NiTriTeError> {
 async fn start_monitoring(
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
+    interval_scale: Option<f64>,
 ) -> Result<(), NiTriTeError> {
     let (interval, process_count) = {
         let config = state.config.lock().await;
         (config.monitor_interval_ms, config.process_count)
     };
+    // Profil de performance « leger »/« equilibre » : l'interface demande un
+    // echantillonnage moins frequent (x1.5 / x2) sur les petites configurations.
+    let scale = interval_scale.filter(|s| s.is_finite()).unwrap_or(1.0).clamp(1.0, 4.0);
+    let interval = (interval as f64 * scale) as u64;
     let running = state.monitor_running.clone();
     system::monitor::start_monitoring(window, running, interval, process_count);
     Ok(())
@@ -142,6 +147,20 @@ async fn uninstall_app(app_id: Option<String>, winget_id: Option<String>) -> Res
     tokio::task::spawn_blocking(move || installer::smart_install::uninstall_app_smart(&entry))
         .await
         .map_err(|e| NiTriTeError::System(e.to_string()))?
+}
+
+/// Ids du catalogue deja installes sur ce poste (registre + winget export).
+/// Appele une fois a l'ouverture de Master Install : permet d'afficher
+/// « Installe » et le bouton de desinstallation sans avoir a reinstaller
+/// l'app dans la session.
+#[tauri::command]
+async fn detect_installed_catalog_apps() -> Result<Vec<String>, NiTriTeError> {
+    tokio::task::spawn_blocking(|| {
+        let apps = installer::manager::get_default_apps();
+        installer::smart_install::detect_installed(&apps)
+    })
+    .await
+    .map_err(|e| NiTriTeError::System(e.to_string()))
 }
 
 #[tauri::command]

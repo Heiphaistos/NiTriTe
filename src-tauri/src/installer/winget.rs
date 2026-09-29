@@ -184,6 +184,41 @@ fn stream_winget_upgrade(args: &[&str], window: &tauri::Window) -> Result<(), Ni
     Ok(())
 }
 
+/// Identifiants (en minuscules) des paquets installes connus de winget.
+/// `winget export` plutot que `winget list` : la table de `list` tronque les
+/// colonnes (« Microsoft.VisualStudio… ») selon la largeur de console, alors
+/// que l'export JSON donne les identifiants exacts.
+pub fn installed_ids() -> std::collections::HashSet<String> {
+    let path = std::env::temp_dir().join(format!("nitrite-winget-export-{}.json", std::process::id()));
+    let status = Command::new("winget")
+        .args(["export", "-o"])
+        .arg(&path)
+        .args(["--accept-source-agreements", "--disable-interactivity"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(0x08000000)
+        .status();
+    let text = if status.is_ok() { std::fs::read_to_string(&path).unwrap_or_default() } else { String::new() };
+    let _ = std::fs::remove_file(&path);
+    parse_export_ids(&text)
+}
+
+/// Extrait les `PackageIdentifier` d'un fichier `winget export`.
+pub fn parse_export_ids(json: &str) -> std::collections::HashSet<String> {
+    let mut ids = std::collections::HashSet::new();
+    // winget ecrit parfois un BOM UTF-8 en tete du fichier.
+    let json = json.trim_start_matches('\u{feff}');
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(json) else { return ids };
+    for src in v["Sources"].as_array().into_iter().flatten() {
+        for pkg in src["Packages"].as_array().into_iter().flatten() {
+            if let Some(id) = pkg["PackageIdentifier"].as_str() {
+                ids.insert(id.to_lowercase());
+            }
+        }
+    }
+    ids
+}
+
 pub fn upgrade_all(excluded_ids: Vec<String>, window: &tauri::Window) -> Result<(), NiTriTeError> {
     // winget upgrade ne supporte PAS d'option d'exclusion : `--all` mettrait à
     // jour TOUS les paquets, y compris ceux que l'utilisateur a exclus. Quand une
@@ -243,4 +278,25 @@ pub fn search_packages(query: &str) -> Result<Vec<WingetPackage>, NiTriTeError> 
     }
 
     Ok(packages)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_export_ids_reads_every_source() {
+        let json = "\u{feff}{\"Sources\":[{\"Packages\":[{\"PackageIdentifier\":\"7zip.7zip\"},{\"PackageIdentifier\":\"Git.Git\"}]},{\"Packages\":[{\"PackageIdentifier\":\"9NKSQGP7F2NH\"}]}]}";
+        let ids = parse_export_ids(json);
+        assert_eq!(ids.len(), 3);
+        assert!(ids.contains("git.git"));
+        assert!(ids.contains("9nksqgp7f2nh"));
+    }
+
+    #[test]
+    fn parse_export_ids_tolerates_garbage() {
+        assert!(parse_export_ids("").is_empty());
+        assert!(parse_export_ids("not json").is_empty());
+        assert!(parse_export_ids("{\"Sources\":null}").is_empty());
+    }
 }
