@@ -29,6 +29,7 @@ function agentBootstrap(): Plugin {
   if (m) {
     try { sessionStorage.setItem("nitrite-agent-token", m[1]); } catch (e) {}
     history.replaceState(null, "", location.pathname + location.search);
+    fetch("/api/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: m[1] }) });
   }
 })();
 </script>`;

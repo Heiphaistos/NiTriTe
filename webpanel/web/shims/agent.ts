@@ -35,7 +35,9 @@ export async function agentFetch<T>(path: string, body?: unknown, method = "POST
   try {
     res = await fetch(`/api${path}`, {
       method,
-      headers: { "Content-Type": "application/json", "X-Nitrite-Token": agentToken() },
+      // Jeton de l'onglet s'il en a un ; sinon le cookie de session (HttpOnly,
+      // pose par /api/session) authentifie les autres onglets.
+      headers: { "Content-Type": "application/json", ...(agentToken() ? { "X-Nitrite-Token": agentToken() } : {}) },
       body: method === "GET" ? undefined : JSON.stringify(body ?? {}),
     });
   } catch {
@@ -43,6 +45,7 @@ export async function agentFetch<T>(path: string, body?: unknown, method = "POST
     throw new AgentError(0, "NiTriTe Agent ne répond pas — relancez nitrite-agent.exe");
   }
   if (res.status === 401) agentStatus.set("unauthorized");
+  else agentStatus.set("online");
   const text = await res.text();
   let payload: unknown = null;
   try { payload = text ? JSON.parse(text) : null; } catch { payload = text; }
@@ -77,7 +80,8 @@ let retry = 0;
 function connect(): void {
   if (socket && socket.readyState <= WebSocket.OPEN) return;
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  socket = new WebSocket(`${proto}://${location.host}/api/events?token=${encodeURIComponent(agentToken())}`);
+  const t = agentToken();
+  socket = new WebSocket(`${proto}://${location.host}/api/events${t ? `?token=${encodeURIComponent(t)}` : ""}`);
   socket.onopen = () => { retry = 0; agentStatus.set("online"); };
   socket.onmessage = (m) => {
     try {

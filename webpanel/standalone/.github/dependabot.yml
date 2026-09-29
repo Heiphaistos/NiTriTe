@@ -1,0 +1,22 @@
+# Garde le panneau a jour : NiTriTe lui-meme (sous-module upstream/), les
+# dependances Rust/JS de l'agent et les actions GitHub.
+version: 2
+updates:
+  - package-ecosystem: gitsubmodule
+    directory: "/"
+    schedule:
+      interval: daily
+    commit-message:
+      prefix: "chore(upstream)"
+  - package-ecosystem: cargo
+    directory: "/agent"
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

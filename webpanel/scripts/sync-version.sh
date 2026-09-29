@@ -36,6 +36,16 @@ if [ "${1:-}" = "--check" ]; then
     exit 1
   fi
   check_deps
+  # Idem cote JS : l'interface de NiTriTe est compilee avec les outils du
+  # panneau (vite, plugin Vue, vitest…) : memes versions que NiTriTe.
+  node -e '
+    const [up, wp] = process.argv.slice(1).map((f) => require(f));
+    const all = (p) => ({ ...p.dependencies, ...p.devDependencies });
+    const u = all(up), w = all(wp);
+    const bad = Object.keys(w).filter((k) => u[k] && u[k] !== w[k]);
+    for (const k of bad) console.error(`Dependance JS desalignee : ${k} = ${u[k]} dans NiTriTe, ${w[k]} dans le panneau`);
+    process.exit(bad.length ? 1 : 0);
+  ' "$upstream/package.json" "$here/package.json"
   echo "Versions et dependances alignees : $want"
   exit 0
 fi
