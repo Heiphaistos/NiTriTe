@@ -38,8 +38,8 @@ try {
   Check "mauvais Host -> 403" ((Req GET "/api/health" (@{ Host = "evil.example:$($s.port)" } + $auth)).StatusCode -eq 403)
   Check "mauvaise Origin -> 403" ((Req POST "/api/invoke/get_apps" (@{ Origin = "http://evil.example" } + $auth) @{}).StatusCode -eq 403)
   $index = Req GET "/"
-  Check "CSP presente" ($index.Headers["Content-Security-Policy"] -match "frame-ancestors 'none'")
-  Check "X-Frame-Options DENY" ($index.Headers["X-Frame-Options"] -eq "DENY")
+  Check "CSP presente" ("$($index.Headers['Content-Security-Policy'])" -match "frame-ancestors 'none'")
+  Check "X-Frame-Options DENY" ("$($index.Headers['X-Frame-Options'])" -eq "DENY")
   $sess = Req POST "/api/session" @{} @{ token = $s.token }
   Check "cookie de session HttpOnly/Strict" ($sess.StatusCode -eq 204 -and "$($sess.Headers['Set-Cookie'])" -match "HttpOnly" -and "$($sess.Headers['Set-Cookie'])" -match "SameSite=Strict")
 
