@@ -16,7 +16,7 @@
     "@tauri-apps/api": "2.11",
     "@tauri-apps/plugin-dialog": "2.7",
     "@tauri-apps/plugin-fs": "2.5",
-    "@tauri-apps/plugin-http": "^2.2.0",
+    "@tauri-apps/plugin-http": "^2.6.0",
     "@tauri-apps/plugin-notification": "^2.2.0",
     "@tauri-apps/plugin-opener": "^2.2.0",
     "@tauri-apps/plugin-os": "^2.2.0",
@@ -32,7 +32,7 @@
     "pinia-plugin-persistedstate": "^4.7.1",
     "vue": "^3.5.13",
     "vue-chartjs": "^5.3.3",
-    "vue-router": "^5.2.0"
+    "vue-router": "^5.3.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
