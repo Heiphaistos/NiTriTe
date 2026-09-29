@@ -289,9 +289,47 @@ export const PRESET_THEMES: { id: string; label: string; accent: string; vars: R
     id: "ayu-dark", label: "Ayu Dark", accent: "#ff8f40",
     vars: { "--bg-primary": "#0a0e14", "--bg-secondary": "#0d1017", "--bg-tertiary": "#131721", "--bg-elevated": "#1a2132", "--accent-primary": "#ff8f40", "--accent-hover": "#ffaa66", "--text-primary": "#b3b1ad", "--text-secondary": "#6c7680", "--text-muted": "#3d4354", "--border": "#131721", "--border-hover": "#1a2132", "--success": "#91b362", "--warning": "#f2ae49", "--danger": "#ea6c73", "--info": "#36a3d9", "--radius-sm": "3px", "--radius-md": "5px", "--radius-lg": "8px", "--radius-xl": "12px" },
   },
+
+  // ── NOUVEAUTÉS ───────────────────────────────────────────────────────────
+  {
+    id: "nitrite-light", label: "Nitrite Light (Clair)", accent: "#ea580c",
+    vars: { "--bg-primary": "#fafaf9", "--bg-secondary": "#f5f5f4", "--bg-tertiary": "#e7e5e4", "--bg-elevated": "#d6d3d1", "--accent-primary": "#ea580c", "--accent-hover": "#f97316", "--text-primary": "#1c1917", "--text-secondary": "#44403c", "--text-muted": "#78716c", "--border": "#e7e5e4", "--border-hover": "#d6d3d1", "--success": "#15803d", "--warning": "#b45309", "--danger": "#b91c1c", "--info": "#1d4ed8", "--radius-sm": "6px", "--radius-md": "8px", "--radius-lg": "12px", "--radius-xl": "16px" },
+  },
+  {
+    id: "carbon", label: "Carbon (AMOLED Orange)", accent: "#ff7a1a",
+    vars: { "--bg-primary": "#000000", "--bg-secondary": "#0a0a0a", "--bg-tertiary": "#141414", "--bg-elevated": "#1f1f1f", "--accent-primary": "#ff7a1a", "--accent-hover": "#ff9447", "--text-primary": "#f5f5f5", "--text-secondary": "#a3a3a3", "--text-muted": "#737373", "--border": "#1c1c1c", "--border-hover": "#2e2e2e", "--success": "#22c55e", "--warning": "#eab308", "--danger": "#ef4444", "--info": "#3b82f6", "--radius-sm": "4px", "--radius-md": "6px", "--radius-lg": "10px", "--radius-xl": "14px" },
+  },
+  {
+    id: "graphite", label: "Graphite (Sobre)", accent: "#a1a1aa",
+    vars: { "--bg-primary": "#18181b", "--bg-secondary": "#1f1f23", "--bg-tertiary": "#27272a", "--bg-elevated": "#3f3f46", "--accent-primary": "#d4d4d8", "--accent-hover": "#e4e4e7", "--text-primary": "#fafafa", "--text-secondary": "#a1a1aa", "--text-muted": "#71717a", "--border": "#2f2f35", "--border-hover": "#3f3f46", "--success": "#4ade80", "--warning": "#facc15", "--danger": "#f87171", "--info": "#60a5fa", "--radius-sm": "4px", "--radius-md": "6px", "--radius-lg": "8px", "--radius-xl": "12px" },
+  },
+  {
+    id: "high-contrast", label: "Contraste élevé", accent: "#ffd400",
+    vars: { "--bg-primary": "#000000", "--bg-secondary": "#000000", "--bg-tertiary": "#111111", "--bg-elevated": "#1a1a1a", "--accent-primary": "#ffd400", "--accent-hover": "#ffe44d", "--text-primary": "#ffffff", "--text-secondary": "#ffffff", "--text-muted": "#d4d4d4", "--border": "#ffffff", "--border-hover": "#ffd400", "--success": "#3ff23f", "--warning": "#ffd400", "--danger": "#ff4d4d", "--info": "#4dc3ff", "--radius-sm": "2px", "--radius-md": "4px", "--radius-lg": "6px", "--radius-xl": "8px" },
+  },
+  {
+    id: "midnight-purple", label: "Midnight Purple", accent: "#8b5cf6",
+    vars: { "--bg-primary": "#0b0915", "--bg-secondary": "#120f22", "--bg-tertiary": "#1b1733", "--bg-elevated": "#272148", "--accent-primary": "#8b5cf6", "--accent-hover": "#a78bfa", "--text-primary": "#f5f3ff", "--text-secondary": "#c4b5fd", "--text-muted": "#8b80b8", "--border": "#221d3d", "--border-hover": "#2f2857", "--success": "#34d399", "--warning": "#fbbf24", "--danger": "#fb7185", "--info": "#60a5fa", "--radius-sm": "6px", "--radius-md": "10px", "--radius-lg": "14px", "--radius-xl": "20px" },
+  },
+  {
+    id: "mint-light", label: "Mint (Clair)", accent: "#0d9488",
+    vars: { "--bg-primary": "#f6fdfb", "--bg-secondary": "#ecfaf6", "--bg-tertiary": "#d5f3ea", "--bg-elevated": "#b4e9d9", "--accent-primary": "#0d9488", "--accent-hover": "#14b8a6", "--text-primary": "#042f2e", "--text-secondary": "#115e59", "--text-muted": "#5b7f7a", "--border": "#d5f3ea", "--border-hover": "#b4e9d9", "--success": "#15803d", "--warning": "#b45309", "--danger": "#b91c1c", "--info": "#0369a1", "--radius-sm": "6px", "--radius-md": "10px", "--radius-lg": "14px", "--radius-xl": "20px" },
+  },
+  {
+    id: "sunset-dusk", label: "Sunset Dusk", accent: "#f472b6",
+    vars: { "--bg-primary": "#140a14", "--bg-secondary": "#1f0f1c", "--bg-tertiary": "#2c1528", "--bg-elevated": "#3d1d38", "--accent-primary": "#f472b6", "--accent-hover": "#f9a8d4", "--text-primary": "#fff1f7", "--text-secondary": "#f9a8d4", "--text-muted": "#b86b94", "--border": "#2c1528", "--border-hover": "#3d1d38", "--success": "#4ade80", "--warning": "#fb923c", "--danger": "#f43f5e", "--info": "#818cf8", "--radius-sm": "6px", "--radius-md": "10px", "--radius-lg": "14px", "--radius-xl": "20px" },
+  },
+  {
+    id: "deep-sea-light", label: "Paper (Clair, lecture)", accent: "#2563eb",
+    vars: { "--bg-primary": "#fbfaf6", "--bg-secondary": "#f4f1e8", "--bg-tertiary": "#e9e4d4", "--bg-elevated": "#d9d2bc", "--accent-primary": "#2563eb", "--accent-hover": "#3b82f6", "--text-primary": "#1f1d17", "--text-secondary": "#4a463a", "--text-muted": "#7b7563", "--border": "#e4ddc9", "--border-hover": "#d9d2bc", "--success": "#15803d", "--warning": "#a16207", "--danger": "#b91c1c", "--info": "#1d4ed8", "--radius-sm": "4px", "--radius-md": "6px", "--radius-lg": "10px", "--radius-xl": "14px" },
+  },
 ];
 
 export const PRESET_THEME_GROUPS = [
+  {
+    label: "✨ Nouveautés",
+    ids: ["nitrite-light","carbon","graphite","high-contrast","midnight-purple","mint-light","sunset-dusk","deep-sea-light"],
+  },
   {
     label: "🎨 Nitrite Originals",
     ids: ["nitrite-dark","cyber-blue","matrix-green","purple-haze","red-alert","arctic-light","midnight-gold","neon-synthwave","ocean-deep","rose-quartz","void-dark","forest-green","copper-rust","slate-steel"],

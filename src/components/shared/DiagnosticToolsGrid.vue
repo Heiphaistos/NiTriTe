@@ -9,12 +9,13 @@ interface PortableInfo { id: string; name: string; }
 interface ToolDef {
   label: string;
   emoji: string;
-  type: "portable" | "exe" | "url" | "cmd" | "battery";
+  type: "portable" | "exe" | "url" | "cmd" | "battery" | "catalog";
   match?: string;        // portable: id.includes(match)
   exclude?: string;      // portable: !id.includes(exclude)
   path?: string;         // exe: relative from logiciel/
   url?: string;          // url
   cmd?: string;          // cmd: passed to execute_tool
+  catalog?: { name: string; section: string }; // catalog: outil de tools.json (élévation UAC gérée par le backend)
   officialUrl?: string;  // portable: fallback si non trouvé
 }
 
@@ -48,13 +49,13 @@ const TOOLS: ToolDef[] = [
   { label: "Dossier Temp",                     emoji: "📁",  type: "cmd",      cmd: "explorer %TEMP%" },
   { label: "AppData Local",                    emoji: "📂",  type: "cmd",      cmd: "explorer %LOCALAPPDATA%" },
   { label: "Version Windows",                  emoji: "🪟",  type: "cmd",      cmd: "winver" },
-  { label: "Tout Mettre à Jour",               emoji: "🔄",  type: "cmd",      cmd: "start cmd /k winget upgrade --all --include-unknown" },
+  { label: "Tout Mettre à Jour",               emoji: "🔄",  type: "catalog",  catalog: { name: "Upgrade All", section: "WinGet Package Manager" } },
   { label: "Drivers NVIDIA",                   emoji: "🟢",  type: "url",      url: "https://www.nvidia.com/fr-fr/drivers/" },
   { label: "Drivers AMD",                      emoji: "🔴",  type: "url",      url: "https://www.amd.com/fr/support/download/drivers.html" },
-  { label: "Réparer Image Windows",            emoji: "🔧",  type: "cmd",      cmd: "start cmd /k DISM /Online /Cleanup-Image /RestoreHealth" },
+  { label: "Réparer Image Windows",            emoji: "🔧",  type: "catalog",  catalog: { name: "DISM Restore", section: "Réparation Système" } },
   { label: "Propriétés Utilisateur",           emoji: "👤",  type: "cmd",      cmd: "netplwiz" },
   { label: "Système",                          emoji: "🖥️",  type: "cmd",      cmd: "sysdm.cpl" },
-  { label: "CHKDSK Complet",                   emoji: "💽",  type: "cmd",      cmd: "start cmd /k chkdsk C: /f /r" },
+  { label: "CHKDSK Complet",                   emoji: "💽",  type: "catalog",  catalog: { name: "CHKDSK C:", section: "Réparation Système" } },
 ];
 
 const portables = ref<PortableInfo[]>([]);
@@ -96,6 +97,9 @@ async function launchTool(tool: ToolDef) {
       const cmd = tool.cmd!;
       const isUrl = cmd.startsWith("ms-settings:");
       await invoke("execute_tool", { command: cmd, isUrl });
+
+    } else if (tool.type === "catalog") {
+      await invoke("launch_tool", { name: tool.catalog!.name, section: tool.catalog!.section });
 
     } else if (tool.type === "battery") {
       const path = await invoke<string>("run_battery_report");

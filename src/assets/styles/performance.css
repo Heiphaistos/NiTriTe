@@ -1,0 +1,62 @@
+/* === Profils de performance ===============================================
+   <html data-perf="full|balanced|light"> est pose par le store app selon le
+   materiel (ou le choix dans Parametres > Performance).
+   - balanced : plus de flous ni d'animations en boucle ; transitions courtes.
+   - light    : aucun effet couteux au rendu (flou, lueur, ombre portee,
+                animation, transition) — pour les doubles coeurs / 4 Go.
+   Les spinners restent animes : ils signalent qu'un traitement est en cours. */
+
+/* ── Équilibré + Léger : les flous sont le premier poste de coût GPU ── */
+html[data-perf="balanced"] *,
+html[data-perf="balanced"] *::before,
+html[data-perf="balanced"] *::after,
+html[data-perf="light"] *,
+html[data-perf="light"] *::before,
+html[data-perf="light"] *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Animations décoratives en boucle (pulsations, lueurs, flottement, shimmer) */
+html[data-perf="balanced"] .animate-glow,
+html[data-perf="balanced"] .animate-float,
+html[data-perf="balanced"] .animate-heartbeat,
+html[data-perf="balanced"] .animate-shimmer::after,
+html[data-perf="balanced"] .status-dot,
+html[data-perf="balanced"] .skeleton {
+  animation: none !important;
+}
+
+/* ── Léger ── */
+html[data-perf="light"] {
+  --accent-glow: none;
+  --accent-glow-sm: none;
+  --success-glow: none;
+  --shadow-sm: none;
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 2px 4px rgba(0, 0, 0, 0.45);
+  --transition-fast: 0ms;
+  --transition-normal: 0ms;
+  --transition-slow: 0ms;
+  text-rendering: optimizeSpeed;
+}
+
+html[data-perf="light"] *,
+html[data-perf="light"] *::before,
+html[data-perf="light"] *::after {
+  transition: none !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+/* Les indicateurs d'activité restent visibles et animés */
+html[data-perf="light"] .animate-spin,
+html[data-perf="light"] .spin,
+html[data-perf="light"] .spin-icon,
+html[data-perf="light"] .n-spinner,
+html[data-perf="light"] .n-spinner * {
+  animation-duration: 1s !important;
+}

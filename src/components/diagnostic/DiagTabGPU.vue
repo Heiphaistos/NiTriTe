@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { scaledInterval } from "@/utils/perfProfile";
 import { invoke, isTauriContext } from "@/utils/invoke";
 import { ref, onMounted, onUnmounted } from "vue";
 import { useNotificationStore } from "@/stores/notifications";
@@ -43,7 +44,7 @@ async function loadGpuTemps() {
 onMounted(() => {
   loadGpuTemps();
   // Polling temps réel toutes les 3 secondes
-  pollTimer = setInterval(loadGpuTemps, 3000);
+  pollTimer = setInterval(loadGpuTemps, scaledInterval(3000));
 });
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer);

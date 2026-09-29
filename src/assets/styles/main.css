@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./themes.css";
 @import "./animations.css";
+@import "./performance.css";
 
 /* === Font size system === */
 [data-font-size="small"]  { font-size: 12px; }
@@ -151,7 +152,7 @@ code {
   color: var(--accent-primary);
   padding-left: 10px;
   border-left: 3px solid var(--accent-primary);
-  box-shadow: -3px 0 10px rgba(249, 115, 22, 0.2);
+  box-shadow: -3px 0 10px var(--accent-muted);
   margin-bottom: 10px;
 }
 
@@ -184,8 +185,8 @@ code {
 
 /* === Premium card border === */
 .card-premium {
-  border-color: rgba(249, 115, 22, 0.25) !important;
-  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.08), var(--shadow-lg);
+  border-color: color-mix(in srgb, var(--accent-primary) 25%, transparent) !important;
+  box-shadow: 0 0 0 1px var(--accent-subtle, transparent), var(--shadow-lg);
 }
 
 /* === Divider === */

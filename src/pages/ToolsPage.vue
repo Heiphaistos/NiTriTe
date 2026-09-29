@@ -245,13 +245,16 @@ async function loadTools() {
   loading.value = true;
   try {
     const raw = await invoke<ToolEntry[]>("get_tools");
-    tools.value = raw.map((t, i) => ({
-      id: String(i),
+    // id stable (section + nom) : un index de tableau decalait favoris et
+    // recents a chaque ajout/suppression d'outil dans le catalogue.
+    tools.value = raw.map((t) => ({
+      id: `${t.section}::${t.name}`,
       name: t.name,
       description: t.description || "",
       command: t.command,
       is_url: t.is_url,
       category: normalizeCategory(t.section || t.category || "", t.name || ""),
+      section: t.section,
       requires_admin: t.requires_admin ?? false,
     }));
   } catch (e: unknown) {
@@ -270,13 +273,14 @@ async function launchTool(tool: ToolInfo) {
   trackUsage(tool.id);
 
   try {
-    const useAdmin = tool.requires_admin && (adminChecked.value[tool.id] ?? false);
-    if (useAdmin && !tool.is_url) {
-      // Ouvre un CMD élevé visible qui reste ouvert après la commande
-      await invoke("run_system_command", {
-        cmd: "powershell",
-        args: ["-NoProfile", "-Command",
-               `Start-Process cmd -ArgumentList '/K ${tool.command}' -Verb RunAs`],
+    if (tool.section) {
+      // Outil du catalogue : le backend le retrouve par son nom et execute SA
+      // commande (chainages `&&`, variables %TEMP%, PowerShell…), eleve via
+      // UAC si l'outil l'exige ou si « Lancer en admin » est coche.
+      await invoke("launch_tool", {
+        name: tool.name,
+        section: tool.section,
+        forceAdmin: adminChecked.value[tool.id] ?? false,
       });
     } else {
       await invoke("execute_tool", { command: tool.command, isUrl: tool.is_url });
@@ -342,7 +346,11 @@ onMounted(() => {
                 </NBadge>
               </div>
               <div class="tool-desc">{{ tool.description }}</div>
-              <label v-if="tool.requires_admin" class="admin-check">
+              <span v-if="tool.requires_admin" class="admin-check admin-required" title="Windows demandera une confirmation (UAC)">
+                <ShieldAlert :size="11" />
+                Administrateur requis
+              </span>
+              <label v-else-if="!tool.is_url && tool.section" class="admin-check">
                 <input type="checkbox" v-model="adminChecked[tool.id]" />
                 <ShieldAlert :size="11" />
                 Lancer en admin
@@ -381,7 +389,11 @@ onMounted(() => {
                 </NBadge>
               </div>
               <div class="tool-desc">{{ tool.description }}</div>
-              <label v-if="tool.requires_admin" class="admin-check">
+              <span v-if="tool.requires_admin" class="admin-check admin-required" title="Windows demandera une confirmation (UAC)">
+                <ShieldAlert :size="11" />
+                Administrateur requis
+              </span>
+              <label v-else-if="!tool.is_url && tool.section" class="admin-check">
                 <input type="checkbox" v-model="adminChecked[tool.id]" />
                 <ShieldAlert :size="11" />
                 Lancer en admin
@@ -422,7 +434,11 @@ onMounted(() => {
                   </NBadge>
                 </div>
                 <div class="tool-desc">{{ tool.description }}</div>
-                <label v-if="tool.requires_admin" class="admin-check">
+                <span v-if="tool.requires_admin" class="admin-check admin-required" title="Windows demandera une confirmation (UAC)">
+                  <ShieldAlert :size="11" />
+                  Administrateur requis
+                </span>
+                <label v-else-if="!tool.is_url && tool.section" class="admin-check">
                   <input type="checkbox" v-model="adminChecked[tool.id]" />
                   <ShieldAlert :size="11" />
                   Lancer en admin
@@ -583,6 +599,9 @@ onMounted(() => {
   cursor: pointer;
   user-select: none;
 }
+
+.admin-check.admin-required { cursor: default; font-weight: 600; }
+.admin-check:not(.admin-required) { color: var(--text-muted); }
 
 .admin-check input[type="checkbox"] {
   width: 12px;

@@ -1,0 +1,53 @@
+name: Web Panel (NiTriTe Agent)
+
+on:
+  push:
+    branches: [main]
+    paths: ["webpanel/**", "src/**", "src-tauri/src/**", "src-tauri/data/**", "package.json", ".github/workflows/webpanel.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["webpanel/**", "src/**", "src-tauri/src/**", "src-tauri/data/**", "package.json", ".github/workflows/webpanel.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  agent:
+    name: Build NiTriTe Agent (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            webpanel/package-lock.json
+      # L'interface de NiTriTe (src/) se resout depuis node_modules a la racine.
+      - run: npm ci
+      - run: npm ci
+        working-directory: webpanel
+      - name: Version de l'agent alignee sur NiTriTe
+        shell: bash
+        run: bash webpanel/scripts/sync-version.sh --check
+      - name: Tests des cales JS
+        run: npm test
+        working-directory: webpanel
+      - name: Build de l'interface web
+        run: npm run build
+        working-directory: webpanel
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - name: Tests de l'agent
+        working-directory: webpanel/agent
+        run: cargo test -p tauri -p nitrite-agent
+      - name: Build release
+        working-directory: webpanel/agent
+        run: cargo build --release -p nitrite-agent
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: NiTriTe-Agent
+          path: webpanel/agent/target/release/nitrite-agent.exe
+          if-no-files-found: error

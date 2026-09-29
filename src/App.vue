@@ -15,6 +15,7 @@ import { useProactiveAlerts } from "@/composables/useProactiveAlerts";
 import { logger } from "@/utils/logger";
 import { sdiRelease } from "@/utils/sdiGuard";
 import { checkForUpdate } from "@/composables/useAutoUpdate";
+import { runLimited, startupConcurrency, pollMultiplier } from "@/utils/perfProfile";
 
 const { start: startAlerts, stop: stopAlerts } = useProactiveAlerts();
 const appVersion = __APP_VERSION__;
@@ -57,7 +58,8 @@ const appReady         = ref(false);
 // Vidéo de fond du splash : une fois terminée (elle ne boucle pas), on la
 // démonte et on affiche sa dernière frame en image statique — évite de
 // garder un <video> arrêté en mémoire si le chargement traîne encore.
-const splashVideoEnded = ref(false);
+// Profil léger : pas de décodage vidéo pendant le démarrage, image fixe directe.
+const splashVideoEnded = ref(appStore.perfTier === "light");
 
 // ── Preloader ──────────────────────────────────────────────────────────────────
 interface LoadTask { label: string; status: "pending" | "running" | "done" | "error" }
@@ -180,45 +182,24 @@ onMounted(async () => {
   };
 
   // ── Tâche 1 : Monitoring (doit démarrer en premier, fournit les events) ──
-  await load(1, "start_monitoring");
+  await load(1, "start_monitoring", { intervalScale: pollMultiplier(appStore.perfTier) });
 
-  // ── Tâches 2-23 : 3 batches avec yields pour garder le thread libre ──────
-  // Batch A — infos système de base (les plus rapides)
-  await Promise.allSettled([
-    load(2,  "get_system_info"),
-    load(3,  "get_ram_detailed"),
-    load(4,  "get_storage_physical_info"),
-    load(5,  "get_network_overview"),
-    load(6,  "get_gpu_detailed"),
-    load(7,  "get_user_accounts"),
-  ]);
-  // Yield réel → libère le thread UI entre chaque batch
-  await new Promise(r => setTimeout(r, 0));
-
-  // Batch B — données moyennement lourdes
-  await Promise.allSettled([
-    load(8,  "get_apps"),
-    load(9,  "get_sys_drivers_list"),
-    load(10, "get_running_processes"),
-    load(11, "get_windows_services"),
-    load(12, "get_event_logs", { logName: "System", count: 50 }),
-    load(13, "get_firewall_rules"),
-  ]);
-  await new Promise(r => setTimeout(r, 0));
-
-  // Batch C — données secondaires / lentes
-  await Promise.allSettled([
-    load(14, "get_windows_license"),
-    load(15, "get_bsod_history"),
-    load(16, "list_restore_points_cmd"),
-    load(17, "get_bluetooth_info"),
-    load(18, "get_network_shares"),
-    load(19, "get_certificates"),
-    load(20, "get_scheduled_tasks"),
-    load(21, "get_environment_variables"),
-    load(22, "get_bios_info"),
-    load(23, "ai_find_llamacpp_server"),
-  ]);
+  // ── Tâches 2-23 : sondes système, avec un nombre limité en vol ──────────
+  // Toutes en parallèle, elles lançaient ~10 PowerShell/WMI à la fois : un
+  // double cœur saturait et l'interface figeait. Le plafond suit le profil de
+  // performance (2 en léger, 3 en équilibré, 8 en complet). Ordre : les plus
+  // rapides et les plus utiles d'abord.
+  const probes: [number, string, Record<string, unknown>?][] = [
+    [2, "get_system_info"], [3, "get_ram_detailed"], [4, "get_storage_physical_info"],
+    [5, "get_network_overview"], [6, "get_gpu_detailed"], [7, "get_user_accounts"],
+    [8, "get_apps"], [9, "get_sys_drivers_list"], [10, "get_running_processes"],
+    [11, "get_windows_services"], [12, "get_event_logs", { logName: "System", count: 50 }],
+    [13, "get_firewall_rules"], [14, "get_windows_license"], [15, "get_bsod_history"],
+    [16, "list_restore_points_cmd"], [17, "get_bluetooth_info"], [18, "get_network_shares"],
+    [19, "get_certificates"], [20, "get_scheduled_tasks"], [21, "get_environment_variables"],
+    [22, "get_bios_info"], [23, "ai_find_llamacpp_server"],
+  ];
+  await runLimited(probes.map(([idx, cmd, args]) => () => load(idx, cmd, args)), startupConcurrency(appStore.perfTier));
 
   // ── Handler fermeture ──
   try {

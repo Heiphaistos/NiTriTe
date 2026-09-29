@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { scaledInterval } from "@/utils/perfProfile";
 import { ref, computed, onMounted, onUnmounted, shallowRef } from "vue";
 import { invoke, isTauriContext } from "@/utils/invoke";
 import { useNotificationStore } from "@/stores/notifications";
@@ -59,7 +60,7 @@ let   pollTimer: ReturnType<typeof setInterval> | null = null;
 const notify = useNotificationStore();
 const sensorsErrorShown = ref(false);
 
-const POLL_MS = 3000;
+const POLL_MS = scaledInterval(3000);
 
 // Group sensors by hardware component
 const groups = computed<HardwareGroup[]>(() => {
