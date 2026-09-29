@@ -7,6 +7,7 @@ import NInput from "@/components/ui/NInput.vue";
 import NToggle from "@/components/ui/NToggle.vue";
 import DiagBanner from "@/components/ui/DiagBanner.vue";
 import { useAppStore, type ThemeName } from "@/stores/app";
+import { PERF_MODE_LABELS, PERF_MODE_DESCRIPTIONS, type PerfMode } from "@/utils/perfProfile";
 import { useNotificationStore } from "@/stores/notifications";
 import { useAiStore } from "@/stores/ai";
 import { checkForUpdate } from "@/composables/useAutoUpdate";
@@ -15,6 +16,8 @@ import {
   Save, RotateCcw, Wifi, CheckCircle, XCircle, FolderOpen,
   Upload, Zap, Bell,
 } from "lucide-vue-next";
+
+const PERF_MODES: PerfMode[] = ["auto", "full", "balanced", "light"];
 
 const appStore = useAppStore();
 const notify   = useNotificationStore();
@@ -336,6 +339,25 @@ const tabs: { id: Tab; label: string; icon: Component }[] = [
         <!-- ══ PERFORMANCE ══ -->
         <div v-else-if="activeTab === 'performance'" class="tab-section">
           <h2 class="tab-title"><Zap :size="16" /> Performance</h2>
+
+          <div class="setting-group">
+            <p class="setting-label">Profil de l'interface</p>
+            <p class="setting-desc">
+              Ce PC : {{ appStore.hardware.cores }} cœur(s) logique(s)<template v-if="appStore.hardware.memoryGb">, {{ appStore.hardware.memoryGb }} Go de RAM{{ appStore.hardware.memoryGb >= 8 ? ' ou plus' : '' }}</template>
+              — profil actif : <strong>{{ PERF_MODE_LABELS[appStore.perfTier] }}</strong>
+            </p>
+            <div class="btn-group" style="margin-top:6px">
+              <button
+                v-for="m in PERF_MODES"
+                :key="m"
+                class="size-btn"
+                :class="{ active: appStore.perfMode === m }"
+                :title="PERF_MODE_DESCRIPTIONS[m]"
+                @click="appStore.setPerfMode(m)"
+              >{{ PERF_MODE_LABELS[m] }}</button>
+            </div>
+            <p class="setting-desc" style="margin-top:6px">{{ PERF_MODE_DESCRIPTIONS[appStore.perfMode] }}. Les intervalles de démarrage et de monitoring s'appliquent au prochain lancement.</p>
+          </div>
 
           <div class="setting-group">
             <p class="setting-label">Intervalle de monitoring</p>

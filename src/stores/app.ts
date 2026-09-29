@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { ref, computed } from "vue";
+import { readHardwareHints, resolveTier, type PerfMode, type PerfTier } from "@/utils/perfProfile";
 
 export type ThemeName =
   | "nitrite-dark" | "cyber-blue" | "matrix-green" | "purple-haze" | "red-alert"
@@ -15,9 +16,32 @@ export const useAppStore = defineStore("app", () => {
   const language = ref<"fr" | "en">("fr");
   const fontSize = ref<"small" | "normal" | "large">("normal");
   const showAnimations = ref(true);
+  const perfMode = ref<PerfMode>("auto");
+  const hardware = readHardwareHints();
+  const perfTier = computed<PerfTier>(() => resolveTier(perfMode.value, hardware));
+
+  /** Pose `data-perf` sur <html> : performance.css en derive les coupes d'effets. */
+  function applyPerf() {
+    document.documentElement.setAttribute("data-perf", perfTier.value);
+  }
+
+  function setPerfMode(mode: PerfMode) {
+    perfMode.value = mode;
+    try { localStorage.setItem("nitrite-perf-mode", mode); } catch { /* stockage indisponible */ }
+    applyPerf();
+  }
+
+  function loadPerfMode() {
+    let saved: string | null = null;
+    try { saved = localStorage.getItem("nitrite-perf-mode"); } catch { /* stockage indisponible */ }
+    if (saved === "auto" || saved === "full" || saved === "balanced" || saved === "light") perfMode.value = saved;
+    applyPerf();
+  }
 
   function setTheme(name: ThemeName) {
-    document.documentElement.classList.add("theme-transitioning");
+    // Fondu de 300 ms sur CHAQUE element : trop lourd pour le profil leger.
+    const animate = perfTier.value !== "light";
+    if (animate) document.documentElement.classList.add("theme-transitioning");
     document.documentElement.setAttribute("data-theme", name);
     theme.value = name;
     localStorage.setItem("nitrite-theme", name);
@@ -76,6 +100,11 @@ export const useAppStore = defineStore("app", () => {
     language,
     fontSize,
     showAnimations,
+    perfMode,
+    perfTier,
+    hardware,
+    setPerfMode,
+    loadPerfMode,
     setTheme,
     loadSavedTheme,
     toggleSidebar,

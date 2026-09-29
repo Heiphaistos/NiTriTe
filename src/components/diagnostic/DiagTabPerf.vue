@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { scaledInterval } from "@/utils/perfProfile";
 import { ref, onMounted, onUnmounted, computed } from "vue";
 import { invoke } from "@/utils/invoke";
 import NSpinner from "@/components/ui/NSpinner.vue";
@@ -41,7 +42,7 @@ async function load() {
 
 function toggleAuto() {
   autoRefresh.value = !autoRefresh.value;
-  if (autoRefresh.value) { timer = setInterval(load, 3000); }
+  if (autoRefresh.value) { timer = setInterval(load, scaledInterval(3000)); }
   else { if (timer) { clearInterval(timer); timer = null; } }
 }
 
