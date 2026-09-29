@@ -1,0 +1,10 @@
+[package]
+name = "tauri-plugin-dialog"
+version = "2.0.0-webpanel"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+tauri = { path = "../../tauri" }
+rfd = { version = "0.15", default-features = false }

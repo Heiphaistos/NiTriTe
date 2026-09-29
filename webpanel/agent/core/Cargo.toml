@@ -1,0 +1,69 @@
+[package]
+# Meme nom et version que l'application native : `env!("CARGO_PKG_VERSION")`
+# dans le code de NiTriTe renvoie donc la bonne version. Le script
+# scripts/sync-version met la version a jour.
+name = "nitrite"
+version = "8.221.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "NiTriTe (backend de l'application, compile contre la cale tauri)"
+
+[lib]
+name = "nitrite_lib"
+# Le backend de NiTriTe, SANS copie : un seul code a maintenir. Chemin reecrit
+# par scripts/export-standalone.sh pour le depot autonome (sous-module upstream/).
+path = "../../../src-tauri/src/lib.rs"
+# Les tests du backend tournent dans le depot NiTriTe.
+test = false
+doctest = false
+
+[dependencies]
+# Cales (memes noms de crate que l'application native)
+tauri = { path = "../crates/tauri" }
+tauri-plugin-shell = { path = "../crates/plugins/shell" }
+tauri-plugin-fs = { path = "../crates/plugins/fs" }
+tauri-plugin-dialog = { path = "../crates/plugins/dialog" }
+tauri-plugin-process = { path = "../crates/plugins/process" }
+tauri-plugin-notification = { path = "../crates/plugins/notification" }
+tauri-plugin-os = { path = "../crates/plugins/os" }
+tauri-plugin-http = { path = "../crates/plugins/http" }
+tauri-plugin-opener = { path = "../crates/plugins/opener" }
+tauri-plugin-updater = { path = "../crates/plugins/updater" }
+
+# Dependances de NiTriTe (src-tauri/Cargo.toml), a garder alignees
+minisign-verify = "0.2"
+base64 = "0.22"
+semver = "1"
+sysinfo = "0.39"
+tokio.workspace = true
+reqwest = { version = "0.13", features = ["json", "stream", "blocking"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+dirs = "6"
+open = "5"
+walkdir = "2"
+regex = "1"
+zip = { version = "8", default-features = false, features = ["deflate"] }
+sha2 = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+wmi = "0.18"
+winreg = "0.52"
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_System_Com",
+  "Win32_System_SystemInformation",
+  "Win32_Globalization",
+] }
+
+[lints.rust]
+# `#[cfg_attr(mobile, ...)]` dans lib.rs : cfg pose par tauri-build, absent ici.
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(mobile)"] }

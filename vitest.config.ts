@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
 import vue from "@vitejs/plugin-vue";
 import { resolve } from "path";
 
@@ -7,6 +7,8 @@ export default defineConfig({
   test: {
     environment: "happy-dom",
     globals: true,
+    // Le panneau web a ses propres tests (webpanel/web/vitest.config.ts).
+    exclude: [...configDefaults.exclude, "webpanel/**"],
     // Laisse passer le CSS tel quel : les tests lisent themes.css en `?raw`.
     css: { include: [/themes\.css/] },
     coverage: {
