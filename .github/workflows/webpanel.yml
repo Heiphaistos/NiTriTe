@@ -46,6 +46,12 @@ jobs:
       - name: Build release
         working-directory: webpanel/agent
         run: cargo build --release -p nitrite-agent
+      # Le vrai .exe sur un vrai Windows : securite, commandes WMI/registre,
+      # WebSocket d'evenements, arret propre.
+      - name: Test de fumee (exe release)
+        working-directory: webpanel
+        shell: pwsh
+        run: ./scripts/smoke-test.ps1 -Exe agent/target/release/nitrite-agent.exe
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: NiTriTe-Agent
