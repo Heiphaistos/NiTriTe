@@ -1,8 +1,8 @@
 <div align="center">
-  <h1>🔧 NiTriTe 8.221.0</h1>
+  <h1>🔧 NiTriTe 8.222.0</h1>
   <p><strong>Suite de diagnostic, réparation, optimisation et administration Windows — 44 outils, interface Tauri v2 native.</strong></p>
 
-  ![Version](https://img.shields.io/badge/version-8.221.0-blue)
+  ![Version](https://img.shields.io/badge/version-8.222.0-blue)
   ![Stack](https://img.shields.io/badge/stack-Tauri%20v2%20%2B%20Rust%20%2B%20Vue%203-purple)
   ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-informational)
   ![Language](https://img.shields.io/badge/language-Rust%20%2B%20TypeScript-orange)
@@ -15,7 +15,7 @@
 
 NiTriTe est un outil Windows tout-en-un conçu pour les techniciens et utilisateurs avancés. **44 pages** organisées en **10 catégories**, dont un tableau de diagnostic regroupant **33 sous-onglets** d'analyse système — le tout via une interface native moderne construite avec Tauri v2 (backend Rust, frontend Vue 3).
 
-La 8.221.0 couvre le diagnostic matériel/logiciel complet, la réparation Windows (SFC/DISM/WinPE bootable), le clonage et la récupération de données (VSS), la gestion réseau et sécurité, l'automatisation via scripts et un assistant IA local (Ollama / llama.cpp portable), jusqu'au packaging d'une release portable autonome (exe + logiciels + drivers + scripts Windows).
+La 8.222.0 couvre le diagnostic matériel/logiciel complet, la réparation Windows (SFC/DISM/WinPE bootable), le clonage et la récupération de données (VSS), la gestion réseau et sécurité, l'automatisation via scripts et un assistant IA local (Ollama / llama.cpp portable), jusqu'au packaging d'une release portable autonome (exe + logiciels + drivers + scripts Windows).
 
 ---
 

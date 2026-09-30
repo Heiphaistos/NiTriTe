@@ -3,7 +3,7 @@
 # dans le code de NiTriTe renvoie donc la bonne version. Le script
 # scripts/sync-version met la version a jour.
 name = "nitrite"
-version = "8.221.0"
+version = "8.222.0"
 edition.workspace = true
 license.workspace = true
 publish = false
