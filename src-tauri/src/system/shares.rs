@@ -68,8 +68,14 @@ $out.AdminShares = @($allShares | Where-Object { $_.Name -match '^\w+\$$' -or $_
 
 # Lecteurs réseau mappés
 try {
-    $out.MappedDrives = @(Get-WmiObject -Class Win32_MappedLogicalDisk -ErrorAction SilentlyContinue | ForEach-Object {
-        @{driveLetter=$_.DeviceID; remotePath=$_.ProviderName; status=[string]$_.Status}
+    # Registre + lettres montees : aucun acces reseau. Win32_MappedLogicalDisk
+    # interroge chaque serveur et attendait le delai de chaque partage
+    # injoignable (134 s mesurees avec 4 lecteurs NAS eteints).
+    $mounted = [IO.Directory]::GetLogicalDrives()
+    $out.MappedDrives = @(Get-ChildItem HKCU:\Network -ErrorAction SilentlyContinue | ForEach-Object {
+        $l = "$($_.PSChildName.ToUpper()):"
+        @{driveLetter=$l; remotePath=[string](Get-ItemProperty $_.PSPath).RemotePath
+          status=if ($mounted -contains "$l\") { "OK" } else { "Déconnecté" }}
     })
 } catch { $out.MappedDrives = @() }
 
