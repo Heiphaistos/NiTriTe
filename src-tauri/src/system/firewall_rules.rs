@@ -73,10 +73,15 @@ $customRules = $allRules | Where-Object {
     $_.Group -eq '' -or ($_.Group -notmatch 'Windows|Microsoft|@')
 } | Select-Object -First 100
 
+# Filtres lus en une fois puis joints par InstanceID : deux requetes CIM par
+# regle coutaient ~20 s pour 100 regles, contre 0,2 s ici.
+$ports = @{}; Get-NetFirewallPortFilter -All -ErrorAction SilentlyContinue | ForEach-Object { $ports[$_.InstanceID] = $_ }
+$apps  = @{}; Get-NetFirewallApplicationFilter -All -ErrorAction SilentlyContinue | ForEach-Object { $apps[$_.InstanceID] = $_ }
+
 $out.Rules = @($customRules | ForEach-Object {
     $r = $_
-    $portFilter = $r | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
-    $appFilter  = $r | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
+    $portFilter = $ports[$r.InstanceID]
+    $appFilter  = $apps[$r.InstanceID]
     @{
         name=[string]$r.DisplayName; direction=[string]$r.Direction;
         action=[string]$r.Action; enabled=[bool]$r.Enabled;

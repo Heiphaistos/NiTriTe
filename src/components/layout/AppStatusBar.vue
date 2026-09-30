@@ -18,10 +18,12 @@ onMounted(async () => {
     // Stocker le unlisten pour nettoyage propre
     unlistenMonitor = await listen<SystemMonitorPayload>("system-monitor", (event) => {
       const data = event.payload;
-      cpuUsage.value   = data.cpu_percent      ?? 0;
-      ramUsage.value   = data.ram_percent       ?? 0;
-      diskUsage.value  = data.disk_percent      ?? 0;
-      networkDown.value = data.network_down_kbs ?? 0;
+      // Le backend envoie des flottants bruts (14.212326049884688) : arrondis
+      // ici, sinon la barre d'etat les affichait tels quels.
+      cpuUsage.value   = Math.round(data.cpu_percent      ?? 0);
+      ramUsage.value   = Math.round(data.ram_percent       ?? 0);
+      diskUsage.value  = Math.round(data.disk_percent      ?? 0);
+      networkDown.value = Math.round(data.network_down_kbs ?? 0);
     });
   } catch {
     monitorInterval = setInterval(() => {

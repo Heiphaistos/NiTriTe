@@ -91,6 +91,9 @@ const loadTasks = ref<LoadTask[]>([
   { label: "Assistant IA",                   status: "pending" },
 ]);
 
+/** Attente maximale d'une sonde au demarrage avant de passer a la suivante. */
+const STARTUP_PROBE_WAIT_MS = 8000;
+
 const doneCount    = computed(() => loadTasks.value.filter(t => t.status === "done" || t.status === "error").length);
 const loadProgress = computed(() => Math.round((doneCount.value / loadTasks.value.length) * 100));
 const currentLabel = computed(() => {
@@ -169,11 +172,12 @@ onMounted(async () => {
   const load = async (idx: number, cmd: string, args?: Record<string, unknown>) => {
     loadTasks.value[idx].status = "running";
     if (inv) {
-      try {
-        const key   = args ? `${cmd}::${JSON.stringify(args)}` : cmd;
-        const result = await inv(cmd, args);
-        dataCache.set(key, result);
-      } catch { /* non critique — la page re-fetchera si besoin */ }
+      const key = args ? `${cmd}::${JSON.stringify(args)}` : cmd;
+      // Une sonde lente (WMI fige, VM, vieux PC) ne bloque plus l'ecran de
+      // chargement : passe le delai, on continue et le resultat arrive en
+      // cache plus tard (sinon la page le redemandera).
+      const call = inv(cmd, args).then(r => { dataCache.set(key, r); }, () => { /* non critique */ });
+      await Promise.race([call, new Promise(r => setTimeout(r, STARTUP_PROBE_WAIT_MS))]);
       loadTasks.value[idx].status = "done";
     } else {
       await new Promise(r => setTimeout(r, 300));
