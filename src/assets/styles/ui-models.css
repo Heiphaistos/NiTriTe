@@ -226,3 +226,14 @@ html[data-perf="light"][data-ui-model]:not([data-ui-model="classic"]) .n-card,
 html[data-perf="light"][data-ui-model]:not([data-ui-model="classic"]) .n-btn--primary {
   box-shadow: none;
 }
+
+/* ── Thèmes clairs : verre et survols lisibles sur fond clair ─────────────── */
+html[data-theme-tone="light"] {
+  --surface-glass: rgba(15, 23, 42, 0.035);
+  --surface-glass-hover: rgba(15, 23, 42, 0.065);
+}
+html[data-theme-tone="light"][data-ui-model="glass-dock"] .n-card,
+html[data-theme-tone="light"][data-ui-model="glass-dock"] .diag-sidenav,
+html[data-theme-tone="light"][data-ui-model="glass-dock"] .table-wrap {
+  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
+}

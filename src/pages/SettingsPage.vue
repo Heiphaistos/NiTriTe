@@ -8,7 +8,7 @@ import NInput from "@/components/ui/NInput.vue";
 import NToggle from "@/components/ui/NToggle.vue";
 import DiagBanner from "@/components/ui/DiagBanner.vue";
 import { useAppStore } from "@/stores/app";
-import { themeGallery, totalThemeCount } from "@/utils/themeCatalog";
+import { themeGallery, totalThemeCount, isLightColor } from "@/utils/themeCatalog";
 import { PERF_MODE_LABELS, PERF_MODE_DESCRIPTIONS, type PerfMode } from "@/utils/perfProfile";
 import { useNotificationStore } from "@/stores/notifications";
 import { useAiStore } from "@/stores/ai";
@@ -70,8 +70,13 @@ function markChanged() { changed.value = true; }
 // ── Thèmes ────────────────────────────────────────────────────
 // Galerie complète : thèmes Nitrite + tous les presets de l'éditeur
 // (Windows 11, éditeurs de code, nouveautés), appliqués et mémorisés.
-const themeGroups = themeGallery();
 const themeCount = totalThemeCount();
+// Filtre de la galerie : tous / sombres / clairs (d'après la couleur de fond).
+const themeToneFilter = ref<"all" | "dark" | "light">("all");
+const themeGroups = computed(() => themeGallery()
+  .map(g => ({ ...g, themes: g.themes.filter(t => themeToneFilter.value === "all"
+    || (isLightColor(t.background) ? "light" : "dark") === themeToneFilter.value) }))
+  .filter(g => g.themes.length > 0));
 
 // ── Chargement config ─────────────────────────────────────────
 onMounted(async () => {
@@ -266,6 +271,15 @@ const tabs: { id: Tab; label: string; icon: Component }[] = [
 
           <div class="setting-group">
             <p class="setting-label">Thème <span class="setting-desc" style="display:inline">— {{ themeCount }} thèmes</span></p>
+            <div class="btn-group theme-tone-filter" style="margin: 4px 0 10px">
+              <button
+                v-for="f in ([['all', 'Tous'], ['dark', 'Sombres'], ['light', 'Clairs']] as const)"
+                :key="f[0]"
+                class="size-btn"
+                :class="{ active: themeToneFilter === f[0] }"
+                @click="themeToneFilter = f[0]"
+              >{{ f[1] }}</button>
+            </div>
             <div v-for="g in themeGroups" :key="g.label" class="theme-group">
               <p class="theme-group-label">{{ g.label }}</p>
               <div class="theme-grid">
