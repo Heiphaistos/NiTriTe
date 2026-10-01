@@ -148,6 +148,7 @@ html[data-perf="light"] .orb-overlay { backdrop-filter: none; background: var(--
 .orb-close { position: absolute; top: 18px; right: 18px; border-radius: 50%; }
 .orb-stage { position: relative; width: 660px; height: 660px; display: flex; align-items: center; justify-content: center; }
 @media (max-height: 760px) { .orb-stage { transform: scale(0.82); } }
+@media (max-height: 620px) { .orb-stage { transform: scale(0.68); } }
 .orb-rings { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .ring { fill: none; }
 .ring--outer { stroke: color-mix(in srgb, var(--accent-primary) 12%, transparent); stroke-width: 1; }

@@ -137,4 +137,16 @@ function pick(title: string) {
 .col-tool__sub { font-size: 11px; color: var(--text-muted); padding-left: 22px; }
 
 .col-main { background: var(--bg-primary); }
+
+@media (max-width: 1440px) {
+  .col-sections { width: 180px; }
+  .col-tools { width: 210px; }
+}
+@media (max-width: 1200px) {
+  .col-sections { width: 60px; align-items: center; }
+  .col-sec { justify-content: center; padding: 9px; }
+  .col-sec span, .col-sec__chev { display: none; }
+  .col-search { width: auto; }
+  .col-search > span:first-of-type { display: none; }
+}
 </style>

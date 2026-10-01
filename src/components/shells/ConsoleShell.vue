@@ -163,4 +163,6 @@ const promptPath = computed(() => {
   color: var(--text-secondary); font-family: inherit; font-size: 11px;
 }
 .con-prompt__btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+
+@media (max-width: 1280px) { .con-tree { width: 220px; } }
 </style>
