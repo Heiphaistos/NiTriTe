@@ -6,6 +6,8 @@ import router from "./router";
 import "./assets/styles/main.css";
 import "./assets/styles/tab-styles.css";
 import "./assets/diagnostic.css";
+import "./assets/styles/shells.css";
+import "./assets/styles/ui-models.css";
 import { logger, setupGlobalErrorHandlers } from "./utils/logger";
 import { useAppStore } from "./stores/app";
 
