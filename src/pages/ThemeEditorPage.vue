@@ -5,6 +5,7 @@ import { useLayoutStore } from "@/stores/layoutStore";
 import { useNotificationStore } from "@/stores/notifications";
 import ThemePreview from "@/components/theme/ThemePreview.vue";
 import ThemeEditorLayoutTab from "@/components/theme/ThemeEditorLayoutTab.vue";
+import UiModelPicker from "@/components/shared/UiModelPicker.vue";
 import ThemeEditorThemeTab from "@/components/theme/ThemeEditorThemeTab.vue";
 import {
   Palette, Save, Download, Upload, Eye, EyeOff, Copy, Layout, Monitor,
@@ -123,6 +124,10 @@ function copyCurrentTheme() {
           </button>
         </div>
 
+        <section v-if="activeTab === 'layout'" class="te-models">
+          <h3 class="te-models__title">Modèle d'interface</h3>
+          <UiModelPicker />
+        </section>
         <ThemeEditorLayoutTab v-if="activeTab === 'layout'" />
         <ThemeEditorThemeTab v-if="activeTab === 'theme'" />
 
@@ -145,3 +150,8 @@ function copyCurrentTheme() {
 </template>
 
 <style src="@/assets/themeEditor.css"></style>
+
+<style scoped>
+.te-models { margin-bottom: 20px; }
+.te-models__title { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+</style>

@@ -8,6 +8,7 @@ import { computed, inject, ref, watch, type Ref } from "vue";
 import { useRouter } from "vue-router";
 import { Search, Star, ChevronDown, Settings, PanelLeftClose, PanelLeftOpen } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
+import PageSlot from "./PageSlot.vue";
 import logoUrl from "@/assets/nitrite-logo.jpg";
 import { useShellNav } from "@/composables/useShellNav";
 import { useAppStore } from "@/stores/app";
@@ -165,7 +166,7 @@ watch(() => nav.currentSection.value?.title, (title) => {
           <kbd class="sh-kbd">Ctrl K</kbd>
         </button>
       </header>
-      <slot />
+      <PageSlot><slot /></PageSlot>
       <AppStatusBar />
     </div>
   </div>

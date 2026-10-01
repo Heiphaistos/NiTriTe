@@ -9,6 +9,7 @@ import { useRouter } from "vue-router";
 import { onClickOutside, onKeyStroke } from "@vueuse/core";
 import { ChevronDown, Plus, Settings, X } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
+import PageSlot from "./PageSlot.vue";
 import { useShellNav, useOpenTabs } from "@/composables/useShellNav";
 
 const nav = useShellNav();
@@ -102,7 +103,7 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
     </div>
 
     <div class="sh-main">
-      <slot />
+      <PageSlot><slot /></PageSlot>
       <AppStatusBar />
     </div>
   </div>

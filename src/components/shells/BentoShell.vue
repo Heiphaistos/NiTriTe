@@ -8,6 +8,7 @@ import { inject, ref, watch, computed, type Ref } from "vue";
 import { useRouter } from "vue-router";
 import { Search, Settings } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
+import PageSlot from "./PageSlot.vue";
 import logoUrl from "@/assets/nitrite-logo.jpg";
 import { useShellNav } from "@/composables/useShellNav";
 
@@ -94,7 +95,7 @@ function pick(title: string) {
         </button>
       </header>
       <div class="bento-stage">
-        <slot />
+        <PageSlot><slot /></PageSlot>
       </div>
       <AppStatusBar />
     </div>

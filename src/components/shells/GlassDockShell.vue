@@ -9,6 +9,7 @@ import { useRouter } from "vue-router";
 import { onClickOutside, onKeyStroke } from "@vueuse/core";
 import { Search, Settings } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
+import PageSlot from "./PageSlot.vue";
 import logoUrl from "@/assets/nitrite-logo.jpg";
 import { useShellNav } from "@/composables/useShellNav";
 
@@ -47,7 +48,7 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
     </header>
 
     <div class="sh-main glass-pane">
-      <slot />
+      <PageSlot><slot /></PageSlot>
       <AppStatusBar />
     </div>
 
