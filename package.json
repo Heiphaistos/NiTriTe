@@ -20,7 +20,7 @@
     "@tauri-apps/plugin-notification": "^2.2.0",
     "@tauri-apps/plugin-opener": "^2.2.0",
     "@tauri-apps/plugin-os": "^2.2.0",
-    "@tauri-apps/plugin-process": "^2.2.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
     "@tauri-apps/plugin-shell": "^2.2.0",
     "@tauri-apps/plugin-updater": "^2.11.0",
     "@vueuse/core": "^14.4.0",
