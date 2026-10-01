@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, provide, onMounted, onUnmounted, onErrorCaptured, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import AppSidebar from "@/components/layout/AppSidebar.vue";
-import AppHeader from "@/components/layout/AppHeader.vue";
-import AppStatusBar from "@/components/layout/AppStatusBar.vue";
 import NToast from "@/components/ui/NToast.vue";
 import NAlertBanner from "@/components/ui/NAlertBanner.vue";
 import SearchModal from "@/components/shared/SearchModal.vue";
 import KeyboardShortcutsModal from "@/components/ui/KeyboardShortcutsModal.vue";
 import { useAppStore } from "@/stores/app";
 import { useLayoutStore } from "@/stores/layoutStore";
+import { useUiModelStore } from "@/stores/uiModel";
+import { shellFor } from "@/components/shells";
 import { useDataCache } from "@/stores/dataCache";
 import { useProactiveAlerts } from "@/composables/useProactiveAlerts";
 import { logger } from "@/utils/logger";
@@ -49,6 +48,8 @@ const appContent  = ref<HTMLElement | null>(null);
 const appStore    = useAppStore();
 const layoutStore = useLayoutStore();
 const dataCache   = useDataCache();
+const uiModelStore = useUiModelStore();
+const shellComponent = computed(() => shellFor(uiModelStore.model));
 
 const sidebarCollapsed = ref(false);
 const searchOpen       = ref(false);
@@ -109,8 +110,6 @@ provide("sidebarCollapsed", sidebarCollapsed);
 provide("toggleSidebar",    toggleSidebar);
 provide("openSearch",       openSearch);
 
-const isRightSidebar      = computed(() => layoutStore.state.sidebarPosition === "right");
-const currentSidebarWidth = computed(() => sidebarCollapsed.value ? 64 : layoutStore.sidebarWidthPx);
 
 // ── Scroll reset automatique à chaque navigation ─────────────────────────────
 router.afterEach(() => {
@@ -161,6 +160,7 @@ onMounted(async () => {
   appStore.loadSidebarState();
   sidebarCollapsed.value = appStore.sidebarCollapsed;
   layoutStore.applyToDocument();
+  uiModelStore.load();
   window.addEventListener("keydown", handleKeyDown);
   loadTasks.value[0].status = "done";
 
@@ -303,29 +303,16 @@ onMounted(async () => {
   <NAlertBanner />
 
   <!-- ── Application ── -->
+  <!-- La coque (modèle d'interface) n'entoure que la navigation : la zone de
+       page ci-dessous (router-view, keep-alive, overlay d'erreur) est la même
+       pour tous les modèles, donc chaque page garde ses fonctions et boutons. -->
   <div
     v-if="appReady"
-    class="app-layout"
-    :class="[`sidebar-pos-${layoutStore.state.sidebarPosition}`, `density-${layoutStore.state.density}`]"
+    class="app-root"
+    :class="[`density-${layoutStore.state.density}`, `ui-model-${uiModelStore.model}`]"
     :data-density="layoutStore.state.density"
-    :data-sidebar-pos="layoutStore.state.sidebarPosition"
   >
-    <AppSidebar
-      :collapsed="sidebarCollapsed"
-      :position="layoutStore.state.sidebarPosition"
-      :width="layoutStore.state.sidebarWidth"
-      :mode="layoutStore.state.sidebarMode"
-      @toggle="toggleSidebar"
-    />
-    <div
-      class="app-main"
-      :class="{ 'sidebar-collapsed': sidebarCollapsed }"
-      :style="{
-        [isRightSidebar ? 'marginRight' : 'marginLeft']: `${currentSidebarWidth}px`,
-        [isRightSidebar ? 'marginLeft'  : 'marginRight']: '0',
-      }"
-    >
-      <AppHeader v-if="layoutStore.state.headerVisible" @open-search="openSearch" />
+    <component :is="shellComponent">
       <main ref="appContent" class="app-content" :style="{ padding: `${layoutStore.state.contentPadding}px` }">
         <div
           class="app-content-inner"
@@ -350,8 +337,7 @@ onMounted(async () => {
           </div>
         </div>
       </main>
-      <AppStatusBar />
-    </div>
+    </component>
   </div>
 
   <NToast />
@@ -454,16 +440,14 @@ onMounted(async () => {
 .splash-leave-to { opacity: 0; }
 
 /* ── App Layout ─────────────────────────────────────────────────────────── */
-.app-layout {
-  display:flex; height:100vh; overflow:hidden;
+.app-root {
+  height:100vh; overflow:hidden;
   background:var(--bg-primary); color:var(--text-primary);
   animation: app-in 350ms ease forwards;
   font-size: var(--layout-font-size, 13px);
 }
 @keyframes app-in { from { opacity:0 } to { opacity:1 } }
-.sidebar-pos-right { flex-direction:row-reverse; }
-.app-main { flex:1; display:flex; flex-direction:column; transition:margin var(--transition-normal); min-width:0; }
-.app-content { flex:1; overflow-y:auto; overflow-x:hidden; }
+.app-content { flex:1; overflow-y:auto; overflow-x:hidden; min-height:0; }
 .app-content-inner { width:100%; position: relative; }
 
 /* transition gérée globalement — voir <style> ci-dessous */
