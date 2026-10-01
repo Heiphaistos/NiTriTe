@@ -9,6 +9,7 @@ import { useRouter } from "vue-router";
 import { onKeyStroke } from "@vueuse/core";
 import { Orbit, Search, Settings, X } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
+import PageSlot from "./PageSlot.vue";
 import { useShellNav } from "@/composables/useShellNav";
 
 const nav = useShellNav();
@@ -65,7 +66,7 @@ const nodes = computed(() => nav.sections.map((section, i) => {
     </header>
 
     <div class="sh-main">
-      <slot />
+      <PageSlot><slot /></PageSlot>
       <AppStatusBar />
     </div>
 

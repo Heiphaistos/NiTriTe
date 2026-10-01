@@ -305,14 +305,17 @@ onMounted(async () => {
   <!-- ── Application ── -->
   <!-- La coque (modèle d'interface) n'entoure que la navigation : la zone de
        page ci-dessous (router-view, keep-alive, overlay d'erreur) est la même
-       pour tous les modèles, donc chaque page garde ses fonctions et boutons. -->
+       pour tous les modèles, donc chaque page garde ses fonctions et boutons.
+       Elle est téléportée dans l'emplacement <PageSlot> de la coque : changer
+       de modèle la déplace sans la recréer (opérations en cours préservées). -->
   <div
     v-if="appReady"
     class="app-root"
     :class="[`density-${layoutStore.state.density}`, `ui-model-${uiModelStore.model}`]"
     :data-density="layoutStore.state.density"
   >
-    <component :is="shellComponent">
+    <component :is="shellComponent" />
+    <Teleport defer :to="`[data-page-slot='${uiModelStore.model}']`">
       <main ref="appContent" class="app-content" :style="{ padding: `${layoutStore.state.contentPadding}px` }">
         <div
           class="app-content-inner"
@@ -337,7 +340,7 @@ onMounted(async () => {
           </div>
         </div>
       </main>
-    </component>
+    </Teleport>
   </div>
 
   <NToast />

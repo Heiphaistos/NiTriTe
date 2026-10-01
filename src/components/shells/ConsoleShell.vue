@@ -8,6 +8,7 @@ import { computed, inject, ref, type Ref } from "vue";
 import { useRouter } from "vue-router";
 import { X, Search, Settings, ChevronRight } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
+import PageSlot from "./PageSlot.vue";
 import { useShellNav, useOpenTabs } from "@/composables/useShellNav";
 
 const nav = useShellNav();
@@ -86,7 +87,7 @@ const promptPath = computed(() => {
           <Settings :size="13" />
         </button>
       </div>
-      <slot />
+      <PageSlot><slot /></PageSlot>
       <AppStatusBar />
     </div>
   </div>

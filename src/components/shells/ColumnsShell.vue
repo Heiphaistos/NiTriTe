@@ -9,6 +9,7 @@ import { computed, inject, ref, watch, type Ref } from "vue";
 import { useRouter } from "vue-router";
 import { ChevronLeft, ChevronRight, Search, Settings } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
+import PageSlot from "./PageSlot.vue";
 import { useShellNav } from "@/composables/useShellNav";
 
 const nav = useShellNav();
@@ -80,7 +81,7 @@ function pick(title: string) {
       </nav>
 
       <div class="sh-main col-main">
-        <slot />
+        <PageSlot><slot /></PageSlot>
       </div>
     </div>
     <AppStatusBar />

@@ -59,10 +59,13 @@ Le modèle 03 (HUD) et le modèle 07 (Néo-brutal) ne sont pas retenus.
 - `src/data/navDescriptions.ts` — sous-titre de chaque outil.
 - `src/composables/useShellNav.ts` — logique commune : page courante, section,
   navigation, favoris, sections repliées, onglets ouverts (`useOpenTabs`).
-- `src/components/shells/*Shell.vue` — une coque par modèle, avec un `<slot>`
-  qui reçoit la zone de page.
+- `src/components/shells/*Shell.vue` — une coque par modèle, avec un emplacement
+  `<PageSlot>` qui reçoit la zone de page.
+- `App.vue` téléporte (`<Teleport defer>`) la zone de page dans le `<PageSlot>` du
+  modèle actif : changer de modèle **déplace** la page sans la recréer, donc les
+  opérations en cours et l'état des pages (keep-alive compris) sont conservés.
 - `src/assets/styles/ui-models.css` — habillage des composants par modèle.
-- `App.vue` — choisit la coque (`<component :is>`), le reste est inchangé.
+- `src/components/shared/UiModelPicker.vue` — sélecteur avec aperçus.
 
 ## 5. Critères d'acceptation
 

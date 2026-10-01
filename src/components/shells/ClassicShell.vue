@@ -4,6 +4,7 @@ import { computed, inject, type Ref, ref } from "vue";
 import AppSidebar from "@/components/layout/AppSidebar.vue";
 import AppHeader from "@/components/layout/AppHeader.vue";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
+import PageSlot from "./PageSlot.vue";
 import { useLayoutStore } from "@/stores/layoutStore";
 
 const layoutStore = useLayoutStore();
@@ -38,7 +39,7 @@ const currentSidebarWidth = computed(() => sidebarCollapsed.value ? 64 : layoutS
       }"
     >
       <AppHeader v-if="layoutStore.state.headerVisible" @open-search="openSearch" />
-      <slot />
+      <PageSlot><slot /></PageSlot>
       <AppStatusBar />
     </div>
   </div>
