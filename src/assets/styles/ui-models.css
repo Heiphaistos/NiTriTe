@@ -1,0 +1,228 @@
+/* ============================================================================
+   HABILLAGE DES MODÈLES D'INTERFACE
+   Posé sur <html data-ui-model="…"> par le store uiModel.
+   Règles d'or :
+   - uniquement des variables du thème pour les couleurs (les 62 thèmes restent
+     valables dans chaque modèle) ;
+   - aucun changement de disposition interne des pages (pas de display / position
+     / width) : on touche à l'aspect (rayons, fonds, bordures, typographie) ;
+   - profil léger (data-perf="light") : ni flou ni ombre portée lourde.
+   Le modèle « classic » n'a aucune règle ici : il reste strictement identique.
+   ========================================================================== */
+
+/* ── 01 · FORGE (défaut) ─────────────────────────────────────────────────── */
+html[data-ui-model="forge"] {
+  --radius-sm: 7px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 16px;
+}
+html[data-ui-model="forge"] .n-card {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent-primary) 4%, var(--bg-secondary)) 0%, var(--bg-secondary) 55%);
+}
+html[data-ui-model="forge"] .n-card__header {
+  background: transparent;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+html[data-ui-model="forge"] .n-btn--primary {
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+  box-shadow: 0 6px 18px -8px var(--accent-primary);
+}
+html[data-ui-model="forge"] .page-header h1,
+html[data-ui-model="forge"] .page-title,
+html[data-ui-model="forge"] .diag-page-title {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+html[data-ui-model="forge"] .diag-sidenav,
+html[data-ui-model="forge"] .table-wrap {
+  background: var(--bg-secondary);
+}
+html[data-ui-model="forge"] .sidenav-item.active {
+  background: linear-gradient(90deg, var(--accent-muted), transparent);
+}
+
+/* ── 02 · COMMAND DECK : net, angles serrés, accent latéral ───────────────── */
+html[data-ui-model="command-deck"] {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+}
+html[data-ui-model="command-deck"] .n-card { box-shadow: none; }
+html[data-ui-model="command-deck"] .n-card__header {
+  background: var(--bg-secondary);
+  box-shadow: inset 3px 0 0 var(--accent-primary);
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+html[data-ui-model="command-deck"] .n-btn { letter-spacing: 0.02em; font-weight: 600; }
+html[data-ui-model="command-deck"] .n-btn--primary::after { display: none; }
+html[data-ui-model="command-deck"] .page-header h1,
+html[data-ui-model="command-deck"] .diag-page-title { letter-spacing: -0.01em; }
+html[data-ui-model="command-deck"] .data-table th {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+}
+html[data-ui-model="command-deck"] .sidenav-group-label { letter-spacing: 0.12em; }
+
+/* ── 04 · BENTO : grandes cartes très arrondies, sans bordure dure ────────── */
+html[data-ui-model="bento"] {
+  --radius-sm: 9px;
+  --radius-md: 13px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+}
+html[data-ui-model="bento"] .n-card {
+  border-color: transparent;
+  background: var(--bg-tertiary);
+}
+html[data-ui-model="bento"] .n-card--inset { background: var(--bg-primary); }
+html[data-ui-model="bento"] .n-card__header {
+  background: transparent;
+  border-bottom-color: transparent;
+  font-size: 15px;
+  font-weight: 800;
+  padding-top: 18px;
+}
+html[data-ui-model="bento"] .n-btn { border-radius: 12px; }
+html[data-ui-model="bento"] .page-header h1,
+html[data-ui-model="bento"] .diag-page-title { font-weight: 800; letter-spacing: -0.02em; }
+html[data-ui-model="bento"] .diag-sidenav { border-color: transparent; background: var(--bg-tertiary); }
+html[data-ui-model="bento"] .table-wrap { border-color: transparent; background: var(--bg-tertiary); }
+html[data-ui-model="bento"] .sidenav-item { border-radius: 10px; }
+html[data-ui-model="bento"] .sidenav-item.active::before { display: none; }
+html[data-ui-model="bento"] .sidenav-item.active { background: var(--accent-muted); }
+
+/* ── 05 · CONSOLE : terminal, monospace, angles quasi droits ──────────────── */
+html[data-ui-model="console"] {
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 4px;
+}
+html[data-ui-model="console"] .n-card { box-shadow: none; background: var(--bg-primary); }
+html[data-ui-model="console"] .n-card__header,
+html[data-ui-model="console"] .page-header h1,
+html[data-ui-model="console"] .page-title,
+html[data-ui-model="console"] .diag-page-title,
+html[data-ui-model="console"] .section-header,
+html[data-ui-model="console"] .sidenav-group-label,
+html[data-ui-model="console"] .data-table th,
+html[data-ui-model="console"] .tabs .tab-btn,
+html[data-ui-model="console"] .n-btn {
+  font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+}
+html[data-ui-model="console"] .n-card__header {
+  background: var(--bg-secondary);
+  font-size: 12.5px;
+}
+html[data-ui-model="console"] .n-card__header::before {
+  content: "›";
+  color: var(--accent-primary);
+  margin-right: 8px;
+}
+html[data-ui-model="console"] .n-btn { font-size: 12px; }
+html[data-ui-model="console"] .n-btn--primary::after { display: none; }
+html[data-ui-model="console"] .page-header h1,
+html[data-ui-model="console"] .diag-page-title { font-size: 20px; letter-spacing: 0; }
+html[data-ui-model="console"] .sidenav-item { font-family: "JetBrains Mono", Consolas, monospace; font-size: 12px; }
+html[data-ui-model="console"] .data-table td { font-variant-numeric: tabular-nums; }
+
+/* ── 06 · ORBITAL : formes rondes, boutons pilule, halo d'accent ──────────── */
+html[data-ui-model="orbital"] {
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 22px;
+}
+html[data-ui-model="orbital"] .n-card {
+  border-color: color-mix(in srgb, var(--accent-primary) 18%, var(--border));
+  background: radial-gradient(ellipse at 0% 0%, var(--accent-muted), transparent 55%), var(--bg-secondary);
+}
+html[data-ui-model="orbital"] .n-card__header { background: transparent; }
+html[data-ui-model="orbital"] .n-btn,
+html[data-ui-model="orbital"] .tabs .tab-btn { border-radius: 999px; }
+html[data-ui-model="orbital"] .n-btn--primary { box-shadow: var(--accent-glow-sm, none); }
+html[data-ui-model="orbital"] .sidenav-item { border-radius: 999px; }
+html[data-ui-model="orbital"] .sidenav-item.active::before { display: none; }
+html[data-ui-model="orbital"] .sidenav-item.active {
+  background: var(--accent-muted);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 35%, transparent);
+}
+
+/* ── 08 · COLONNES : panneaux plats, séparations nettes ───────────────────── */
+html[data-ui-model="columns"] {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+}
+html[data-ui-model="columns"] .n-card { box-shadow: none; }
+html[data-ui-model="columns"] .n-card--hoverable:hover { transform: none; }
+html[data-ui-model="columns"] .n-card__header {
+  background: var(--bg-tertiary);
+  font-size: 13px;
+}
+html[data-ui-model="columns"] .data-table tbody tr:nth-child(even) td { background: var(--surface-glass); }
+html[data-ui-model="columns"] .n-btn--primary::after { display: none; }
+html[data-ui-model="columns"] .sidenav-item.active { background: var(--accent-primary); color: var(--bg-primary); }
+html[data-ui-model="columns"] .sidenav-item.active::before { display: none; }
+
+/* ── 09 · VERRE & DOCK : verre dépoli, transparence ───────────────────────── */
+html[data-ui-model="glass-dock"] {
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+}
+html[data-ui-model="glass-dock"] .n-card,
+html[data-ui-model="glass-dock"] .diag-sidenav,
+html[data-ui-model="glass-dock"] .table-wrap {
+  background: color-mix(in srgb, var(--bg-tertiary) 45%, transparent);
+  border-color: color-mix(in srgb, var(--text-primary) 9%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+html[data-ui-model="glass-dock"] .n-card__header {
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+html[data-ui-model="glass-dock"] .n-btn--secondary,
+html[data-ui-model="glass-dock"] .n-btn--ghost {
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
+html[data-ui-model="glass-dock"][data-perf="light"] .n-card,
+html[data-ui-model="glass-dock"][data-perf="light"] .diag-sidenav,
+html[data-ui-model="glass-dock"][data-perf="light"] .table-wrap {
+  backdrop-filter: none;
+  background: var(--bg-tertiary);
+}
+
+/* ── 10 · MISSION : bandeau d'accent, titres « fiche d'intervention » ─────── */
+html[data-ui-model="mission"] {
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+}
+html[data-ui-model="mission"] .n-card { border-top: 2px solid var(--accent-primary); }
+html[data-ui-model="mission"] .n-card--inset { border-top-color: var(--border); }
+html[data-ui-model="mission"] .n-card__header {
+  background: var(--bg-secondary);
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+html[data-ui-model="mission"] .page-header h1,
+html[data-ui-model="mission"] .diag-page-title { font-weight: 800; }
+html[data-ui-model="mission"] .data-table th { letter-spacing: 0.06em; text-transform: uppercase; font-size: 11px; }
+html[data-ui-model="mission"] .sidenav-group-label { color: var(--accent-primary); }
+
+/* ── Profil léger : aucun halo ajouté par les modèles ─────────────────────── */
+html[data-perf="light"][data-ui-model]:not([data-ui-model="classic"]) .n-card,
+html[data-perf="light"][data-ui-model]:not([data-ui-model="classic"]) .n-btn--primary {
+  box-shadow: none;
+}

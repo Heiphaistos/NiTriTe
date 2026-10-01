@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiModelPicker from "@/components/shared/UiModelPicker.vue";
 import { ref, computed, onMounted, type Component } from "vue";
 import { invoke, isTauriContext } from "@/utils/invoke";
 import type { AppConfig } from "@/types/diagnostic";
@@ -256,6 +257,12 @@ const tabs: { id: Tab; label: string; icon: Component }[] = [
         <!-- ══ INTERFACE ══ -->
         <div v-if="activeTab === 'interface'" class="tab-section">
           <h2 class="tab-title"><Palette :size="16" /> Interface</h2>
+
+          <div class="setting-group">
+            <p class="setting-label">Modèle d'interface</p>
+            <p class="setting-desc">Disposition et style de toute l'application. Les pages et leurs fonctions restent identiques ; les couleurs suivent le thème choisi.</p>
+            <UiModelPicker />
+          </div>
 
           <div class="setting-group">
             <p class="setting-label">Thème <span class="setting-desc" style="display:inline">— {{ themeCount }} thèmes</span></p>

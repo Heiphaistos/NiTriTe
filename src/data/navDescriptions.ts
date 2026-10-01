@@ -1,0 +1,57 @@
+/**
+ * Sous-titre court de chaque outil du menu (par `NavItem.id`), affiché par les
+ * modèles d'interface qui détaillent leurs menus (Command Deck, Bento, Colonnes…).
+ */
+export const navDescriptions: Record<string, string> = {
+  "dashboard": "Vue d'ensemble et santé du PC",
+  "diagnostic": "Inventaire matériel et logiciel complet",
+  "monitoring": "CPU, RAM, disques et réseau en direct",
+  "optimizations": "Réglages Windows et services",
+  "turbo-mode": "Performances maximales en un clic",
+  "master-install": "Installer des centaines d'apps en lot",
+  "portables": "Applications sans installation",
+  "uninstaller": "Désinstaller proprement, sans résidus",
+  "updates": "Mettre à jour Windows et les logiciels",
+  "dependencies": "Runtimes, .NET, Visual C++…",
+  "os-downloads": "ISO Windows / Linux et outils USB",
+  "temperatures": "Capteurs et températures",
+  "benchmark": "Mesurer CPU, RAM et disques",
+  "perf-history": "Évolution des performances",
+  "stats-reports": "Rapports et statistiques d'intervention",
+  "cleaner": "Fichiers temporaires, caches, journaux",
+  "tools": "Outils et commandes de réparation",
+  "drivers": "Pilotes : sauvegarde et mise à jour",
+  "scanvirus": "Analyse antivirus et menaces",
+  "restore-points": "Créer et restaurer des points",
+  "bsod-analyzer": "Comprendre les écrans bleus",
+  "boot-manager": "Démarrage, BCD et entrées de boot",
+  "disk-visualizer": "Carte de l'occupation des disques",
+  "big-files": "Trouver les fichiers volumineux",
+  "duplicate-finder": "Repérer les fichiers en double",
+  "hash-checker": "Vérifier l'intégrité des fichiers",
+  "backup": "Sauvegarder fichiers et profils",
+  "data-recovery": "Récupérer des fichiers supprimés",
+  "clone": "Cloner un disque ou un système",
+  "network": "Connexions, IP, tests et diagnostics",
+  "dns-switcher": "Changer de serveurs DNS",
+  "wifi-analyzer": "Réseaux Wi-Fi et canaux",
+  "port-scanner": "Scanner les ports ouverts",
+  "bluetooth": "Appareils et adaptateurs Bluetooth",
+  "hosts-editor": "Modifier le fichier hosts",
+  "terminal": "PowerShell et invite de commandes",
+  "scripts": "Scripts et snippets prêts à l'emploi",
+  "wsl": "Distributions Linux sous Windows",
+  "docker": "Conteneurs et images Docker",
+  "ai-agents": "Assistant IA local de dépannage",
+  "knowledge-base": "Fiches de résolution de pannes",
+  "documentation": "Guide d'utilisation de NiTriTe",
+  "settings": "Préférences, modèle et performances",
+  "theme-editor": "Couleurs, thèmes et mise en page",
+  "profiles": "Profils de configuration",
+  "logs": "Journaux de l'application",
+  "winpe": "Outils pour environnement WinPE",
+};
+
+export function navDescription(id: string): string {
+  return navDescriptions[id] ?? "";
+}
