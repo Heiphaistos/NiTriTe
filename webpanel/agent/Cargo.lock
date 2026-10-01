@@ -1176,7 +1176,7 @@ dependencies = [
 
 [[package]]
 name = "nitrite"
-version = "8.222.0"
+version = "8.223.0"
 dependencies = [
  "anyhow",
  "base64",
