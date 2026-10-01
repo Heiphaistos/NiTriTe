@@ -143,12 +143,14 @@ watch(() => nav.currentSection.value?.title, (title) => {
 
     <div class="sh-main">
       <header class="forge-head">
-        <div class="forge-head__titles">
-          <span class="forge-head__crumb">
-            <template v-if="nav.currentSection.value">{{ nav.currentSection.value.title }} / </template>{{ nav.pageTitle.value }}
-          </span>
-          <span class="forge-head__title">{{ nav.pageTitle.value }}</span>
-        </div>
+        <nav class="forge-head__crumb" aria-label="Fil d'Ariane">
+          <template v-if="nav.currentSection.value">
+            <component :is="nav.getSectionIcon(nav.currentSection.value.title)" :size="15" />
+            <span>{{ nav.currentSection.value.title }}</span>
+            <span class="forge-head__sep">/</span>
+          </template>
+          <strong>{{ nav.pageTitle.value }}</strong>
+        </nav>
         <span v-if="nav.currentItem.value" class="forge-head__desc">{{ nav.navDescription(nav.currentItem.value.id) }}</span>
         <div class="forge-head__spacer" />
         <button
@@ -273,13 +275,14 @@ watch(() => nav.currentSection.value?.title, (title) => {
 .forge-search-mini { width: 40px; height: 36px; }
 
 .forge-head {
-  min-height: 64px; flex-shrink: 0; display: flex; align-items: center; gap: 14px;
+  min-height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 14px;
   padding: 0 24px; border-bottom: 1px solid var(--border);
   background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
 }
-.forge-head__titles { display: flex; flex-direction: column; min-width: 0; }
-.forge-head__crumb { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
-.forge-head__title { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; }
+.forge-head__crumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); white-space: nowrap; min-width: 0; }
+.forge-head__crumb :deep(svg) { color: var(--accent-primary); flex-shrink: 0; }
+.forge-head__crumb strong { color: var(--text-primary); font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.forge-head__sep { color: var(--border-strong); }
 .forge-head__desc {
   font-size: 12px; color: var(--text-secondary); padding: 5px 11px; border-radius: 999px;
   border: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
@@ -288,4 +291,6 @@ watch(() => nav.currentSection.value?.title, (title) => {
 .forge-head__search { width: 230px; }
 
 @media (max-width: 1100px) { .forge-head__desc { display: none; } .forge-head__search { width: auto; } }
+
+@media (max-width: 1280px) { .forge-side { width: 240px; } }
 </style>

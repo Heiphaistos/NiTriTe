@@ -182,4 +182,18 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
 }
 .deck-strip__item:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 .deck-strip__item.active { color: var(--text-primary); background: var(--bg-tertiary); box-shadow: inset 0 -2px 0 var(--accent-primary); }
+
+/* Écrans moyens / petits : la barre des 10 catégories doit tenir sans défiler. */
+@media (max-width: 1440px) {
+  .deck-cat { padding: 7px 9px; gap: 6px; font-size: 12px; }
+  .deck-cat__chev { display: none; }
+}
+@media (max-width: 1300px) {
+  .deck-cat :deep(svg:first-child) { display: none; }
+  .deck-cat { padding: 7px 8px; }
+}
+@media (max-width: 1100px) {
+  .deck-cmd span { display: none; }
+  .deck-cmd { flex: 0 0 auto; margin: 0 0 0 auto; }
+}
 </style>

@@ -98,7 +98,6 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
 
     <div class="mis-banner">
       <span class="mis-banner__kicker">{{ nav.currentSection.value ? nav.currentSection.value.title.toUpperCase() : "NITRITE" }}</span>
-      <span class="mis-banner__title">{{ nav.pageTitle.value }}</span>
       <span v-if="nav.currentItem.value" class="mis-banner__sub">{{ nav.navDescription(nav.currentItem.value.id) }}</span>
     </div>
 
@@ -150,12 +149,13 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
 .mis-menu { position: absolute; top: calc(100% + 4px); width: 340px; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
 
 .mis-banner {
-  flex-shrink: 0; display: flex; align-items: baseline; gap: 14px; padding: 14px 24px 12px;
+  flex-shrink: 0; display: flex; align-items: baseline; gap: 14px; padding: 8px 24px;
   border-bottom: 1px solid var(--border);
   background: linear-gradient(90deg, var(--accent-subtle, var(--accent-muted)), transparent 60%);
   white-space: nowrap; overflow: hidden;
 }
 .mis-banner__kicker { font-family: "JetBrains Mono", monospace; font-size: 10.5px; letter-spacing: 0.12em; color: var(--accent-primary); }
-.mis-banner__title { font-size: 19px; font-weight: 800; }
 .mis-banner__sub { font-size: 12.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 1280px) { .mis-cat { padding: 6px 8px; font-size: 12px; } }
 </style>
