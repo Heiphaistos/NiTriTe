@@ -156,7 +156,7 @@ onMounted(() => loadUserFolders());
           <NSpinner v-if="backingUp" :size="14" />
           <span>{{ backupProgressMsg }}</span>
         </div>
-        <NProgress :value="backupProgress" showLabel size="lg" />
+        <NProgress :value="backupProgress" showLabel size="lg" color="accent" />
       </div>
 
       <div v-if="backupResult" class="result-card" :class="backupResult.success ? 'success' : 'error'">

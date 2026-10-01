@@ -348,7 +348,7 @@ async function addUltimatePlan() {
         <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
           <div style="font-size:36px;font-weight:700;color:var(--accent);min-width:80px">{{ b.estimated_charge_remaining }}%</div>
           <div style="flex:1">
-            <NProgress :value="b.estimated_charge_remaining" :variant="b.estimated_charge_remaining > 20 ? 'default' : 'danger'" size="lg" />
+            <NProgress :value="b.estimated_charge_remaining" :color="b.estimated_charge_remaining > 20 ? 'success' : 'danger'" size="lg" />
             <div style="display:flex;justify-content:space-between;margin-top:4px">
               <span class="muted" style="font-size:11px">{{ b.status }}</span>
               <span class="muted" style="font-size:11px">{{ b.estimated_run_time }}</span>

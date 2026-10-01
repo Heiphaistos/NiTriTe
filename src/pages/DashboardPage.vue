@@ -392,7 +392,7 @@ onUnmounted(() => {
         <div class="health-section">
           <div class="health-score" :style="{ color: healthColor() }">{{ healthScore }}<span class="health-max">/100</span></div>
           <div class="health-label" :style="{ color: healthColor() }">{{ healthLabel() }}</div>
-          <NProgress :value="healthScore" size="lg" />
+          <NProgress :value="healthScore" size="lg" :color="healthScore >= 80 ? 'success' : healthScore >= 50 ? 'warning' : 'danger'" />
           <div class="health-details">
             <div class="health-item">
               <CheckCircle v-if="cpuUsage < thresholds.cpu_warn" :size="14" style="color:var(--success)" />

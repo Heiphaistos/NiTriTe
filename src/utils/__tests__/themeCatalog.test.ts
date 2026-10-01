@@ -64,3 +64,41 @@ describe("setTheme", () => {
     expect(store.theme).toBe("nitrite-dark");
   });
 });
+
+describe("thèmes clairs", () => {
+  it("la galerie propose un groupe de thèmes clairs, tous réellement clairs", async () => {
+    const { isLightColor } = await import("@/utils/themeCatalog");
+    const group = themeGallery().find((g) => g.label.includes("clairs"));
+    expect(group).toBeTruthy();
+    expect(group!.themes.length).toBeGreaterThanOrEqual(15);
+    for (const t of group!.themes) expect(isLightColor(t.background), t.id).toBe(true);
+  });
+
+  it("les thèmes sombres sont tous conservés", () => {
+    const dark = ["nitrite-dark", "cyber-blue", "void-dark", "dracula", "nord", "carbon", "graphite", "tokyo-night"];
+    const ids = new Set(themeGallery().flatMap((g) => g.themes.map((t) => t.id)));
+    for (const id of dark) expect(ids.has(id), id).toBe(true);
+  });
+
+  it("détecte la tonalité et adapte ombres et verre aux fonds clairs", async () => {
+    const { themeTone, isLightColor } = await import("@/utils/themeCatalog");
+    expect(isLightColor("#ffffff")).toBe(true);
+    expect(isLightColor("#09090b")).toBe(false);
+    expect(themeTone("arctic-light")).toBe("light");
+    expect(themeTone("nitrite-dark")).toBe("dark");
+    expect(themeTone("forge-light")).toBe("light");
+    const light = deriveThemeVars({ "--bg-primary": "#ffffff", "--accent-primary": "#2563eb" });
+    expect(light["--surface-glass"]).toMatch(/rgba\(15, 23, 42/);
+    const dark = deriveThemeVars({ "--bg-primary": "#000000" });
+    expect(dark["--surface-glass"]).toBeUndefined();
+  });
+
+  it("setTheme pose data-theme-tone", () => {
+    setActivePinia(createPinia());
+    const store = useAppStore();
+    store.setTheme("github-light");
+    expect(document.documentElement.getAttribute("data-theme-tone")).toBe("light");
+    store.setTheme("nitrite-dark");
+    expect(document.documentElement.getAttribute("data-theme-tone")).toBe("dark");
+  });
+});
