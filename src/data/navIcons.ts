@@ -6,7 +6,7 @@ import {
   BarChart3, Settings, Palette, Trash2, Gauge, Server, Globe, Bug, TerminalSquare,
   Bluetooth, Sparkles, Copy, Database, User,
   Thermometer, PieChart, Files, FileSearch, Hash, Container, Radio, Network, Code2,
-  Rocket, ClipboardList, Monitor, AppWindow, Brush, Usb,
+  Rocket, ClipboardList, Monitor, AppWindow, Brush, Usb, ListChecks,
 } from "lucide-vue-next";
 
 /** Icônes Lucide des entrées de menu, par nom (`NavItem.icon`). Partagé par toutes les coques. */
@@ -26,7 +26,7 @@ export const iconMap: Record<string, Component> = {
   thermometer: Thermometer, "pie-chart": PieChart, files: Files,
   "file-search": FileSearch, hash: Hash, container: Container,
   radio: Radio, network: Network, "code-2": Code2,
-  rocket: Rocket, "clipboard-list": ClipboardList,
+  rocket: Rocket, "clipboard-list": ClipboardList, "list-checks": ListChecks,
 };
 
 export function getNavIcon(name: string): Component {

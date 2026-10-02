@@ -22,6 +22,17 @@ const SEARCH_INDEX: SearchEntry[] = [
     keywords: ["dashboard", "accueil", "home", "overview", "systeme", "sante", "cpu", "ram", "disque", "reseau", "monitoring"],
   },
 
+  // ─── MISSIONS ────────────────────────────────────────────────────────────────
+  {
+    id: "missions",
+    label: "Missions",
+    description: "Enchaîner les outils d'une intervention et produire le rapport",
+    route: "/missions",
+    section: "Système",
+    type: "page",
+    keywords: ["mission", "intervention", "remise en etat", "pc lent", "pc neuf", "ecran bleu", "checklist", "etapes", "rapport", "workflow"],
+  },
+
   // ─── DIAGNOSTIC — ONGLETS ────────────────────────────────────────────────────
   {
     id: "diag-os",

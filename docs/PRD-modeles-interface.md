@@ -71,7 +71,7 @@ Le modèle 03 (HUD) et le modèle 07 (Néo-brutal) ne sont pas retenus.
 
 - `vue-tsc` et `vite build` passent ; tous les tests existants passent.
 - Nouveaux tests : défaut = Forge, persistance et valeur invalide ; chaque route du
-  menu existe ; chaque coque se monte et affiche les 47 entrées (ou les 10
+  menu existe ; chaque coque se monte et affiche toutes les entrées (ou les 10
   sections et leurs outils au survol/clic) ; un clic sur une entrée navigue vers la
   bonne route.
 - Basculer d'un modèle à l'autre ne recharge pas l'application et ne perd ni les
