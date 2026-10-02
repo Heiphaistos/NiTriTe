@@ -133,8 +133,15 @@ provide("openSearch",       openSearch);
 
 
 // ── Scroll reset automatique à chaque navigation ─────────────────────────────
-router.afterEach(() => {
+router.afterEach((to) => {
   pageError.value = null;
+  // Outils récemment ouverts (tableau de bord du modèle Colonnes).
+  if (to.path !== "/" && navigationSections.some(s => s.items.some(i => i.route === to.path))) {
+    try {
+      const prev = JSON.parse(localStorage.getItem("nitrite-recent") ?? "[]") as string[];
+      localStorage.setItem("nitrite-recent", JSON.stringify([to.path, ...prev.filter(p => p !== to.path)].slice(0, 8)));
+    } catch { /* stockage indisponible */ }
+  }
   if (appContent.value) appContent.value.scrollTop = 0;
 });
 
