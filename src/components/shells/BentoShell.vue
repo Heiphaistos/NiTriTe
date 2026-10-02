@@ -10,6 +10,7 @@ import { Search, Settings } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
 import PageSlot from "./PageSlot.vue";
 import logoUrl from "@/assets/nitrite-logo.jpg";
+import { useMenuKeys } from "@/composables/useMenuKeys";
 import { useShellNav } from "@/composables/useShellNav";
 
 const nav = useShellNav();
@@ -20,6 +21,11 @@ const selectedTitle = ref(nav.currentSection.value?.title ?? nav.sections[0].tit
 watch(() => nav.currentSection.value?.title, (t) => { if (t) selectedTitle.value = t; });
 const selected = computed(() => nav.sections.find(s => s.title === selectedTitle.value) ?? nav.sections[0]);
 
+const rail = ref<HTMLElement | null>(null);
+const panel = ref<HTMLElement | null>(null);
+useMenuKeys(rail, ".bento-rail__btn", "vertical");
+useMenuKeys(panel, ".bento-tool, .bento-pin", "vertical");
+
 function pick(title: string) {
   selectedTitle.value = title;
   panelHidden.value = false;
@@ -28,7 +34,7 @@ function pick(title: string) {
 
 <template>
   <div class="sh-shell bento">
-    <nav class="bento-rail" aria-label="Sections">
+    <nav ref="rail" class="bento-rail" aria-label="Sections">
       <img :src="logoUrl" class="sh-logo bento-logo" alt="NiTriTe" />
       <button
         v-for="section in nav.sections"
@@ -50,7 +56,7 @@ function pick(title: string) {
       </button>
     </nav>
 
-    <section v-show="!panelHidden" class="bento-panel sh-scroll" :aria-label="`Sous-menu ${selected.title}`">
+    <section v-show="!panelHidden" ref="panel" class="bento-panel sh-scroll" :aria-label="`Sous-menu ${selected.title}`">
       <span class="bento-panel__title">{{ selected.title }}</span>
       <button
         v-for="item in selected.items"

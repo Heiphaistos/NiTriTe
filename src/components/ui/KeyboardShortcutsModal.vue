@@ -16,9 +16,19 @@ const sections = [
     title: "Navigation",
     shortcuts: [
       { keys: ["Ctrl", "K"], desc: "Ouvrir la recherche" },
-      { keys: ["Ctrl", "B"], desc: "Réduire la sidebar" },
+      { keys: ["Ctrl", "B"], desc: "Réduire la navigation (Orbital : ouvrir l'orbite)" },
+      { keys: ["Ctrl", "1…0"], desc: "Aller à la section 1 à 10" },
+      { keys: ["Alt", "← / →"], desc: "Page précédente / suivante" },
+      { keys: ["↑ ↓ ← →"], desc: "Se déplacer dans les menus" },
       { keys: ["?"], desc: "Raccourcis clavier" },
       { keys: ["Esc"], desc: "Fermer la modale" },
+    ],
+  },
+  {
+    title: "Modèles d'interface",
+    shortcuts: [
+      { keys: ["Ctrl", "Maj", "M"], desc: "Modèle suivant" },
+      { keys: ["Suppr"], desc: "Fermer l'onglet (Console, Mission)" },
     ],
   },
   {

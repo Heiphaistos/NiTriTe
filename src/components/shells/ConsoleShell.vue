@@ -9,12 +9,18 @@ import { useRouter } from "vue-router";
 import { X, Search, Settings, ChevronRight } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
 import PageSlot from "./PageSlot.vue";
+import { useMenuKeys } from "@/composables/useMenuKeys";
 import { useShellNav, useOpenTabs } from "@/composables/useShellNav";
 
 const nav = useShellNav();
 const tabs = useOpenTabs();
 const router = useRouter();
 const treeHidden = inject<Ref<boolean>>("sidebarCollapsed", ref(false));
+
+const tree = ref<HTMLElement | null>(null);
+const tabBar = ref<HTMLElement | null>(null);
+useMenuKeys(tree, ".con-group__head, .con-leaf", "vertical");
+useMenuKeys(tabBar, ".con-tab", "horizontal");
 
 function slug(text: string) {
   return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
@@ -30,7 +36,7 @@ const promptPath = computed(() => {
   <div class="sh-shell con">
     <nav v-show="!treeHidden" class="con-tree" aria-label="Arborescence des outils">
       <div class="con-tree__head"><span class="con-tree__n">N</span>NITRITE · EXPLORATEUR</div>
-      <div class="con-tree__body sh-scroll">
+      <div ref="tree" class="con-tree__body sh-scroll">
         <div v-for="(section, si) in nav.sections" :key="section.title" class="con-group">
           <button
             class="con-group__head"
@@ -60,7 +66,7 @@ const promptPath = computed(() => {
     </nav>
 
     <div class="sh-main">
-      <div class="con-tabs" role="tablist" aria-label="Outils ouverts">
+      <div ref="tabBar" class="con-tabs" role="tablist" aria-label="Outils ouverts">
         <div
           v-for="path in tabs.tabs.value"
           :key="path"
@@ -68,7 +74,10 @@ const promptPath = computed(() => {
           :aria-selected="nav.isActive(path)"
           class="con-tab"
           :class="{ active: nav.isActive(path) }"
+          :tabindex="nav.isActive(path) ? 0 : -1"
           @click="nav.navigate(path)"
+          @keydown.enter.prevent="nav.navigate(path)"
+          @keydown.delete.prevent="tabs.close(path)"
         >
           <span>{{ tabs.labelOf(path) }}</span>
           <button class="con-tab__x" :aria-label="`Fermer ${tabs.labelOf(path)}`" @click.stop="tabs.close(path)">

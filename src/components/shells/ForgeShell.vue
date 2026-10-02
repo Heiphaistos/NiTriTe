@@ -10,6 +10,7 @@ import { Search, Star, ChevronDown, Settings, PanelLeftClose, PanelLeftOpen } fr
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
 import PageSlot from "./PageSlot.vue";
 import logoUrl from "@/assets/nitrite-logo.jpg";
+import { useMenuKeys } from "@/composables/useMenuKeys";
 import { useShellNav } from "@/composables/useShellNav";
 import { useAppStore } from "@/stores/app";
 
@@ -26,6 +27,9 @@ const perfLabel = computed(() => ({
 }[appStore.perfTier] ?? "Profil auto"));
 const perfSub = computed(() => appStore.perfTier === "light"
   ? "Effets coupés pour la fluidité" : "Animations et effets actifs");
+
+const navEl = ref<HTMLElement | null>(null);
+useMenuKeys(navEl, ".forge-sec__head, .forge-item, .forge-mini", "vertical");
 
 // La section de la page ouverte est toujours dépliée.
 watch(() => nav.currentSection.value?.title, (title) => {
@@ -74,7 +78,7 @@ watch(() => nav.currentSection.value?.title, (title) => {
         </div>
       </div>
 
-      <nav class="forge-nav sh-scroll" aria-label="Catégories">
+      <nav ref="navEl" class="forge-nav sh-scroll" aria-label="Catégories">
         <template v-if="!collapsed">
           <div v-for="section in nav.sections" :key="section.title" class="forge-sec">
             <button
