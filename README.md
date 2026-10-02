@@ -1,8 +1,8 @@
 <div align="center">
-  <h1>🔧 NiTriTe 8.223.0</h1>
+  <h1>🔧 NiTriTe 8.224.0</h1>
   <p><strong>Suite de diagnostic, réparation, optimisation et administration Windows — 44 outils, interface Tauri v2 native.</strong></p>
 
-  ![Version](https://img.shields.io/badge/version-8.223.0-blue)
+  ![Version](https://img.shields.io/badge/version-8.224.0-blue)
   ![Stack](https://img.shields.io/badge/stack-Tauri%20v2%20%2B%20Rust%20%2B%20Vue%203-purple)
   ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-informational)
   ![Language](https://img.shields.io/badge/language-Rust%20%2B%20TypeScript-orange)
@@ -13,20 +13,20 @@
 
 ## 📋 Description
 
-NiTriTe est un outil Windows tout-en-un conçu pour les techniciens et utilisateurs avancés. **44 pages** organisées en **10 catégories**, dont un tableau de diagnostic regroupant **33 sous-onglets** d'analyse système — le tout via une interface native moderne construite avec Tauri v2 (backend Rust, frontend Vue 3).
+NiTriTe est un outil Windows tout-en-un conçu pour les techniciens et utilisateurs avancés. **48 outils** organisés en **10 catégories**, **9 modèles d'interface**, dont un tableau de diagnostic regroupant **33 sous-onglets** d'analyse système — le tout via une interface native moderne construite avec Tauri v2 (backend Rust, frontend Vue 3).
 
-La 8.223.0 couvre le diagnostic matériel/logiciel complet, la réparation Windows (SFC/DISM/WinPE bootable), le clonage et la récupération de données (VSS), la gestion réseau et sécurité, l'automatisation via scripts et un assistant IA local (Ollama / llama.cpp portable), jusqu'au packaging d'une release portable autonome (exe + logiciels + drivers + scripts Windows).
+La 8.224.0 couvre le diagnostic matériel/logiciel complet, la réparation Windows (SFC/DISM/WinPE bootable), le clonage et la récupération de données (VSS), la gestion réseau et sécurité, l'automatisation via scripts et un assistant IA local (Ollama / llama.cpp portable), jusqu'au packaging d'une release portable autonome (exe + logiciels + drivers + scripts Windows).
 
 ---
 
 ## 🆕 Nouveautés de cette version
 
-- **Master Install fiable de bout en bout** : détection des applications déjà installées dès l'ouverture, installation *et* désinstallation en un clic ou par lot (20 apps d'un coup, file annulable, « Réessayer les échecs »), filtres Installées / Non installées. Catalogue nettoyé : 723 apps, identifiants WinGet vérifiés contre le dépôt officiel (55 corrigés, 75 ajoutés), plus aucun doublon.
-- **Outils Système** : les commandes chaînées (reset réseau, reset Windows Update, réparation du démarrage…) s'exécutent enfin, avec élévation UAC automatique pour les 43 outils qui l'exigent ; `wmic` (retiré de Windows 11 24H2) remplacé.
-- **Mode performance adaptatif** : Complet / Équilibré / Léger, choisi automatiquement selon le processeur et la mémoire (un double cœur passe en Léger : ni flous, ni animations, démarrage et monitoring allégés). Réglable dans Paramètres › Performance.
-- **62 thèmes** (dont 8 nouveaux : Nitrite Light, Carbon AMOLED, Graphite, Contraste élevé…), tous mémorisés au redémarrage.
-- **Menu réorganisé par tâche** en 10 sections ; Monitoring, Turbo Mode et Rapports statistiques y sont désormais accessibles.
-- **[Panneau web](webpanel/README.md)** : NiTriTe sans fenêtre native — un agent léger + l'interface dans le navigateur, avec les mêmes fonctionnalités.
+- **9 modèles d'interface** : Forge (nouveau modèle par défaut), Command Deck, Bento, Console, Orbital, Colonnes, Verre & dock, Mission — et **Classique**, l'interface d'avant, à l'identique. Choix dans Paramètres › Interface ou d'un clic dans la barre d'état ; changer de modèle n'interrompt pas une opération en cours. Toutes les pages, boutons et sous-onglets fonctionnent comme avant.
+- **Mode Mission** : enchaîner les outils d'une intervention (Remise en état PC, PC lent, PC neuf, Après un écran bleu, Problème réseau, Sauvegarde & migration, ou vos propres missions), avec une barre de suivi sur chaque page, des notes par étape et un rapport à copier ou exporter.
+- **74 thèmes** dont **12 nouveaux thèmes clairs** (Forge, Neige, Lavande, Sable, Ciel, Rosé, Sauge, Ardoise, Solarized Light, GitHub Light, Catppuccin Latte, Nord Snow Storm) ; tous les thèmes sombres sont conservés, filtre Sombres / Clairs dans Paramètres.
+- **Tableau de bord** propre à chaque modèle (santé, favoris, récents, missions…) et écran de démarrage aux couleurs du thème.
+- **Raccourcis clavier** : Ctrl+1…0 pour les sections, Ctrl+Maj+M pour changer de modèle, Alt+←/→, navigation aux flèches dans tous les menus (aide : touche `?`).
+- **Corrections** : barres de progression qui s'affichaient en rouge à tort (score santé à 100, batterie pleine, fin de scan, de récupération, de sauvegarde et d'image disque).
 
 ---
 
