@@ -4,12 +4,13 @@
  * courante en pastilles rondes, et navigation circulaire (sections en orbite,
  * outils au centre) ouverte par le bouton « Orbite ».
  */
-import { computed, ref, watch } from "vue";
+import { computed, inject, ref, watch, type Ref } from "vue";
 import { useRouter } from "vue-router";
 import { onKeyStroke } from "@vueuse/core";
 import { Orbit, Search, Settings, X } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
 import PageSlot from "./PageSlot.vue";
+import { useMenuKeys, focusFirst } from "@/composables/useMenuKeys";
 import { useShellNav } from "@/composables/useShellNav";
 
 const nav = useShellNav();
@@ -19,10 +20,19 @@ const orbitOpen = ref(false);
 const selectedTitle = ref(nav.currentSection.value?.title ?? nav.sections[0].title);
 const selected = computed(() => nav.sections.find(s => s.title === selectedTitle.value) ?? nav.sections[0]);
 
+const stage = ref<HTMLElement | null>(null);
+const pills = ref<HTMLElement | null>(null);
+useMenuKeys(stage, ".orb-node, .orb-core__item", "both");
+useMenuKeys(pills, ".orb-pill", "horizontal");
+
 function openOrbit() {
   selectedTitle.value = nav.currentSection.value?.title ?? selectedTitle.value;
   orbitOpen.value = true;
+  focusFirst(() => stage.value, ".orb-node.selected");
 }
+// Ctrl+B (replier la navigation) ouvre / ferme l'orbite dans ce modèle.
+const collapsed = inject<Ref<boolean>>("sidebarCollapsed", ref(false));
+watch(collapsed, () => { if (orbitOpen.value) orbitOpen.value = false; else openOrbit(); });
 function go(route: string) {
   orbitOpen.value = false;
   nav.navigate(route);
@@ -45,7 +55,7 @@ const nodes = computed(() => nav.sections.map((section, i) => {
         <Orbit :size="16" />
         <span>Orbite</span>
       </button>
-      <div class="orb-pills">
+      <div ref="pills" class="orb-pills">
         <template v-if="nav.currentSection.value">
           <button
             v-for="item in nav.currentSection.value.items"
@@ -73,7 +83,7 @@ const nodes = computed(() => nav.sections.map((section, i) => {
     <Transition name="orb-fade">
       <div v-if="orbitOpen" class="orb-overlay" role="dialog" aria-label="Navigation orbitale" @click.self="orbitOpen = false">
         <button class="sh-icon-btn orb-close" title="Fermer (Échap)" @click="orbitOpen = false"><X :size="18" /></button>
-        <div class="orb-stage">
+        <div ref="stage" class="orb-stage">
           <svg class="orb-rings" viewBox="-330 -330 660 660" aria-hidden="true">
             <circle r="318" class="ring ring--outer" />
             <circle r="268" class="ring ring--dash" />
@@ -87,6 +97,7 @@ const nodes = computed(() => nav.sections.map((section, i) => {
             :style="{ transform: `translate(${n.x}px, ${n.y}px)` }"
             :aria-label="n.section.title"
             @click="selectedTitle = n.section.title"
+            @focus="selectedTitle = n.section.title"
             @mouseenter="selectedTitle = n.section.title"
           >
             <component :is="nav.getSectionIcon(n.section.title)" :size="20" />
@@ -148,6 +159,7 @@ html[data-perf="light"] .orb-overlay { backdrop-filter: none; background: var(--
 .orb-close { position: absolute; top: 18px; right: 18px; border-radius: 50%; }
 .orb-stage { position: relative; width: 660px; height: 660px; display: flex; align-items: center; justify-content: center; }
 @media (max-height: 760px) { .orb-stage { transform: scale(0.82); } }
+@media (max-height: 620px) { .orb-stage { transform: scale(0.68); } }
 .orb-rings { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .ring { fill: none; }
 .ring--outer { stroke: color-mix(in srgb, var(--accent-primary) 12%, transparent); stroke-width: 1; }

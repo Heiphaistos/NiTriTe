@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { Cpu, MemoryStick, HardDrive, Wifi, Activity } from "lucide-vue-next";
 import type { SystemMonitorPayload } from "@/types/diagnostic";
+import UiModelQuickSwitch from "@/components/shared/UiModelQuickSwitch.vue";
 
 const appVersion = __APP_VERSION__;
 const cpuUsage = ref(0);
@@ -112,6 +113,10 @@ const networkColor = computed(() => {
     </div>
 
     <div class="status-spacer" />
+
+    <!-- Modèle d'interface (changement rapide) -->
+    <UiModelQuickSwitch />
+    <span class="status-sep" />
 
     <!-- Live indicator -->
     <div class="status-item status-live">

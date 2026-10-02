@@ -10,6 +10,12 @@ const router = createRouter({
       meta: { title: "Tableau de bord" },
     },
     {
+      path: "/missions",
+      name: "missions",
+      component: () => import("@/pages/MissionsPage.vue"),
+      meta: { title: "Missions" },
+    },
+    {
       path: "/diagnostic",
       name: "diagnostic",
       component: () => import("@/pages/DiagnosticPage.vue"),

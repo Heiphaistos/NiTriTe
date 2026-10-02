@@ -2,12 +2,14 @@
 import { ref, computed, provide, onMounted, onUnmounted, onErrorCaptured, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import NToast from "@/components/ui/NToast.vue";
+import MissionBar from "@/components/mission/MissionBar.vue";
 import NAlertBanner from "@/components/ui/NAlertBanner.vue";
 import SearchModal from "@/components/shared/SearchModal.vue";
 import KeyboardShortcutsModal from "@/components/ui/KeyboardShortcutsModal.vue";
 import { useAppStore } from "@/stores/app";
 import { useLayoutStore } from "@/stores/layoutStore";
-import { useUiModelStore } from "@/stores/uiModel";
+import { useUiModelStore, UI_MODELS } from "@/stores/uiModel";
+import { navigationSections } from "@/data/navigation";
 import { shellFor } from "@/components/shells";
 import { useDataCache } from "@/stores/dataCache";
 import { useProactiveAlerts } from "@/composables/useProactiveAlerts";
@@ -20,6 +22,25 @@ const { start: startAlerts, stop: stopAlerts } = useProactiveAlerts();
 const appVersion = __APP_VERSION__;
 function handleKeyDown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === "k") { e.preventDefault(); searchOpen.value = !searchOpen.value; }
+  // Ctrl+1 … Ctrl+9, Ctrl+0 : premier outil de la section correspondante (10 sections).
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && /^[0-9]$/.test(e.key)) {
+    const section = navigationSections[e.key === "0" ? 9 : Number(e.key) - 1];
+    if (section) { e.preventDefault(); router.push(section.items[0].route); }
+    return;
+  }
+  // Ctrl+Maj+M : modèle d'interface suivant.
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "m") {
+    e.preventDefault();
+    const i = UI_MODELS.findIndex(m => m.id === uiModelStore.model);
+    uiModelStore.setModel(UI_MODELS[(i + 1) % UI_MODELS.length].id);
+    return;
+  }
+  // Alt+← / Alt+→ : page précédente / suivante.
+  if (e.altKey && !e.ctrlKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    e.preventDefault();
+    if (e.key === "ArrowLeft") router.back(); else router.forward();
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.key === "b") { e.preventDefault(); toggleSidebar(); localStorage.setItem("nitrite-sidebar", String(sidebarCollapsed.value)); }
   if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {
     const tag = (e.target as HTMLElement)?.tagName;
@@ -112,8 +133,15 @@ provide("openSearch",       openSearch);
 
 
 // ── Scroll reset automatique à chaque navigation ─────────────────────────────
-router.afterEach(() => {
+router.afterEach((to) => {
   pageError.value = null;
+  // Outils récemment ouverts (tableau de bord du modèle Colonnes).
+  if (to.path !== "/" && navigationSections.some(s => s.items.some(i => i.route === to.path))) {
+    try {
+      const prev = JSON.parse(localStorage.getItem("nitrite-recent") ?? "[]") as string[];
+      localStorage.setItem("nitrite-recent", JSON.stringify([to.path, ...prev.filter(p => p !== to.path)].slice(0, 8)));
+    } catch { /* stockage indisponible */ }
+  }
   if (appContent.value) appContent.value.scrollTop = 0;
 });
 
@@ -224,7 +252,7 @@ onMounted(async () => {
 <template>
   <!-- ── Preloader ── -->
   <Transition name="splash">
-    <div v-if="!appReady" class="splash-screen">
+    <div v-if="!appReady" class="splash-screen" :class="`splash--${uiModelStore.model}`">
 
       <!-- ── Fond vidéo (sans son) — se fige sur la dernière image si le
            chargement dure plus longtemps que la vidéo ── -->
@@ -260,8 +288,15 @@ onMounted(async () => {
           </div>
         </div>
 
+        <!-- Modèle Orbital : progression en anneau -->
+        <svg v-if="uiModelStore.model === 'orbital'" class="splash-ring" viewBox="0 0 120 120" aria-hidden="true">
+          <circle cx="60" cy="60" r="52" class="splash-ring__track" />
+          <circle cx="60" cy="60" r="52" class="splash-ring__fill" :stroke-dasharray="`${loadProgress * 3.267} 327`" transform="rotate(-90 60 60)" />
+          <text x="60" y="66" text-anchor="middle" class="splash-ring__pct">{{ loadProgress }}%</text>
+        </svg>
+
         <!-- Barre de progression -->
-        <div class="splash-progress-wrap">
+        <div v-else class="splash-progress-wrap">
           <div class="splash-progress-bar">
             <div class="splash-progress-fill" :style="{ width: `${loadProgress}%` }" />
           </div>
@@ -285,7 +320,7 @@ onMounted(async () => {
                 <path d="M2.5 5l1.7 1.7L7.5 3.3" stroke="#22c55e" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
               </svg>
               <svg v-else-if="task.status === 'running'" class="spin" width="10" height="10" viewBox="0 0 10 10">
-                <circle cx="5" cy="5" r="4" stroke="#f97316" stroke-width="1.5" stroke-dasharray="16" stroke-dashoffset="8" stroke-linecap="round" fill="none"/>
+                <circle cx="5" cy="5" r="4" stroke="var(--accent-primary, #f97316)" stroke-width="1.5" stroke-dasharray="16" stroke-dashoffset="8" stroke-linecap="round" fill="none"/>
               </svg>
               <span v-else class="task-dot" />
             </span>
@@ -321,6 +356,7 @@ onMounted(async () => {
           class="app-content-inner"
           :style="{ maxWidth: layoutStore.state.contentMaxWidth === 'full' ? '100%' : layoutStore.state.contentMaxWidth, margin: '0 auto' }"
         >
+          <MissionBar />
           <router-view v-slot="{ Component }">
             <transition name="page">
               <keep-alive :include="persistentPages">
@@ -352,7 +388,7 @@ onMounted(async () => {
 /* ── Splash ───────────────────────────────────────────────────────────────── */
 .splash-screen {
   position: fixed; inset: 0; z-index: 99999;
-  background: #09090b; overflow: hidden;
+  background: var(--bg-primary, #09090b); overflow: hidden;
 }
 
 /* Vidéo/image de fond — plein écran, sous l'overlay et le contenu */
@@ -367,8 +403,11 @@ onMounted(async () => {
 .splash-overlay {
   position: absolute; inset: 0; z-index: 1;
   background:
-    radial-gradient(ellipse at 50% 30%, rgba(249,115,22,0.10) 0%, transparent 60%),
-    linear-gradient(to bottom, rgba(9,9,11,0.45) 0%, rgba(9,9,11,0.55) 45%, rgba(9,9,11,0.92) 100%);
+    radial-gradient(ellipse at 50% 30%, var(--accent-muted, rgba(249,115,22,0.10)) 0%, transparent 60%),
+    linear-gradient(to bottom,
+      color-mix(in srgb, var(--bg-primary, #09090b) 45%, transparent) 0%,
+      color-mix(in srgb, var(--bg-primary, #09090b) 55%, transparent) 45%,
+      color-mix(in srgb, var(--bg-primary, #09090b) 92%, transparent) 100%);
   pointer-events: none;
 }
 
@@ -391,33 +430,33 @@ onMounted(async () => {
 .splash-brand-text { display: flex; flex-direction: column; gap: 2px; }
 .splash-title {
   font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
-  background: linear-gradient(135deg, #fafafa 40%, #f97316);
+  background: linear-gradient(135deg, var(--text-primary, #fafafa) 40%, var(--accent-primary, #f97316));
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 .splash-version {
-  font-size: 10px; color: #52525b;
+  font-size: 10px; color: var(--text-muted, #52525b);
   font-family: "JetBrains Mono", monospace; letter-spacing: 0.05em;
 }
 
 /* Progress */
 .splash-progress-wrap { display:flex; align-items:center; gap:8px; width:100%; max-width:520px; }
-.splash-progress-bar  { flex:1; height:3px; background:rgba(255,255,255,0.1); border-radius:99px; overflow:hidden; }
+.splash-progress-bar  { flex:1; height:3px; background:var(--border, rgba(255,255,255,0.1)); border-radius:99px; overflow:hidden; }
 .splash-progress-fill {
   height:100%; border-radius:99px;
-  background: linear-gradient(90deg, #ea580c, #f97316, #fb923c);
-  box-shadow: 0 0 10px rgba(249,115,22,0.6);
+  background: linear-gradient(90deg, var(--accent-primary, #ea580c), var(--accent-hover, #fb923c));
+  box-shadow: var(--accent-glow-sm, 0 0 10px rgba(249,115,22,0.6));
   transition: width 300ms cubic-bezier(0.4,0,0.2,1);
 }
-.splash-pct { font-size:11px; font-weight:700; color:#f97316; font-family:"JetBrains Mono",monospace; min-width:30px; text-align:right; }
-.splash-label { font-size:11px; color:#71717a; min-height:15px; }
+.splash-pct { font-size:11px; font-weight:700; color:var(--accent-primary, #f97316); font-family:"JetBrains Mono",monospace; min-width:30px; text-align:right; }
+.splash-label { font-size:11px; color:var(--text-muted, #71717a); min-height:15px; }
 
 /* Grille de tâches */
 .splash-grid {
   display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px 12px;
   width: 100%; max-width: 620px; margin-top: 4px;
-  background: rgba(17,17,19,0.75);
+  background: color-mix(in srgb, var(--bg-secondary, #111113) 75%, transparent);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255,255,255,0.07);
+  border: 1px solid var(--border, rgba(255,255,255,0.07));
   border-radius: 10px;
   padding: 10px 14px;
 }
@@ -429,15 +468,30 @@ onMounted(async () => {
 .splash-task.done    { opacity: 0.55; }
 
 .task-icon { width:12px; height:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.task-dot  { width:4px; height:4px; border-radius:50%; background:#3f3f46; display:block; }
-.task-label { font-size:10px; color:#a1a1aa; line-height:1.3; }
-.splash-task.running .task-label { color:#f97316; font-weight:600; }
-.splash-task.done    .task-label { color:#4ade80; }
+.task-dot  { width:4px; height:4px; border-radius:50%; background:var(--border-strong, #3f3f46); display:block; }
+.task-label { font-size:10px; color:var(--text-secondary, #a1a1aa); line-height:1.3; }
+.splash-task.running .task-label { color:var(--accent-primary, #f97316); font-weight:600; }
+.splash-task.done    .task-label { color:var(--success, #4ade80); }
 
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.splash-counter { font-size:10px; color:#52525b; font-family:"JetBrains Mono",monospace; }
+.splash-counter { font-size:10px; color:var(--text-muted, #52525b); font-family:"JetBrains Mono",monospace; }
+
+/* ── Variantes par modèle d'interface ── */
+.splash--console .splash-content, .splash--console .splash-title { font-family: "JetBrains Mono", Consolas, monospace; }
+.splash--console .splash-title { -webkit-text-fill-color: var(--accent-primary, #f97316); }
+.splash--console .splash-grid { border-radius: 2px; }
+.splash--console .splash-progress-bar, .splash--console .splash-progress-fill { border-radius: 0; height: 6px; }
+.splash--bento .splash-grid, .splash--glass-dock .splash-grid { border-radius: 20px; padding: 14px 18px; }
+.splash--glass-dock .splash-grid { backdrop-filter: blur(24px) saturate(1.4); }
+.splash--command-deck .splash-grid, .splash--columns .splash-grid, .splash--mission .splash-grid { border-radius: 6px; }
+.splash--mission .splash-grid { border-top: 2px solid var(--accent-primary, #f97316); }
+.splash-ring { width: 120px; height: 120px; }
+.splash-ring__track { fill: none; stroke: var(--border, #26262c); stroke-width: 8; }
+.splash-ring__fill { fill: none; stroke: var(--accent-primary, #f97316); stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray 300ms ease; }
+.splash-ring__pct { fill: var(--text-primary, #fafafa); font-size: 20px; font-weight: 800; font-family: "JetBrains Mono", monospace; }
+html[data-perf="light"] .splash-grid { backdrop-filter: none; }
 
 .splash-leave-active { transition: opacity 500ms ease; }
 .splash-leave-to { opacity: 0; }

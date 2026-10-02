@@ -197,6 +197,7 @@ loadDisks();
         :value="progress?.percent ?? 0"
         :max="100"
         :glow="true"
+        color="accent"
         class="img-progress"
       />
       <div class="progress-stats" v-if="progress">

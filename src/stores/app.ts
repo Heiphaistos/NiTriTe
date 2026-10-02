@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { readHardwareHints, resolveTier, type PerfMode, type PerfTier } from "@/utils/perfProfile";
-import { isCssTheme, findVarTheme, applyThemeVars, clearThemeVars } from "@/utils/themeCatalog";
+import { isCssTheme, findVarTheme, applyThemeVars, clearThemeVars, themeTone, applyThemeTone } from "@/utils/themeCatalog";
 
 export type ThemeName =
   | "nitrite-dark" | "cyber-blue" | "matrix-green" | "purple-haze" | "red-alert"
@@ -55,6 +55,7 @@ export const useAppStore = defineStore("app", () => {
       document.documentElement.setAttribute("data-theme", name);
     }
     theme.value = name;
+    applyThemeTone(themeTone(name));
     try { localStorage.setItem("nitrite-theme", name); } catch { /* stockage indisponible */ }
     setTimeout(() => {
       document.documentElement.classList.remove("theme-transitioning");

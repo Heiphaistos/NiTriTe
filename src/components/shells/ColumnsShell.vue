@@ -10,6 +10,7 @@ import { useRouter } from "vue-router";
 import { ChevronLeft, ChevronRight, Search, Settings } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
 import PageSlot from "./PageSlot.vue";
+import { useMenuKeys, focusFirst } from "@/composables/useMenuKeys";
 import { useShellNav } from "@/composables/useShellNav";
 
 const nav = useShellNav();
@@ -19,6 +20,11 @@ const toolsHidden = inject<Ref<boolean>>("sidebarCollapsed", ref(false));
 const selectedTitle = ref(nav.currentSection.value?.title ?? nav.sections[0].title);
 watch(() => nav.currentSection.value?.title, (t) => { if (t) selectedTitle.value = t; });
 const selected = computed(() => nav.sections.find(s => s.title === selectedTitle.value) ?? nav.sections[0]);
+
+const secCol = ref<HTMLElement | null>(null);
+const toolCol = ref<HTMLElement | null>(null);
+useMenuKeys(secCol, ".col-sec", "vertical");
+useMenuKeys(toolCol, ".col-tool", "vertical");
 
 function pick(title: string) {
   selectedTitle.value = title;
@@ -49,13 +55,14 @@ function pick(title: string) {
     </header>
 
     <div class="col-body">
-      <nav class="col-sections sh-scroll" aria-label="Sections">
+      <nav ref="secCol" class="col-sections sh-scroll" aria-label="Sections">
         <button
           v-for="section in nav.sections"
           :key="section.title"
           class="col-sec"
           :class="{ selected: section.title === selected.title, 'has-active': nav.sectionHasActive(section) }"
           @click="pick(section.title)"
+          @keydown.right.prevent="pick(section.title); focusFirst(() => toolCol, '.col-tool')"
         >
           <component :is="nav.getSectionIcon(section.title)" :size="16" />
           <span>{{ section.title }}</span>
@@ -63,7 +70,7 @@ function pick(title: string) {
         </button>
       </nav>
 
-      <nav v-show="!toolsHidden" class="col-tools sh-scroll" :aria-label="`Outils ${selected.title}`">
+      <nav v-show="!toolsHidden" ref="toolCol" class="col-tools sh-scroll" :aria-label="`Outils ${selected.title}`">
         <span class="col-tools__title">{{ selected.title }}</span>
         <button
           v-for="item in selected.items"
@@ -71,6 +78,7 @@ function pick(title: string) {
           class="col-tool"
           :class="{ active: nav.isActive(item.route) }"
           @click="nav.navigate(item.route)"
+          @keydown.left.prevent="(secCol?.querySelector('.col-sec.selected') as HTMLElement | null)?.focus()"
         >
           <span class="col-tool__label">
             <component :is="nav.getNavIcon(item.icon)" :size="14" />
@@ -137,4 +145,16 @@ function pick(title: string) {
 .col-tool__sub { font-size: 11px; color: var(--text-muted); padding-left: 22px; }
 
 .col-main { background: var(--bg-primary); }
+
+@media (max-width: 1440px) {
+  .col-sections { width: 180px; }
+  .col-tools { width: 210px; }
+}
+@media (max-width: 1200px) {
+  .col-sections { width: 60px; align-items: center; }
+  .col-sec { justify-content: center; padding: 9px; }
+  .col-sec span, .col-sec__chev { display: none; }
+  .col-search { width: auto; }
+  .col-search > span:first-of-type { display: none; }
+}
 </style>

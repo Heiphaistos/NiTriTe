@@ -10,6 +10,7 @@ import { onClickOutside, onKeyStroke } from "@vueuse/core";
 import { ChevronDown, Plus, Settings, X } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
 import PageSlot from "./PageSlot.vue";
+import { useMenuKeys, focusFirst } from "@/composables/useMenuKeys";
 import { useShellNav, useOpenTabs } from "@/composables/useShellNav";
 
 const nav = useShellNav();
@@ -29,6 +30,13 @@ function toggle(title: string, e: MouseEvent) {
   openTitle.value = title;
 }
 function go(route: string) { openTitle.value = null; nav.navigate(route); }
+const catBar = ref<HTMLElement | null>(null);
+const menuRef = ref<HTMLElement | null>(null);
+const tabBar = ref<HTMLElement | null>(null);
+useMenuKeys(catBar, ".mis-cat", "horizontal");
+useMenuKeys(menuRef, ".sh-tool", "vertical");
+useMenuKeys(tabBar, ".mis-tab", "horizontal");
+watch(openTitle, (t) => { if (t) focusFirst(() => menuRef.value, ".sh-tool"); });
 onClickOutside(barRef, () => { openTitle.value = null; });
 onKeyStroke("Escape", () => { openTitle.value = null; });
 watch(() => nav.route.path, () => { openTitle.value = null; });
@@ -36,7 +44,7 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
 
 <template>
   <div class="sh-shell mis">
-    <div class="mis-tabs" role="tablist" aria-label="Outils ouverts">
+    <div ref="tabBar" class="mis-tabs" role="tablist" aria-label="Outils ouverts">
       <span class="mis-logo">N</span>
       <div
         v-for="path in tabs.tabs.value"
@@ -45,7 +53,10 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
         :aria-selected="nav.isActive(path)"
         class="mis-tab"
         :class="{ active: nav.isActive(path) }"
+        :tabindex="nav.isActive(path) ? 0 : -1"
         @click="nav.navigate(path)"
+        @keydown.enter.prevent="nav.navigate(path)"
+        @keydown.delete.prevent="tabs.close(path)"
       >
         <span v-if="nav.isActive(path)" class="mis-tab__dot" />
         <component :is="tabs.iconOf(path)" v-else :size="13" />
@@ -58,7 +69,7 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
     </div>
 
     <div ref="barRef" class="mis-barwrap">
-      <nav class="mis-bar" aria-label="Sections">
+      <nav ref="catBar" class="mis-bar" aria-label="Sections">
         <button
           v-for="section in nav.sections"
           :key="section.title"
@@ -74,6 +85,7 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
       <Transition name="sh-fade">
         <section
           v-if="openSection"
+          ref="menuRef"
           :key="openSection.title"
           class="mis-menu sh-pop"
           :style="{ left: `${menuLeft + 12}px` }"
@@ -98,7 +110,6 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
 
     <div class="mis-banner">
       <span class="mis-banner__kicker">{{ nav.currentSection.value ? nav.currentSection.value.title.toUpperCase() : "NITRITE" }}</span>
-      <span class="mis-banner__title">{{ nav.pageTitle.value }}</span>
       <span v-if="nav.currentItem.value" class="mis-banner__sub">{{ nav.navDescription(nav.currentItem.value.id) }}</span>
     </div>
 
@@ -150,12 +161,13 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
 .mis-menu { position: absolute; top: calc(100% + 4px); width: 340px; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
 
 .mis-banner {
-  flex-shrink: 0; display: flex; align-items: baseline; gap: 14px; padding: 14px 24px 12px;
+  flex-shrink: 0; display: flex; align-items: baseline; gap: 14px; padding: 8px 24px;
   border-bottom: 1px solid var(--border);
   background: linear-gradient(90deg, var(--accent-subtle, var(--accent-muted)), transparent 60%);
   white-space: nowrap; overflow: hidden;
 }
 .mis-banner__kicker { font-family: "JetBrains Mono", monospace; font-size: 10.5px; letter-spacing: 0.12em; color: var(--accent-primary); }
-.mis-banner__title { font-size: 19px; font-weight: 800; }
 .mis-banner__sub { font-size: 12.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 1280px) { .mis-cat { padding: 6px 8px; font-size: 12px; } }
 </style>
