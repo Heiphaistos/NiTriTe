@@ -11,6 +11,7 @@ import { Search, Settings, ChevronDown } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
 import PageSlot from "./PageSlot.vue";
 import logoUrl from "@/assets/nitrite-logo.jpg";
+import { useMenuKeys, focusFirst } from "@/composables/useMenuKeys";
 import { useShellNav } from "@/composables/useShellNav";
 import type { NavSection } from "@/data/navigation";
 
@@ -21,8 +22,14 @@ const openTitle = ref<string | null>(null);
 const barRef = ref<HTMLElement | null>(null);
 const openSection = computed(() => nav.sections.find(s => s.title === openTitle.value) ?? null);
 
+const catBar = ref<HTMLElement | null>(null);
+const menuRef = ref<HTMLElement | null>(null);
+useMenuKeys(catBar, ".deck-cat", "horizontal");
+useMenuKeys(menuRef, ".sh-tool", "both");
+
 function toggle(section: NavSection) {
   openTitle.value = openTitle.value === section.title ? null : section.title;
+  if (openTitle.value) focusFirst(() => menuRef.value, ".sh-tool");
 }
 function go(route: string) {
   openTitle.value = null;
@@ -51,7 +58,7 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
     </header>
 
     <div ref="barRef" class="deck-barwrap">
-      <nav class="deck-bar" aria-label="Sections">
+      <nav ref="catBar" class="deck-bar" aria-label="Sections">
         <button
           v-for="section in nav.sections"
           :key="section.title"
@@ -69,6 +76,7 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
       <Transition name="sh-fade">
         <section
           v-if="openSection"
+          ref="menuRef"
           :key="openSection.title"
           class="deck-menu sh-pop"
           :aria-label="`Menu ${openSection.title}`"

@@ -10,6 +10,7 @@ import "./assets/styles/shells.css";
 import "./assets/styles/ui-models.css";
 import { logger, setupGlobalErrorHandlers } from "./utils/logger";
 import { useAppStore } from "./stores/app";
+import { useUiModelStore } from "./stores/uiModel";
 
 // ── Logger : intercepteurs globaux (window.onerror, unhandledrejection, console) ──
 setupGlobalErrorHandlers();
@@ -31,5 +32,9 @@ app.use(router);
 // Profil de performance appliqué AVANT le premier rendu (splash compris) :
 // un PC modeste ne doit jamais payer les effets, même quelques secondes.
 useAppStore(pinia).loadPerfMode();
+// Thème et modèle d'interface appliqués avant le premier rendu : l'écran de
+// démarrage prend déjà les couleurs et le style choisis.
+useAppStore(pinia).loadSavedTheme();
+useUiModelStore(pinia).load();
 
 app.mount("#app");
