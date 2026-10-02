@@ -2,6 +2,7 @@
 import { ref, computed, provide, onMounted, onUnmounted, onErrorCaptured, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import NToast from "@/components/ui/NToast.vue";
+import MissionBar from "@/components/mission/MissionBar.vue";
 import NAlertBanner from "@/components/ui/NAlertBanner.vue";
 import SearchModal from "@/components/shared/SearchModal.vue";
 import KeyboardShortcutsModal from "@/components/ui/KeyboardShortcutsModal.vue";
@@ -348,6 +349,7 @@ onMounted(async () => {
           class="app-content-inner"
           :style="{ maxWidth: layoutStore.state.contentMaxWidth === 'full' ? '100%' : layoutStore.state.contentMaxWidth, margin: '0 auto' }"
         >
+          <MissionBar />
           <router-view v-slot="{ Component }">
             <transition name="page">
               <keep-alive :include="persistentPages">
