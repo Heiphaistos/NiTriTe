@@ -19,7 +19,9 @@ La 8.224.0 couvre le diagnostic matériel/logiciel complet, la réparation Windo
 
 ---
 
-## 🆕 Nouveautés de cette version
+## 🆕 Nouveautés
+
+### 8.224.0 — 2 octobre 2026
 
 - **9 modèles d'interface** : Forge (nouveau modèle par défaut), Command Deck, Bento, Console, Orbital, Colonnes, Verre & dock, Mission — et **Classique**, l'interface d'avant, à l'identique. Choix dans Paramètres › Interface ou d'un clic dans la barre d'état ; changer de modèle n'interrompt pas une opération en cours. Toutes les pages, boutons et sous-onglets fonctionnent comme avant.
 - **Mode Mission** : enchaîner les outils d'une intervention (Remise en état PC, PC lent, PC neuf, Après un écran bleu, Problème réseau, Sauvegarde & migration, ou vos propres missions), avec une barre de suivi sur chaque page, des notes par étape et un rapport à copier ou exporter.
@@ -27,6 +29,84 @@ La 8.224.0 couvre le diagnostic matériel/logiciel complet, la réparation Windo
 - **Tableau de bord** propre à chaque modèle (santé, favoris, récents, missions…) et écran de démarrage aux couleurs du thème.
 - **Raccourcis clavier** : Ctrl+1…0 pour les sections, Ctrl+Maj+M pour changer de modèle, Alt+←/→, navigation aux flèches dans tous les menus (aide : touche `?`).
 - **Corrections** : barres de progression qui s'affichaient en rouge à tort (score santé à 100, batterie pleine, fin de scan, de récupération, de sauvegarde et d'image disque).
+
+<details>
+<summary><b>8.221.0 → 8.223.0 — fin septembre 2026</b> : Master Install, profil de performance, panneau web, démarrage rapide</summary>
+
+- **Master Install fiable de bout en bout** : détection des applications déjà installées dès l'ouverture, installation *et* désinstallation en un clic ou par lot (20 apps d'un coup, file annulable, « Réessayer les échecs »), filtres Installées / Non installées, journal winget en direct. Catalogue nettoyé : 723 apps, identifiants WinGet vérifiés contre le dépôt officiel (55 corrigés, 75 ajoutés), plus aucun doublon, profil « Technicien ».
+- **Outils Système** : les commandes chaînées (reset réseau, reset Windows Update, réparation du démarrage…) s'exécutent enfin, avec élévation UAC automatique pour les 43 outils qui l'exigent ; `wmic` (retiré de Windows 11 24H2) remplacé.
+- **Mode performance adaptatif** : Complet / Équilibré / Léger, choisi automatiquement selon le processeur et la mémoire (un double cœur passe en Léger : ni flous, ni animations, démarrage et monitoring allégés).
+- **62 thèmes** (dont 8 nouveaux : Nitrite Light, Carbon AMOLED, Graphite, Contraste élevé…), tous mémorisés au redémarrage.
+- **Menu réorganisé par tâche** en 10 sections ; Monitoring, Turbo Mode et Rapports statistiques y sont désormais accessibles.
+- **[Panneau web](webpanel/README.md)** : NiTriTe sans fenêtre native — un agent léger + l'interface dans le navigateur, avec les mêmes fonctionnalités.
+- **Démarrage bien plus rapide** : tableau de bord en ~8 s au lieu de plus d'une minute avec des lecteurs réseau ; partages réseau 134 s → 0,7 s, pare-feu ~20 s → 0,2 s, historique système 9,5 s → 0,3 s ; un module lent ne bloque plus l'ouverture.
+- **Sécurité** : Control Flow Guard activé, exécutables signés (Authenticode), confirmation Windows native pour les commandes administrateur du Terminal.
+
+</details>
+
+<details>
+<summary><b>8.217.0 → 8.219.0 — mi-septembre 2026</b> : mise à jour automatique</summary>
+
+- **Mise à jour automatique** des versions installée *et* portable : au démarrage, NiTriTe propose lui-même la nouvelle version. La mise à jour ne remplace que l'application — les dossiers `logiciel`, `Drivers` et `Script Windows` ne sont jamais touchés.
+- Deux téléchargements au choix : **portable complet** (aucune trace sur le PC, clé USB) ou **installateur complet**, avec logiciels, pilotes et scripts inclus.
+- **Plus de blocage infini** : 16 opérations système (pilotes, Windows Update, Docker, bcdedit, certificats, pare-feu, inventaire matériel…) ont désormais une limite de temps et rendent la main proprement.
+- La proposition de mise à jour arrive dès l'ouverture de la fenêtre, au lieu d'attendre la fin de l'inventaire de démarrage.
+- Téléchargement de l'IA locale (llama.cpp) réparé et vérifié par empreinte SHA-256.
+
+</details>
+
+<details>
+<summary><b>8.111.0 → 8.216.0 — août 2026</b> : grande campagne de fiabilisation</summary>
+
+- **Fini les faux succès** : nettoyage, Windows Update, winget, cache DNS, désinstallation, signatures Defender, quarantaine, pilotes, démarrage en récupération, corbeille… chaque action affiche désormais son vrai résultat.
+- **Confirmations avant toute action irréversible** : suppression de copies Shadow, de conteneurs Docker, de profils, restauration du MBR (confirmation tapée), outils WinPE (registre SYSTEM, arrêt de processus et de services).
+- **Windows en français** : SFC et DISM détectent enfin correctement l'état du système, plus de fausse mise à jour WinGet, accents corrigés dans une dizaine d'écrans (terminal, sécurité, programmes au démarrage, Chocolatey, Scoop, hosts…).
+- **Sécurité** : correction d'une faille qui pouvait vider les données de l'app via la quarantaine, « Vider le cache Firefox » ne supprime plus tout le profil, chaque redirection de téléchargement est vérifiée.
+- **Plus de gel** : délais maximums sur les appels PowerShell, winget/choco, le monitoring en direct, les instantanés de performance et les connexions réseau.
+- **Messages clairs** à la place des écrans vides et des chargements infinis (diagnostic, SMART, partitions, recherches, filtres, scanner de ports, BSOD…), vraies erreurs de l'IA locale (Ollama / llama.cpp).
+
+</details>
+
+<details>
+<summary><b>8.62.0 → 8.73.0 — juillet 2026 (2)</b> : Master Install 745 apps, navigation sans perte, WinPE réparé</summary>
+
+- **28 boutons d'actions sensibles réparés** (terminer un processus, pare-feu, Bluetooth, registre, points de restauration, DLL, Docker, pilotes…) : leur confirmation ne s'affichait jamais, l'action était annulée à chaque clic.
+- **Master Install** : installation silencieuse réellement fonctionnelle sur les 745 applications, avec chaîne de secours WinGet → Chocolatey → Scoop → téléchargement direct, vérification réelle de chaque installation, temps restant estimé, MAJ et désinstallation par application.
+- **Navigation sans perte** : un scan, une mise à jour, une installation ou un nettoyage en cours continue et garde son affichage quand on change de page.
+- **Mode WinPE** : l'onglet Réparation (effacement disque, SFC / DISM hors ligne, comptes hors ligne, BitLocker) fonctionne enfin réellement.
+- Hash Checker, DNS Switcher, copies Shadow et Éditeur Hosts réparés ; version portable **sans aucune trace** sur le PC client.
+- **Pack complet auto-extractible** (application + logiciels + pilotes + scripts), vidéo d'introduction au démarrage, plus aucun gel de l'interface pendant les commandes longues.
+
+</details>
+
+<details>
+<summary><b>7.59.0 → 8.55.0 — juillet 2026 (1)</b> : Windows français et résultats fiables</summary>
+
+- **Décodage des accents** sur Windows FR pour toutes les sorties d'outils console (pilotes, réseau, WiFi, ARP, bcdedit, journaux, licences, partages…) : fin des caractères illisibles.
+- **Résultats fidèles** : scan antivirus (menaces réellement détectées), installations, MAJ de pilotes, points de restauration, Bluetooth, WSL, historique de performance, top processus.
+- **Exclusions de mise à jour** WinGet / Chocolatey / Scoop enfin respectées.
+- **Sécurité** : protections contre l'injection PowerShell et CSV, confirmation avant d'enregistrer des secrets en clair (mots de passe WiFi, clés BitLocker).
+
+</details>
+
+<details>
+<summary><b>6.1.0 → 6.72.0 — mai à juillet 2026</b> : audits de sécurité et 19 corrections</summary>
+
+- **Audit de sécurité complet** : injections PowerShell, écriture de fichiers arbitraire, chemins traversants, activation Windows sans script distant ; analyse CodeQL et alertes Dependabot automatiques.
+- **19 corrections** : type de RAM DDR4/DDR5, export du scan vers n'importe quel dossier, benchmark, test de débit 50 Mo, traceroute, rapports batterie et certificats exportables, boutons des gestionnaires Windows.
+- Délais maximums sur DISM / SFC / scripts, erreurs réelles affichées au lieu de données simulées.
+
+</details>
+
+<details>
+<summary><b>Mars 2026</b> : NiTriTe 2.0, réécriture complète</summary>
+
+- **Réécriture complète en Rust + Tauri v2 + Vue 3** : démarrage quasi instantané, un seul exécutable portable.
+- **Diagnostic complet** en dizaines d'onglets, monitoring temps réel, score de santé.
+- **IA 100 % locale et portable** : téléchargement automatique de llama.cpp et de modèles GGUF, sans installation.
+- **729 applications portables**, pilotes de base et plus de 50 scripts Windows inclus.
+
+</details>
 
 ---
 
