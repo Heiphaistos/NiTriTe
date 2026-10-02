@@ -81,3 +81,21 @@ Le modèle 03 (HUD) et le modèle 07 (Néo-brutal) ne sont pas retenus.
 
 - Modification du contenu ou de la logique des pages et du backend Rust.
 - Nouvelles polices web (l'application doit rester utilisable hors ligne).
+
+## 7. Évolutions (v2)
+
+- **Thèmes clairs** : 12 nouveaux thèmes clairs (groupe « Thèmes clairs », filtre
+  Tous / Sombres / Clairs) ; tous les thèmes sombres sont conservés. La tonalité
+  (`data-theme-tone`) adapte ombres, verre et halos des modèles.
+- **Petits écrans** : chaque modèle reste lisible en 1280×720 ; plus de titre de page
+  en double entre la coque et la page.
+- **Clavier** : Ctrl+1…0 (sections), Ctrl+Maj+M (modèle suivant), Alt+←/→, Ctrl+B
+  (orbite en Orbital), flèches / Début / Fin dans toutes les barres et menus.
+- **Changement rapide** de modèle depuis la barre d'état ; **écran de démarrage**
+  aux couleurs du thème et du modèle.
+- **Tableau de bord** : en-tête propre à chaque modèle (Classique inchangé).
+- **Mode Mission** : enchaînement guidé d'outils (6 modèles + personnalisés), barre
+  de mission dans tous les modèles, notes, rapport copiable / exportable, historique.
+- **Tests visuels** Playwright en CI (captures publiées en artefact).
+- Corrections : barres de progression rouges à tort (santé 100, batterie pleine,
+  progression de scan / récupération / sauvegarde / image disque).
