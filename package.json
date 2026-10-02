@@ -14,7 +14,7 @@
     "test:visual": "playwright test"
   },
   "dependencies": {
-    "@tauri-apps/api": "2.11",
+    "@tauri-apps/api": "2.12",
     "@tauri-apps/plugin-dialog": "2.7",
     "@tauri-apps/plugin-fs": "2.5",
     "@tauri-apps/plugin-http": "^2.6.0",
