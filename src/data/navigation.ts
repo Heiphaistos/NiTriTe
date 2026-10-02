@@ -22,6 +22,7 @@ export const navigationSections: NavSection[] = [
       { id: "monitoring",    label: "Monitoring",      icon: "activity",         route: "/monitoring" },
       { id: "optimizations", label: "Optimisations",   icon: "zap",              route: "/optimizations" },
       { id: "turbo-mode",    label: "Turbo Mode",      icon: "rocket",           route: "/turbo-mode" },
+      { id: "missions",      label: "Missions",        icon: "list-checks",      route: "/missions" },
     ],
   },
   {

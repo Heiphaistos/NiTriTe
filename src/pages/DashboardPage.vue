@@ -11,6 +11,7 @@ import NCard from "@/components/ui/NCard.vue";
 import NButton from "@/components/ui/NButton.vue";
 import NProgress from "@/components/ui/NProgress.vue";
 import NBadge from "@/components/ui/NBadge.vue";
+import ModelDashboardHero from "@/components/dashboard/ModelDashboardHero.vue";
 import AlertThresholdsModal from "@/components/ui/AlertThresholdsModal.vue";
 import type { AlertThresholds } from "@/utils/alertThresholds";
 import { normalizeThresholds } from "@/utils/alertThresholds";
@@ -300,6 +301,12 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- En-tête propre au modèle d'interface (aucun en Classique) -->
+    <ModelDashboardHero
+      :cpu="cpuUsage" :ram="ramUsage" :disk="diskUsage" :net-down="networkDown"
+      :health="healthScore" :health-label="healthLabel()"
+    />
+
     <!-- Kill error -->
     <div v-if="killError" class="kill-error-bar"><XCircle :size="14" /> {{ killError }}</div>
 
@@ -392,7 +399,7 @@ onUnmounted(() => {
         <div class="health-section">
           <div class="health-score" :style="{ color: healthColor() }">{{ healthScore }}<span class="health-max">/100</span></div>
           <div class="health-label" :style="{ color: healthColor() }">{{ healthLabel() }}</div>
-          <NProgress :value="healthScore" size="lg" />
+          <NProgress :value="healthScore" size="lg" :color="healthScore >= 80 ? 'success' : healthScore >= 50 ? 'warning' : 'danger'" />
           <div class="health-details">
             <div class="health-item">
               <CheckCircle v-if="cpuUsage < thresholds.cpu_warn" :size="14" style="color:var(--success)" />

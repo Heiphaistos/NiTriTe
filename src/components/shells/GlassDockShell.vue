@@ -11,6 +11,7 @@ import { Search, Settings } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
 import PageSlot from "./PageSlot.vue";
 import logoUrl from "@/assets/nitrite-logo.jpg";
+import { useMenuKeys, focusFirst } from "@/composables/useMenuKeys";
 import { useShellNav } from "@/composables/useShellNav";
 
 const nav = useShellNav();
@@ -20,7 +21,14 @@ const openTitle = ref<string | null>(null);
 const openSection = computed(() => nav.sections.find(s => s.title === openTitle.value) ?? null);
 const dockRef = ref<HTMLElement | null>(null);
 
-function toggle(title: string) { openTitle.value = openTitle.value === title ? null : title; }
+const dockBar = ref<HTMLElement | null>(null);
+const menuRef = ref<HTMLElement | null>(null);
+useMenuKeys(dockBar, ".glass-dock__btn", "horizontal");
+useMenuKeys(menuRef, ".sh-tool", "both");
+function toggle(title: string) {
+  openTitle.value = openTitle.value === title ? null : title;
+  if (openTitle.value) focusFirst(() => menuRef.value, ".sh-tool");
+}
 function go(route: string) { openTitle.value = null; nav.navigate(route); }
 onClickOutside(dockRef, () => { openTitle.value = null; });
 onKeyStroke("Escape", () => { openTitle.value = null; });
@@ -35,8 +43,8 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
     <header class="glass-top">
       <img :src="logoUrl" class="sh-logo" alt="NiTriTe" />
       <div class="glass-top__titles">
+        <span class="glass-top__sec">{{ nav.currentSection.value?.title ?? "NiTriTe" }}</span>
         <span class="glass-top__title">{{ nav.pageTitle.value }}</span>
-        <span v-if="nav.currentSection.value" class="glass-top__sec">{{ nav.currentSection.value.title }}</span>
       </div>
       <div class="glass-top__spacer" />
       <button class="sh-search glass-chip" title="Recherche globale (Ctrl+K)" @click="nav.openSearch">
@@ -54,7 +62,7 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
 
     <div ref="dockRef" class="glass-dockwrap">
       <Transition name="sh-fade">
-        <section v-if="openSection" :key="openSection.title" class="glass-menu" :aria-label="`Outils ${openSection.title}`">
+        <section v-if="openSection" ref="menuRef" :key="openSection.title" class="glass-menu" :aria-label="`Outils ${openSection.title}`">
           <span class="glass-menu__title">{{ openSection.title }}</span>
           <div class="glass-menu__grid">
             <button
@@ -73,7 +81,7 @@ watch(() => nav.route.path, () => { openTitle.value = null; });
           </div>
         </section>
       </Transition>
-      <nav class="glass-dock" aria-label="Sections">
+      <nav ref="dockBar" class="glass-dock" aria-label="Sections">
         <button
           v-for="section in nav.sections"
           :key="section.title"
@@ -104,8 +112,8 @@ html[data-perf="light"] .glass-aura { display: none; }
 
 .glass-top { position: relative; z-index: 2; height: 62px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 6px; }
 .glass-top__titles { display: flex; flex-direction: column; min-width: 0; }
-.glass-top__title { font-size: 17px; font-weight: 800; }
-.glass-top__sec { font-size: 11.5px; color: var(--text-muted); }
+.glass-top__title { font-size: 13.5px; font-weight: 700; }
+.glass-top__sec { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
 .glass-top__spacer { flex: 1; }
 .glass-chip {
   background: color-mix(in srgb, var(--bg-secondary) 60%, transparent);
@@ -154,4 +162,10 @@ html[data-perf="light"] .glass-dock__btn:hover { transform: none; }
 }
 .glass-menu__title { display: block; font-weight: 800; font-size: 14px; padding: 0 6px 10px; }
 .glass-menu__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px; }
+
+@media (max-height: 760px) {
+  .glass { padding-bottom: 80px; }
+  .glass-dock__btn { width: 56px; height: 48px; }
+  .glass-dock__label { display: none; }
+}
 </style>

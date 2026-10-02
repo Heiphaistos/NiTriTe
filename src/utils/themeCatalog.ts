@@ -7,6 +7,8 @@
  * Un preset s'applique desormais comme un theme normal, et persiste.
  */
 import { PRESET_THEMES, PRESET_THEME_GROUPS } from "@/stores/themeEditor";
+import { isLightColor } from "@/utils/themeTone";
+export { isLightColor, applyThemeTone } from "@/utils/themeTone";
 
 export interface ThemeEntry {
   id: string;
@@ -87,9 +89,29 @@ function hexToRgb(hex: string): string | null {
   return `${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}`;
 }
 
+/** Tonalité d'un thème du catalogue (CSS ou preset), d'après son fond. */
+export function themeTone(id: string): "light" | "dark" {
+  const entry = CSS_THEMES.find((t) => t.id === id) ?? findVarTheme(id);
+  return entry && isLightColor(entry.background) ? "light" : "dark";
+}
+
+/** Valeurs adaptées aux fonds clairs (les valeurs par défaut sont pensées pour le sombre). */
+const LIGHT_DEFAULTS: Record<string, string> = {
+  "--surface-glass": "rgba(15, 23, 42, 0.035)",
+  "--surface-glass-hover": "rgba(15, 23, 42, 0.065)",
+  "--shadow-sm": "0 1px 2px rgba(15, 23, 42, 0.06)",
+  "--shadow-md": "0 4px 10px rgba(15, 23, 42, 0.08)",
+  "--shadow-lg": "0 10px 24px rgba(15, 23, 42, 0.10)",
+  "--shadow-xl": "0 20px 40px rgba(15, 23, 42, 0.14)",
+  "--shadow-inner": "inset 0 1px 3px rgba(15, 23, 42, 0.08)",
+};
+
 /** Variables derivees calculees a partir des couleurs de base. */
 export function deriveThemeVars(vars: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = { ...vars };
+  if (isLightColor(vars["--bg-primary"] ?? "")) {
+    for (const [k, v] of Object.entries(LIGHT_DEFAULTS)) if (!out[k]) out[k] = v;
+  }
   const accent = hexToRgb(vars["--accent-primary"] ?? "");
   if (accent) {
     out["--accent-muted"] = `rgba(${accent}, 0.12)`;

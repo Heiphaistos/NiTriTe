@@ -8,6 +8,7 @@ export const navDescriptions: Record<string, string> = {
   "monitoring": "CPU, RAM, disques et réseau en direct",
   "optimizations": "Réglages Windows et services",
   "turbo-mode": "Performances maximales en un clic",
+  "missions": "Enchaîner les outils d'une intervention",
   "master-install": "Installer des centaines d'apps en lot",
   "portables": "Applications sans installation",
   "uninstaller": "Désinstaller proprement, sans résidus",

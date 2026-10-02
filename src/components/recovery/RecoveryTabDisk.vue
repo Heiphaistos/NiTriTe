@@ -249,7 +249,7 @@ onMounted(loadDisks);
       <!-- Progression -->
       <div v-if="recovering || recoverProgress > 0" class="progress-section">
         <div class="progress-header"><NSpinner v-if="recovering" :size="14" /><span>{{ recoverMsg }}</span></div>
-        <NProgress :value="recoverProgress" showLabel size="lg" />
+        <NProgress :value="recoverProgress" showLabel size="lg" color="accent" />
       </div>
 
       <!-- Résultat -->

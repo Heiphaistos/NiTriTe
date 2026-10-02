@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { applyThemeTone, isLightColor } from "@/utils/themeTone";
 import { ref, computed } from "vue";
 
 export interface CustomSavedTheme {
@@ -323,12 +324,65 @@ export const PRESET_THEMES: { id: string; label: string; accent: string; vars: R
     id: "deep-sea-light", label: "Paper (Clair, lecture)", accent: "#2563eb",
     vars: { "--bg-primary": "#fbfaf6", "--bg-secondary": "#f4f1e8", "--bg-tertiary": "#e9e4d4", "--bg-elevated": "#d9d2bc", "--accent-primary": "#2563eb", "--accent-hover": "#3b82f6", "--text-primary": "#1f1d17", "--text-secondary": "#4a463a", "--text-muted": "#7b7563", "--border": "#e4ddc9", "--border-hover": "#d9d2bc", "--success": "#15803d", "--warning": "#a16207", "--danger": "#b91c1c", "--info": "#1d4ed8", "--radius-sm": "4px", "--radius-md": "6px", "--radius-lg": "10px", "--radius-xl": "14px" },
   },
+  // ── THÈMES CLAIRS ────────────────────────────────────────────────────────
+  {
+    id: "forge-light", label: "Forge (Clair)", accent: "#ea580c",
+    vars: { "--bg-primary": "#fbfaf8", "--bg-secondary": "#ffffff", "--bg-tertiary": "#f3efe9", "--bg-elevated": "#e7e0d6", "--accent-primary": "#ea580c", "--accent-hover": "#f97316", "--text-primary": "#1c1410", "--text-secondary": "#57483c", "--text-muted": "#8a7a6c", "--border": "#e9e2d8", "--border-hover": "#d9cfc2", "--success": "#15803d", "--warning": "#b45309", "--danger": "#b91c1c", "--info": "#1d4ed8", "--radius-sm": "6px", "--radius-md": "10px", "--radius-lg": "14px", "--radius-xl": "18px" },
+  },
+  {
+    id: "snow-light", label: "Neige (Clair)", accent: "#2563eb",
+    vars: { "--bg-primary": "#f8fafc", "--bg-secondary": "#ffffff", "--bg-tertiary": "#eef2f7", "--bg-elevated": "#e2e8f0", "--accent-primary": "#2563eb", "--accent-hover": "#3b82f6", "--text-primary": "#0f172a", "--text-secondary": "#334155", "--text-muted": "#64748b", "--border": "#e2e8f0", "--border-hover": "#cbd5e1", "--success": "#15803d", "--warning": "#b45309", "--danger": "#b91c1c", "--info": "#1d4ed8", "--radius-sm": "6px", "--radius-md": "10px", "--radius-lg": "14px", "--radius-xl": "18px" },
+  },
+  {
+    id: "lavender-light", label: "Lavande (Clair)", accent: "#7c3aed",
+    vars: { "--bg-primary": "#faf8ff", "--bg-secondary": "#ffffff", "--bg-tertiary": "#f1edfc", "--bg-elevated": "#e4dcf9", "--accent-primary": "#7c3aed", "--accent-hover": "#8b5cf6", "--text-primary": "#1e1433", "--text-secondary": "#4c3d6e", "--text-muted": "#7e72a0", "--border": "#e8e1f8", "--border-hover": "#d6cbf3", "--success": "#15803d", "--warning": "#b45309", "--danger": "#b91c1c", "--info": "#1d4ed8", "--radius-sm": "6px", "--radius-md": "10px", "--radius-lg": "14px", "--radius-xl": "18px" },
+  },
+  {
+    id: "sand-light", label: "Sable (Clair)", accent: "#b45309",
+    vars: { "--bg-primary": "#fbf8f1", "--bg-secondary": "#fffdf8", "--bg-tertiary": "#f3ecdc", "--bg-elevated": "#e8dcc2", "--accent-primary": "#b45309", "--accent-hover": "#d97706", "--text-primary": "#26200f", "--text-secondary": "#5c4f30", "--text-muted": "#8c7d5c", "--border": "#ece2cc", "--border-hover": "#dccdab", "--success": "#15803d", "--warning": "#a16207", "--danger": "#b91c1c", "--info": "#1d4ed8", "--radius-sm": "6px", "--radius-md": "10px", "--radius-lg": "14px", "--radius-xl": "18px" },
+  },
+  {
+    id: "sky-light", label: "Ciel (Clair)", accent: "#0284c7",
+    vars: { "--bg-primary": "#f5fbff", "--bg-secondary": "#ffffff", "--bg-tertiary": "#e8f4fc", "--bg-elevated": "#d3eaf8", "--accent-primary": "#0284c7", "--accent-hover": "#0ea5e9", "--text-primary": "#082f49", "--text-secondary": "#215270", "--text-muted": "#5b8199", "--border": "#dcedf8", "--border-hover": "#c2dff2", "--success": "#15803d", "--warning": "#b45309", "--danger": "#b91c1c", "--info": "#1d4ed8", "--radius-sm": "6px", "--radius-md": "10px", "--radius-lg": "14px", "--radius-xl": "18px" },
+  },
+  {
+    id: "rose-light", label: "Rosé (Clair)", accent: "#e11d48",
+    vars: { "--bg-primary": "#fff8f9", "--bg-secondary": "#ffffff", "--bg-tertiary": "#fdecef", "--bg-elevated": "#fad6dd", "--accent-primary": "#e11d48", "--accent-hover": "#f43f5e", "--text-primary": "#2a0b13", "--text-secondary": "#6b2638", "--text-muted": "#a0647a", "--border": "#f8dfe5", "--border-hover": "#f0c4cf", "--success": "#15803d", "--warning": "#b45309", "--danger": "#9f1239", "--info": "#1d4ed8", "--radius-sm": "6px", "--radius-md": "10px", "--radius-lg": "14px", "--radius-xl": "18px" },
+  },
+  {
+    id: "sage-light", label: "Sauge (Clair)", accent: "#4d7c0f",
+    vars: { "--bg-primary": "#f8faf5", "--bg-secondary": "#ffffff", "--bg-tertiary": "#edf2e6", "--bg-elevated": "#dde7d0", "--accent-primary": "#4d7c0f", "--accent-hover": "#65a30d", "--text-primary": "#18230b", "--text-secondary": "#3f5126", "--text-muted": "#71805f", "--border": "#e1e9d6", "--border-hover": "#cbd8bb", "--success": "#15803d", "--warning": "#b45309", "--danger": "#b91c1c", "--info": "#1d4ed8", "--radius-sm": "6px", "--radius-md": "10px", "--radius-lg": "14px", "--radius-xl": "18px" },
+  },
+  {
+    id: "slate-light", label: "Ardoise (Clair)", accent: "#4f46e5",
+    vars: { "--bg-primary": "#f6f7f9", "--bg-secondary": "#ffffff", "--bg-tertiary": "#eceef3", "--bg-elevated": "#dfe2ea", "--accent-primary": "#4f46e5", "--accent-hover": "#6366f1", "--text-primary": "#111827", "--text-secondary": "#374151", "--text-muted": "#6b7280", "--border": "#e3e6ec", "--border-hover": "#ccd1db", "--success": "#15803d", "--warning": "#b45309", "--danger": "#b91c1c", "--info": "#1d4ed8", "--radius-sm": "4px", "--radius-md": "6px", "--radius-lg": "10px", "--radius-xl": "12px" },
+  },
+  {
+    id: "solarized-light", label: "Solarized Light", accent: "#268bd2",
+    vars: { "--bg-primary": "#fdf6e3", "--bg-secondary": "#fffbef", "--bg-tertiary": "#eee8d5", "--bg-elevated": "#e3dcc6", "--accent-primary": "#268bd2", "--accent-hover": "#2aa1f5", "--text-primary": "#073642", "--text-secondary": "#586e75", "--text-muted": "#839496", "--border": "#e6dfc8", "--border-hover": "#d6ceb4", "--success": "#859900", "--warning": "#b58900", "--danger": "#dc322f", "--info": "#268bd2", "--radius-sm": "4px", "--radius-md": "6px", "--radius-lg": "8px", "--radius-xl": "12px" },
+  },
+  {
+    id: "github-light", label: "GitHub Light", accent: "#0969da",
+    vars: { "--bg-primary": "#ffffff", "--bg-secondary": "#f6f8fa", "--bg-tertiary": "#eaeef2", "--bg-elevated": "#d0d7de", "--accent-primary": "#0969da", "--accent-hover": "#218bff", "--text-primary": "#1f2328", "--text-secondary": "#59636e", "--text-muted": "#818b98", "--border": "#d1d9e0", "--border-hover": "#c3ccd5", "--success": "#1a7f37", "--warning": "#9a6700", "--danger": "#d1242f", "--info": "#0969da", "--radius-sm": "4px", "--radius-md": "6px", "--radius-lg": "8px", "--radius-xl": "12px" },
+  },
+  {
+    id: "catppuccin-latte", label: "Catppuccin Latte", accent: "#8839ef",
+    vars: { "--bg-primary": "#eff1f5", "--bg-secondary": "#e6e9ef", "--bg-tertiary": "#dce0e8", "--bg-elevated": "#ccd0da", "--accent-primary": "#8839ef", "--accent-hover": "#9d5cf5", "--text-primary": "#4c4f69", "--text-secondary": "#5c5f77", "--text-muted": "#8c8fa1", "--border": "#ccd0da", "--border-hover": "#bcc0cc", "--success": "#40a02b", "--warning": "#df8e1d", "--danger": "#d20f39", "--info": "#1e66f5", "--radius-sm": "6px", "--radius-md": "10px", "--radius-lg": "14px", "--radius-xl": "18px" },
+  },
+  {
+    id: "nord-light", label: "Nord Snow Storm", accent: "#5e81ac",
+    vars: { "--bg-primary": "#eceff4", "--bg-secondary": "#f5f7fa", "--bg-tertiary": "#e5e9f0", "--bg-elevated": "#d8dee9", "--accent-primary": "#5e81ac", "--accent-hover": "#81a1c1", "--text-primary": "#2e3440", "--text-secondary": "#3b4252", "--text-muted": "#6b7489", "--border": "#d8dee9", "--border-hover": "#c5ccd8", "--success": "#5f8c4a", "--warning": "#c08b30", "--danger": "#bf616a", "--info": "#5e81ac", "--radius-sm": "6px", "--radius-md": "10px", "--radius-lg": "14px", "--radius-xl": "18px" },
+  },
 ];
 
 export const PRESET_THEME_GROUPS = [
   {
     label: "✨ Nouveautés",
-    ids: ["nitrite-light","carbon","graphite","high-contrast","midnight-purple","mint-light","sunset-dusk","deep-sea-light"],
+    ids: ["carbon","graphite","high-contrast","midnight-purple","sunset-dusk"],
+  },
+  {
+    label: "☀️ Thèmes clairs",
+    ids: ["nitrite-light","forge-light","snow-light","lavender-light","sand-light","sky-light","rose-light","sage-light","slate-light","mint-light","deep-sea-light","solarized-light","github-light","catppuccin-latte","nord-light"],
   },
   {
     label: "🎨 Nitrite Originals",
@@ -403,6 +457,7 @@ export const useThemeEditorStore = defineStore("themeEditor", () => {
         if (rgb) document.documentElement.style.setProperty("--info-muted", `rgba(${rgb}, 0.12)`);
       }
     }
+    applyThemeTone(isLightColor(editingVars.value["--bg-primary"] ?? "") ? "light" : "dark");
   }
 
   function clearDocumentVars() {

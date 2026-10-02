@@ -10,6 +10,7 @@ import { Search, Settings } from "lucide-vue-next";
 import AppStatusBar from "@/components/layout/AppStatusBar.vue";
 import PageSlot from "./PageSlot.vue";
 import logoUrl from "@/assets/nitrite-logo.jpg";
+import { useMenuKeys } from "@/composables/useMenuKeys";
 import { useShellNav } from "@/composables/useShellNav";
 
 const nav = useShellNav();
@@ -20,6 +21,11 @@ const selectedTitle = ref(nav.currentSection.value?.title ?? nav.sections[0].tit
 watch(() => nav.currentSection.value?.title, (t) => { if (t) selectedTitle.value = t; });
 const selected = computed(() => nav.sections.find(s => s.title === selectedTitle.value) ?? nav.sections[0]);
 
+const rail = ref<HTMLElement | null>(null);
+const panel = ref<HTMLElement | null>(null);
+useMenuKeys(rail, ".bento-rail__btn", "vertical");
+useMenuKeys(panel, ".bento-tool, .bento-pin", "vertical");
+
 function pick(title: string) {
   selectedTitle.value = title;
   panelHidden.value = false;
@@ -28,7 +34,7 @@ function pick(title: string) {
 
 <template>
   <div class="sh-shell bento">
-    <nav class="bento-rail" aria-label="Sections">
+    <nav ref="rail" class="bento-rail" aria-label="Sections">
       <img :src="logoUrl" class="sh-logo bento-logo" alt="NiTriTe" />
       <button
         v-for="section in nav.sections"
@@ -50,7 +56,7 @@ function pick(title: string) {
       </button>
     </nav>
 
-    <section v-show="!panelHidden" class="bento-panel sh-scroll" :aria-label="`Sous-menu ${selected.title}`">
+    <section v-show="!panelHidden" ref="panel" class="bento-panel sh-scroll" :aria-label="`Sous-menu ${selected.title}`">
       <span class="bento-panel__title">{{ selected.title }}</span>
       <button
         v-for="item in selected.items"
@@ -85,7 +91,7 @@ function pick(title: string) {
     <div class="sh-main bento-main">
       <header class="bento-head">
         <div class="bento-head__titles">
-          <span class="bento-head__title">{{ nav.pageTitle.value }}</span>
+          <span class="bento-head__kicker">{{ nav.currentSection.value?.title ?? "NiTriTe" }} · {{ nav.pageTitle.value }}</span>
           <span v-if="nav.currentItem.value" class="bento-head__sub">{{ nav.navDescription(nav.currentItem.value.id) }}</span>
         </div>
         <button class="sh-search bento-head__search" title="Recherche globale (Ctrl+K)" @click="nav.openSearch">
@@ -145,8 +151,8 @@ function pick(title: string) {
 .bento-main { padding: 12px 12px 0; }
 .bento-head { display: flex; align-items: center; gap: 16px; padding: 4px 8px 12px; }
 .bento-head__titles { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.bento-head__title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
-.bento-head__sub { font-size: 12.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bento-head__kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bento-head__sub { font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bento-head__search { width: 240px; border-radius: 12px; }
 .bento-stage {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
@@ -154,4 +160,6 @@ function pick(title: string) {
   background: var(--bg-secondary); overflow: hidden;
 }
 .bento-main :deep(.status-bar) { margin: 0 -12px; }
+
+@media (max-width: 1280px) { .bento-panel { width: 220px; } .bento-head__search { width: auto; } }
 </style>
