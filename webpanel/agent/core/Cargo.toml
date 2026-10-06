@@ -32,7 +32,7 @@ tauri-plugin-opener = { path = "../crates/plugins/opener" }
 tauri-plugin-updater = { path = "../crates/plugins/updater" }
 
 # Dependances de NiTriTe (src-tauri/Cargo.toml), a garder alignees
-minisign-verify = "0.2"
+minisign-verify = "0.3"
 base64 = "0.22"
 semver = "1"
 sysinfo = "0.39"
