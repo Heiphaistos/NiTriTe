@@ -1,7 +1,7 @@
 {
   "name": "nitrite",
   "private": true,
-  "version": "8.224.0",
+  "version": "8.225.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -48,6 +48,6 @@
     "typescript": "^6.0.3",
     "vite": "^8.3.1",
     "vitest": "^5.0.0",
-    "vue-tsc": "^3.3.7"
+    "vue-tsc": "3.3.11"
   }
 }
