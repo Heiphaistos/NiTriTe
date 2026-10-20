@@ -582,7 +582,7 @@ fn extract_all_zip(zip_path: &str, dest_dir: &str) -> Result<(), String> {
         let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
         if entry.is_dir() { continue; }
         // Extraire seulement les fichiers utiles (exe, dll, so)
-        let name = entry.name().to_string();
+        let name = entry.name().map_err(|e| e.to_string())?.to_string();
         let basename = name.split('/').next_back().unwrap_or(&name);
         let ext = basename.rsplit('.').next().unwrap_or("").to_lowercase();
         if !["exe", "dll", "so", "dylib"].contains(&ext.as_str()) { continue; }

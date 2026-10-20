@@ -3,7 +3,7 @@
 # dans le code de NiTriTe renvoie donc la bonne version. Le script
 # scripts/sync-version met la version a jour.
 name = "nitrite"
-version = "8.224.0"
+version = "8.225.0"
 edition.workspace = true
 license.workspace = true
 publish = false
@@ -51,7 +51,7 @@ dirs = "6"
 open = "5"
 walkdir = "2"
 regex = "1"
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 sha2 = "0.11"
 
 [target.'cfg(windows)'.dependencies]
