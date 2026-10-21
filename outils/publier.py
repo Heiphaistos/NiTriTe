@@ -40,7 +40,7 @@ SEPTZIP = r"C:\Program Files\7-Zip\7z.exe"
 STUB = os.path.join(RACINE, "tools", "7zSD.sfx")
 SORTIE = os.path.join(RACINE, "release")
 CONTENU = ["logiciel", "Drivers", "Script Windows"]
-VPS = "root@<IP_VPS>"
+VPS = os.environ["FORGE_VPS"]  # ex. user@hote, defini hors depot
 VPS_DIR = "/var/www/nitrite-maj"
 BASE_URL = "https://nitrite.heiphaistos.org/maj"
 
