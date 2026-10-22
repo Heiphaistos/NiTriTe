@@ -54,7 +54,7 @@ tracing-appender = "0.2"
 # Utilitaires
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
-dirs = "6"
+dirs = "7"
 open = "5"
 walkdir = "2"
 regex = "1"
