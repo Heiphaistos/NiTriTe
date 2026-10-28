@@ -3,7 +3,7 @@
 # dans le code de NiTriTe renvoie donc la bonne version. Le script
 # scripts/sync-version met la version a jour.
 name = "nitrite"
-version = "8.225.0"
+version = "8.226.0"
 edition.workspace = true
 license.workspace = true
 publish = false
@@ -33,7 +33,7 @@ tauri-plugin-updater = { path = "../crates/plugins/updater" }
 
 # Dependances de NiTriTe (src-tauri/Cargo.toml), a garder alignees
 minisign-verify = "0.3"
-base64 = "0.22"
+base64 = "0.23"
 semver = "1"
 sysinfo = "0.39"
 tokio.workspace = true
@@ -47,7 +47,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
-dirs = "6"
+dirs = "7"
 open = "5"
 walkdir = "2"
 regex = "1"
@@ -56,7 +56,7 @@ sha2 = "0.11"
 
 [target.'cfg(windows)'.dependencies]
 wmi = "0.18"
-winreg = "0.52"
+winreg = "0.56"
 windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_System_Com",
