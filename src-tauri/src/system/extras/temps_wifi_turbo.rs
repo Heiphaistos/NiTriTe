@@ -536,14 +536,12 @@ fn apply_turbo_mode_blocking(mode: String) -> Result<TurboResult, String> {
                 Ok(n) => done.push(format!("Mémoire libérée ({} processus allégés)", n)),
                 Err(e) => errors.push(format!("Libération mémoire : {e}")),
             }
-            match ps_ok(r#"$protected = @('svchost','System','Registry','lsass','csrss','smss','winlogon','wininit','lsm','dwm','fontdrvhost','msseces','msmpeng','avgnt','avp','bdagent','ekrn','mbam','backupclient','veeam','veamagent','mmagent','nessus','falconhost')
-$n = 0
-Get-Process | Where-Object { $_.CPU -lt 0.1 -and $_.WorkingSet -gt 1GB -and $_.SessionId -ne 0 -and $_.Name -notin $protected } |
-    ForEach-Object { try { Stop-Process -Id $_.Id -Force -ErrorAction Stop; $n++ } catch {} }
-Write-Output $n"#) {
-                Ok(n) => done.push(format!("Processus inutiles terminés ({})", n)),
-                Err(e) => errors.push(format!("Processus inutiles : {e}")),
-            }
+            // Retiré sur demande de Momo : le mode turbo ne tue plus les processus
+            // « inutiles » (WorkingSet > 1 Go, CPU < 0,1 %). Le critère était une
+            // heuristique dangereuse — un gros logiciel légitime momentanément
+            // inactif (éditeur, machine virtuelle, jeu en pause) pouvait être tué
+            // de force, avec perte de données. Vider la RAM standby (EmptyWorkingSet
+            // ci-dessus) et le plan haute performance suffisent, sans rien fermer.
             run(PS_HW_SCH, "GPU Hardware Scheduling activé", "GPU Hardware Scheduling", &mut done, &mut errors);
         }
     }

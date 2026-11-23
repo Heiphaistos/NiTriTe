@@ -518,13 +518,14 @@ async fn cleanup_on_exit(app: tauri::AppHandle, state: tauri::State<'_, AppState
             }
         }
 
-        // 6. WebView2 data (cookies, cache) du dossier EBWebView
-        if let Ok(appdata) = std::env::var("APPDATA") {
-            let webview_cache = std::path::PathBuf::from(&appdata).join("com.nitrite.tool");
-            for sub in &["logs", "tmp", "cache"] {
-                let p = webview_cache.join(sub);
-                if p.exists() { let _ = std::fs::remove_dir_all(&p); }
-            }
+        // 6. Mode zero-trace : les donnees WebView2 (EBWebView dans
+        //    %LOCALAPPDATA%\com.nitrite.tool) sont VERROUILLEES tant que la
+        //    fenetre est ouverte — impossible de les supprimer depuis le
+        //    processus en cours (c'est le defaut qui laissait une trace et
+        //    risquait de corrompre le profil). On delegue donc leur suppression
+        //    a un nettoyeur DETACHE qui attend la fin de nitrite.exe puis efface.
+        if crate::utils::config::AppConfig::load().zero_trace {
+            spawn_detached_trace_cleaner();
         }
     })
     .await
@@ -534,6 +535,45 @@ async fn cleanup_on_exit(app: tauri::AppHandle, state: tauri::State<'_, AppState
     app.exit(0);
     Ok(())
 }
+
+/// Lance un script de nettoyage DETACHE (hors de l'arbre de processus de NiTriTe,
+/// donc il survit a la fermeture) qui attend la disparition de nitrite.exe puis
+/// efface les traces laissees sur le PC du client : donnees WebView2, dossiers
+/// %LOCALAPPDATA%/%APPDATA%\com.nitrite.tool, et se supprime lui-meme.
+/// Ne touche PAS aux livrables volontaires (sauvegardes, telechargements).
+#[cfg(target_os = "windows")]
+fn spawn_detached_trace_cleaner() {
+    use std::os::windows::process::CommandExt;
+    // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW : aucune
+    // console, groupe de processus independant -> ne meurt pas avec l'app.
+    const DETACHED: u32 = 0x0000_0008 | 0x0000_0200 | 0x0800_0000;
+
+    let pid = std::process::id();
+    // Nom de script unique pour ne pas collisionner entre deux instances.
+    let script = std::env::temp_dir().join(format!("nitrite_cleanup_{pid}.cmd"));
+    // %~f0 = le script lui-meme (auto-suppression finale). On attend la fin du
+    // PID exact (pas juste le nom) pour ne pas effacer sous une 2e instance.
+    let body = format!(
+        "@echo off\r\n\
+         :wait\r\n\
+         tasklist /FI \"PID eq {pid}\" | find \"{pid}\" >nul && (ping -n 2 127.0.0.1 >nul & goto wait)\r\n\
+         rmdir /s /q \"%LOCALAPPDATA%\\com.nitrite.tool\" 2>nul\r\n\
+         rmdir /s /q \"%APPDATA%\\com.nitrite.tool\" 2>nul\r\n\
+         rmdir /s /q \"%LOCALAPPDATA%\\Nitrite\" 2>nul\r\n\
+         del /f /q \"%TEMP%\\nitrite*\" 2>nul\r\n\
+         del \"%~f0\" 2>nul\r\n"
+    );
+    if std::fs::write(&script, body).is_err() {
+        return;
+    }
+    let _ = std::process::Command::new("cmd")
+        .args(["/c", &script.to_string_lossy()])
+        .creation_flags(DETACHED)
+        .spawn();
+}
+
+#[cfg(not(target_os = "windows"))]
+fn spawn_detached_trace_cleaner() {}
 
 // === Backup ===
 

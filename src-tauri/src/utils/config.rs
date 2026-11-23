@@ -48,6 +48,12 @@ pub struct AppConfig {
     pub font_size: String,
     #[serde(default = "default_json")]
     pub export_format: String,
+    /// Mode zero-trace (defaut: actif). A la fermeture, NiTriTe efface les traces
+    /// qu'il laisse sur le PC d'un client : donnees WebView2 (EBWebView), dossiers
+    /// %LOCALAPPDATA%/%APPDATA%\com.nitrite.tool, journaux et fichiers temporaires.
+    /// Les livrables volontaires (sauvegardes, telechargements) ne sont pas touches.
+    #[serde(default = "default_true")]
+    pub zero_trace: bool,
     /// Reglages purement interface (onglets Performance / Notifications de la
     /// page Parametres : `notif_*`, `auto_save`, `gpu_acceleration`...). Sans ce
     /// champ, serde les jetait en silence et la page annoncait « sauvegardes »
@@ -76,6 +82,7 @@ impl Default for AppConfig {
             process_count: 10,
             font_size: "normal".to_string(),
             export_format: "json".to_string(),
+            zero_trace: true,
             extra: serde_json::Map::new(),
         }
     }

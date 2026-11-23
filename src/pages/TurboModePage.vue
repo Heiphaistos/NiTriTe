@@ -14,7 +14,7 @@ const notify    = useNotificationStore();
 const dataCache = useDataCache();
 
 const modes = [
-  { id: "turbo",  label: "Mode Turbo", icon: Zap,       color: "#f97316", grad: "linear-gradient(135deg,#f97316,#ea580c)", description: "Libère la RAM, vide le DNS, maximise les performances CPU/GPU. Usage général.", actions: ["Plan haute performance","Cache DNS vidé","RAM libérée","GPU Scheduling","Processus inutiles terminés"] },
+  { id: "turbo",  label: "Mode Turbo", icon: Zap,       color: "#f97316", grad: "linear-gradient(135deg,#f97316,#ea580c)", description: "Libère la RAM, vide le DNS, maximise les performances CPU/GPU. Usage général.", actions: ["Plan haute performance","Cache DNS vidé","RAM libérée","GPU Scheduling"] },
   { id: "gaming", label: "Gaming",     icon: Gamepad2,  color: "#8b5cf6", grad: "linear-gradient(135deg,#8b5cf6,#7c3aed)", description: "Optimisé FPS : haute performance, GPU Hardware Scheduling, Game Mode Windows activé.", actions: ["Plan haute performance","Xbox Game Bar OFF","GPU HW Scheduling","Game Mode ON"] },
   { id: "work",   label: "Travail",    icon: Briefcase, color: "#3b82f6", grad: "linear-gradient(135deg,#3b82f6,#2563eb)", description: "Équilibre perf/batterie. Effets visuels réduits. Presse-papiers nettoyé.", actions: ["Plan équilibré","Effets visuels optimisés","Clipboard vidé"] },
   { id: "eco",    label: "Économie",   icon: Leaf,      color: "#22c55e", grad: "linear-gradient(135deg,#22c55e,#16a34a)", description: "Économise la batterie au maximum. Plan économie d'énergie. Luminosité réduite.", actions: ["Plan économie d'énergie","Luminosité 50%"] },

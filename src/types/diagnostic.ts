@@ -66,7 +66,7 @@ export interface AppConfig {
   ai_backend: string; llamacpp_server_path: string; llamacpp_model_path: string; llamacpp_port: number
   monitor_interval_ms: number; show_animations: boolean; compact_mode: boolean
   notifications_enabled: boolean; process_count: number; font_size: string; export_format: string
-  auto_save?: boolean; disk_cache_enabled?: boolean; gpu_acceleration?: boolean; background_tasks?: boolean
+  auto_save?: boolean; zero_trace?: boolean; disk_cache_enabled?: boolean; gpu_acceleration?: boolean; background_tasks?: boolean
   max_history_entries?: number; auto_refresh_dashboard?: boolean; dashboard_refresh_ms?: number
   notif_sounds?: boolean; notif_desktop?: boolean; notif_errors?: boolean; notif_success?: boolean
   notif_position?: string

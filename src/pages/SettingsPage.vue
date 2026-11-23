@@ -16,7 +16,7 @@ import { checkForUpdate, majAutoActive, setMajAuto } from "@/composables/useAuto
 import {
   Settings, Palette, Bot, Download, Info,
   Save, RotateCcw, Wifi, CheckCircle, XCircle, FolderOpen,
-  Upload, Zap, Bell,
+  Upload, Zap, Bell, Shield,
 } from "lucide-vue-next";
 
 const PERF_MODES: PerfMode[] = ["auto", "full", "balanced", "light"];
@@ -47,6 +47,7 @@ const monitorInterval = ref(2000);
 const processCount = ref(10);
 const sidebarDefault = ref(false);
 const autoSave = ref(false);
+const zeroTrace = ref(true);
 const exportFormat = ref<"json" | "txt" | "html" | "md">("json");
 // Performance settings
 const diskCacheEnabled = ref(true);
@@ -92,6 +93,7 @@ onMounted(async () => {
     sidebarDefault.value       = cfg.sidebar_collapsed      ?? false;
     exportFormat.value         = (cfg.export_format ?? "json") as "json" | "txt" | "html" | "md";
     autoSave.value             = cfg.auto_save              ?? false;
+    zeroTrace.value            = cfg.zero_trace             ?? true;
     diskCacheEnabled.value     = cfg.disk_cache_enabled     ?? true;
     gpuAcceleration.value      = cfg.gpu_acceleration       ?? true;
     backgroundTasks.value      = cfg.background_tasks       ?? true;
@@ -196,6 +198,7 @@ async function saveSettings() {
         font_size:               appStore.fontSize,
         export_format:           exportFormat.value,
         auto_save:               autoSave.value,
+        zero_trace:              zeroTrace.value,
         disk_cache_enabled:      diskCacheEnabled.value,
         gpu_acceleration:        gpuAcceleration.value,
         background_tasks:        backgroundTasks.value,
@@ -608,6 +611,12 @@ const tabs: { id: Tab; label: string; icon: Component }[] = [
               </button>
             </div>
             <NToggle v-model="majAuto" label="Rechercher les mises à jour automatiquement (au démarrage puis toutes les 6 h)" @update:model-value="setMajAuto" />
+          </div>
+
+          <div class="about-card">
+            <p class="about-name" style="font-size:1rem"><Shield :size="15" /> Mode zéro trace</p>
+            <p class="about-sub">À la fermeture, Nitrite efface les traces qu'il laisse sur le PC du client : données WebView2, dossiers <code>com.nitrite.tool</code> (AppData), journaux et fichiers temporaires. Vos livrables (sauvegardes, téléchargements) ne sont jamais supprimés.</p>
+            <NToggle :modelValue="zeroTrace" label="Effacer toutes les traces à la fermeture (recommandé pour une intervention client)" @update:modelValue="zeroTrace = $event; markChanged()" />
           </div>
 
           <div class="about-rows">
