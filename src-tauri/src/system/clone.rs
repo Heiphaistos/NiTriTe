@@ -329,7 +329,7 @@ fn is_admin() -> bool {
             .args(["/groups"])
             .creation_flags(0x08000000)
             .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).contains("S-1-16-12288"))
+            .map(|o| crate::maintenance::commands::decode_output(&o.stdout).contains("S-1-16-12288"))
             .unwrap_or(false)
     }
     #[cfg(not(target_os = "windows"))]

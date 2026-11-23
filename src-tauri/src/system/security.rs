@@ -44,7 +44,7 @@ fn run_ps(script: &str) -> String {
         .creation_flags(0x08000000)
         .output();
     match out {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        Ok(o) => crate::maintenance::commands::decode_output(&o.stdout).trim().to_string(),
         Err(_) => String::new(),
     }
 }

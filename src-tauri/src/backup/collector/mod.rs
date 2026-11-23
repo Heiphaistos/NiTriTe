@@ -84,7 +84,7 @@ fn run_ps_temp(script: &str) -> Result<String, NiTriTeError> {
     // Cleanup garanti quel que soit le résultat
     let _ = std::fs::remove_file(&tmp);
 
-    Ok(String::from_utf8_lossy(&result?.stdout).to_string())
+    Ok(crate::maintenance::commands::decode_output(&result?.stdout).to_string())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -371,6 +371,6 @@ mod timeout_tests {
     fn output_timeout_returns_output_of_quick_command() {
         let o = Command::new("cmd").args(["/c", "echo", "ok"]).output_timeout().unwrap();
         assert!(o.status.success());
-        assert!(String::from_utf8_lossy(&o.stdout).contains("ok"));
+        assert!(crate::maintenance::commands::decode_output(&o.stdout).contains("ok"));
     }
 }

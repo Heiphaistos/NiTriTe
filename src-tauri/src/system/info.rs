@@ -147,7 +147,7 @@ fn nvidia_vram_map() -> HashMap<String, f64> {
     let Ok(out) = output else { return map };
     if !out.status.success() { return map; }
 
-    for line in String::from_utf8_lossy(&out.stdout).lines() {
+    for line in crate::maintenance::commands::decode_output(&out.stdout).lines() {
         let parts: Vec<&str> = line.splitn(2, ',').collect();
         if parts.len() == 2 {
             let name = parts[0].trim().to_lowercase();

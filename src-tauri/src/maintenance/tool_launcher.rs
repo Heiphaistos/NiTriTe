@@ -144,7 +144,7 @@ pub fn launch(tool: &ToolEntry, force_admin: bool) -> Result<(), NiTriTeError> {
     } else if elevated {
         Err(NiTriTeError::System("Élévation administrateur refusée ou annulée (UAC)".into()))
     } else {
-        Err(NiTriTeError::System(String::from_utf8_lossy(&out.stderr).trim().chars().take(200).collect()))
+        Err(NiTriTeError::System(crate::maintenance::commands::decode_output(&out.stderr).trim().chars().take(200).collect()))
     }
 }
 

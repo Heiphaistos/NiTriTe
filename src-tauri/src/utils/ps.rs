@@ -50,7 +50,7 @@ pub fn ps_with_timeout(script: &str, timeout_secs: u64) -> Result<String, String
     #[cfg(target_os = "windows")]
     { Ok(crate::maintenance::commands::decode_output(&out.stdout).trim().to_string()) }
     #[cfg(not(target_os = "windows"))]
-    { Ok(String::from_utf8_lossy(&out.stdout).trim().to_string()) }
+    { Ok(crate::maintenance::commands::decode_output(&out.stdout).trim().to_string()) }
 }
 
 /// Préambule PowerShell définissant la fonction `Loc-Counter` : traduit un nom

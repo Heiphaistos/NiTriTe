@@ -218,7 +218,7 @@ try {
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps])
                 .creation_flags(0x08000000).output_within(90).map_err(|e| e.to_string())?;
-            let stdout = String::from_utf8_lossy(&out.stdout);
+            let stdout = crate::maintenance::commands::decode_output(&out.stdout);
             let trimmed = stdout.trim();
             if trimmed.is_empty() || trimmed == "[]" { return Ok(vec![]); }
             let items: Vec<serde_json::Value> = serde_json::from_str(trimmed)

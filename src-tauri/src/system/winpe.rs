@@ -122,7 +122,7 @@ fn get_pe_version() -> Option<String> {
             .creation_flags(NO_WINDOW)
             .output()
             .ok()?;
-        let s = String::from_utf8_lossy(&out.stdout);
+        let s = crate::maintenance::commands::decode_output(&out.stdout);
         let ver = s.lines()
             .find(|l| l.contains("ReleaseId"))?
             .split_whitespace()
@@ -174,8 +174,8 @@ fn run_bootrec(args: &[&str]) -> RepairResult {
             .output();
         match out {
             Ok(o) => {
-                let stdout = String::from_utf8_lossy(&o.stdout).to_string();
-                let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+                let stdout = crate::maintenance::commands::decode_output(&o.stdout).to_string();
+                let stderr = crate::maintenance::commands::decode_output(&o.stderr).to_string();
                 let combined = if stderr.is_empty() { stdout } else { format!("{}\n{}", stdout, stderr) };
                 RepairResult {
                     success: o.status.success(),
@@ -244,7 +244,7 @@ pub async fn run_chkdsk_pe(drive: String, fix: bool) -> Result<RepairResult, NiT
                 .output();
             match out {
                 Ok(o) => {
-                    let output = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                    let output = crate::maintenance::commands::decode_output(&o.stdout).trim().to_string();
                     Ok(RepairResult {
                         success: o.status.code().map(|c| c < 8).unwrap_or(false),
                         output,
@@ -307,7 +307,7 @@ pub async fn run_sfc_offline(windows_dir: String) -> Result<RepairResult, NiTriT
                 .output();
             match out {
                 Ok(o) => {
-                    let output = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                    let output = crate::maintenance::commands::decode_output(&o.stdout).trim().to_string();
                     Ok(RepairResult {
                         success: o.status.success(),
                         output,
@@ -378,7 +378,7 @@ pub async fn list_offline_users(windows_dir: String) -> Result<Vec<OfflineUser>,
                 .map(|o| o.stdout)
                 .unwrap_or_default();
 
-            let users: Vec<OfflineUser> = String::from_utf8_lossy(&out)
+            let users: Vec<OfflineUser> = crate::maintenance::commands::decode_output(&out)
                 .lines()
                 .filter(|l| l.trim().starts_with(r"HKLM\"))
                 .map(|l| {
@@ -429,7 +429,7 @@ pub async fn reset_user_password(windows_dir: String, username: String, new_pass
             match out {
                 Ok(o) => Ok(RepairResult {
                     success: o.status.success(),
-                    output: String::from_utf8_lossy(&o.stdout).trim().to_string(),
+                    output: crate::maintenance::commands::decode_output(&o.stdout).trim().to_string(),
                     command: format!("net user {} ****", username),
                 }),
                 Err(e) => Ok(RepairResult { success: false, output: e.to_string(), command: "net user".to_string() }),
@@ -487,7 +487,7 @@ pub async fn disk_wipe(disk_index: u32, method: String) -> Result<RepairResult, 
             match out {
                 Ok(o) => Ok(RepairResult {
                     success: o.status.success(),
-                    output: String::from_utf8_lossy(&o.stdout).trim().to_string(),
+                    output: crate::maintenance::commands::decode_output(&o.stdout).trim().to_string(),
                     command: format!("diskpart clean{}", if method == "secure" { " all" } else { "" }),
                 }),
                 Err(e) => Ok(RepairResult { success: false, output: e.to_string(), command: "diskpart".to_string() }),
@@ -517,7 +517,7 @@ pub async fn run_dism_offline_repair(windows_dir: String) -> Result<RepairResult
                 .output();
             match out {
                 Ok(o) => {
-                    let output = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                    let output = crate::maintenance::commands::decode_output(&o.stdout).trim().to_string();
                     Ok(RepairResult { success: o.status.success(), output, command: "dism /cleanup-image /restorehealth".to_string() })
                 }
                 Err(e) => Ok(RepairResult { success: false, output: e.to_string(), command: "dism".to_string() }),
@@ -554,15 +554,22 @@ pub async fn detect_windows_installs() -> Result<Vec<WindowsInstall>, NiTriTeErr
                 if std::path::Path::new(&sys32).exists() {
                     // Lit la version depuis le registre offline
                     let version_key = format!("{}:\\Windows\\System32\\config\\SOFTWARE", letter);
-                    let (version, build) = if std::path::Path::new(&version_key).exists() {
-                        let hive_key = format!("HKLM\\OFFLINE_SW_{}", letter);
-                        let _ = std::process::Command::new("reg")
-                            .args(["load", &hive_key, &version_key])
-                            .creation_flags(NO_WINDOW)
-                            .status();
+                    // Windows en cours d'exécution : sa ruche SOFTWARE est verrouillée (reg load
+                    // échoue) -> on lit la clé vivante, sinon version « Windows » et build « ? ».
+                    let live = std::env::var("SystemRoot")
+                        .map(|r| r.to_ascii_uppercase().starts_with(letter))
+                        .unwrap_or(false);
+                    let (version, build) = if live || std::path::Path::new(&version_key).exists() {
+                        let hive_key = if live { "HKLM\\SOFTWARE".to_string() } else { format!("HKLM\\OFFLINE_SW_{}", letter) };
+                        if !live {
+                            let _ = std::process::Command::new("reg")
+                                .args(["load", &hive_key, &version_key])
+                                .creation_flags(NO_WINDOW)
+                                .status();
+                        }
 
                         // Guard RAII : décharge la ruche à la sortie du scope même en cas d'erreur
-                        let _hive_guard = RegHiveGuard { hive_key: hive_key.clone() };
+                        let _hive_guard = (!live).then(|| RegHiveGuard { hive_key: hive_key.clone() });
 
                         let ver_out = std::process::Command::new("reg")
                             .args(["query", &format!("{}\\Microsoft\\Windows NT\\CurrentVersion", hive_key), "/v", "DisplayVersion"])
@@ -577,13 +584,13 @@ pub async fn detect_windows_installs() -> Result<Vec<WindowsInstall>, NiTriTeErr
                             .map(|o| o.stdout)
                             .unwrap_or_default();
                         // _hive_guard dropped à la fin de ce bloc if → reg unload garanti
-                        let ver = String::from_utf8_lossy(&ver_out)
+                        let ver = crate::maintenance::commands::decode_output(&ver_out)
                             .lines()
                             .find(|l| l.contains("DisplayVersion"))
                             .and_then(|l| l.split_whitespace().last())
                             .map(|s| format!("Windows {}", s))
                             .unwrap_or_else(|| "Windows".to_string());
-                        let bld = String::from_utf8_lossy(&build_out)
+                        let bld = crate::maintenance::commands::decode_output(&build_out)
                             .lines()
                             .find(|l| l.contains("CurrentBuildNumber"))
                             .and_then(|l| l.split_whitespace().last())
@@ -628,7 +635,7 @@ pub async fn get_bitlocker_status(drive: String) -> Result<BitLockerStatus, NiTr
                 .args(["-status", &drive])
                 .creation_flags(NO_WINDOW)
                 .output()
-                .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+                .map(|o| crate::maintenance::commands::decode_output(&o.stdout).to_string())
                 .unwrap_or_default();
             let lower = out.to_lowercase();
             let encrypted = lower.contains("bitlocker") && !lower.contains("protection off") && !lower.contains("fully decrypted");
@@ -656,7 +663,7 @@ pub async fn unlock_bitlocker(drive: String, recovery_key: String) -> Result<Rep
                 .output();
             match out {
                 Ok(o) => {
-                    let output = format!("{}\n{}", String::from_utf8_lossy(&o.stdout).trim(), String::from_utf8_lossy(&o.stderr).trim()).trim().to_string();
+                    let output = format!("{}\n{}", crate::maintenance::commands::decode_output(&o.stdout).trim(), crate::maintenance::commands::decode_output(&o.stderr).trim()).trim().to_string();
                     Ok(RepairResult { success: o.status.success(), output, command: format!("manage-bde -unlock {} -RecoveryPassword ****", drive) })
                 }
                 Err(e) => Ok(RepairResult { success: false, output: e.to_string(), command: "manage-bde -unlock".to_string() }),
@@ -712,7 +719,7 @@ pub async fn clear_offline_password(windows_dir: String, username: String) -> Re
             match out {
                 Ok(o) => Ok(RepairResult {
                     success: o.status.success(),
-                    output: String::from_utf8_lossy(&o.stdout).trim().to_string(),
+                    output: crate::maintenance::commands::decode_output(&o.stdout).trim().to_string(),
                     command: format!("net user {} [vide]", username),
                 }),
                 Err(e) => Ok(RepairResult { success: false, output: e.to_string(), command: "net user".to_string() }),
@@ -743,7 +750,7 @@ pub async fn enable_offline_account(windows_dir: String, username: String) -> Re
             match out {
                 Ok(o) => Ok(RepairResult {
                     success: o.status.success(),
-                    output: String::from_utf8_lossy(&o.stdout).trim().to_string(),
+                    output: crate::maintenance::commands::decode_output(&o.stdout).trim().to_string(),
                     command: format!("net user {} /active:yes", username),
                 }),
                 Err(e) => Ok(RepairResult { success: false, output: e.to_string(), command: "net user".to_string() }),
@@ -870,8 +877,8 @@ pub async fn winpe_run_command(command: String) -> Result<RepairResult, NiTriTeE
             };
             match output {
                 Ok(o) => {
-                    let stdout = String::from_utf8_lossy(&o.stdout).to_string();
-                    let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+                    let stdout = crate::maintenance::commands::decode_output(&o.stdout).to_string();
+                    let stderr = crate::maintenance::commands::decode_output(&o.stderr).to_string();
                     let combined = if stderr.trim().is_empty() { stdout.trim().to_string() }
                         else { format!("{}\n[stderr] {}", stdout.trim(), stderr.trim()) };
                     Ok(RepairResult { success: o.status.success(), output: combined, command })

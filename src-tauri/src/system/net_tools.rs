@@ -295,7 +295,7 @@ fn get_route_table_blocking() -> Vec<RouteEntry> {
     {
         let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",ps]).creation_flags(0x08000000).output();
         if let Ok(o) = o {
-            let t = String::from_utf8_lossy(&o.stdout); let t = t.trim();
+            let t = crate::maintenance::commands::decode_output(&o.stdout); let t = t.trim();
             let arr_t = if t.starts_with('{') { format!("[{}]",t) } else { t.to_string() };
             if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&arr_t) {
                 return arr.iter().map(|r| {
@@ -350,7 +350,7 @@ $results | ConvertTo-Json -Compress
     {
         let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",&ps]).creation_flags(0x08000000).output();
         if let Ok(o) = o {
-            let t = String::from_utf8_lossy(&o.stdout); let t = t.trim();
+            let t = crate::maintenance::commands::decode_output(&o.stdout); let t = t.trim();
             let arr_t = if t.starts_with('{') { format!("[{}]",t) } else { t.to_string() };
             if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&arr_t) {
                 return arr.iter().map(|r| {
@@ -443,7 +443,7 @@ $procs = @{}; Get-Process | ForEach-Object { $procs[[string]$_.Id] = $_.ProcessN
     {
         let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",ps]).creation_flags(0x08000000).output();
         if let Ok(o) = o {
-            let t = String::from_utf8_lossy(&o.stdout); let t = t.trim();
+            let t = crate::maintenance::commands::decode_output(&o.stdout); let t = t.trim();
             let arr_t = if t.starts_with('{') { format!("[{}]",t) } else { t.to_string() };
             if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&arr_t) {
                 return arr.iter().map(|r| OpenPort {
@@ -521,7 +521,7 @@ try {{
     {
         let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",&ps]).creation_flags(0x08000000).output();
         if let Ok(o) = o {
-            let t = String::from_utf8_lossy(&o.stdout);
+            let t = crate::maintenance::commands::decode_output(&o.stdout);
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(t.trim()) {
                 return HttpCheckResult {
                     url: url,
@@ -562,7 +562,7 @@ try {{
     {
         let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",&ps]).creation_flags(0x08000000).output();
         if let Ok(o) = o {
-            let t = String::from_utf8_lossy(&o.stdout); let t = t.trim();
+            let t = crate::maintenance::commands::decode_output(&o.stdout); let t = t.trim();
             let arr_t = if t.starts_with('{') { format!("[{}]",t) } else { t.to_string() };
             if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&arr_t) {
                 return arr.iter().map(|r| NetShareEntry {
@@ -610,7 +610,7 @@ try {
     {
         let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",ps]).creation_flags(0x08000000).output();
         if let Ok(o) = o {
-            let t = String::from_utf8_lossy(&o.stdout);
+            let t = crate::maintenance::commands::decode_output(&o.stdout);
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(t.trim()) {
                 return BandwidthResult { download_mbps: v["mbps"].as_f64().unwrap_or(0.0), latency_ms: v["lat"].as_f64().unwrap_or(0.0), test_host: v["host"].as_str().unwrap_or("").to_string(), success: v["ok"].as_bool().unwrap_or(false) };
             }

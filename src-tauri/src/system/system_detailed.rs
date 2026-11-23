@@ -161,7 +161,7 @@ fn nvidia_vram_map() -> std::collections::HashMap<String, u64> {
             .creation_flags(0x08000000).output_within(90)
         else { return map; };
         if !out.status.success() { return map; }
-        for line in String::from_utf8_lossy(&out.stdout).lines() {
+        for line in crate::maintenance::commands::decode_output(&out.stdout).lines() {
             let mut p = line.splitn(2, ',');
             if let (Some(n), Some(m)) = (p.next(), p.next()) {
                 if let Ok(mb) = m.trim().parse::<u64>() { map.insert(n.trim().to_string(), mb); }
@@ -298,7 +298,7 @@ pub async fn get_ram_detailed() -> Result<RamDetailed, String> {
                 .creation_flags(0x08000000)
                 .output_within(90)
                 .ok()
-                .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<usize>().ok());
+                .and_then(|o| crate::maintenance::commands::decode_output(&o.stdout).trim().parse::<usize>().ok());
             let raw = ps_count.unwrap_or_else(|| wmi_con().ok()
                 .and_then(|w| w.raw_query::<WmiMemoryArray>("SELECT * FROM Win32_PhysicalMemoryArray").ok())
                 .map(|v| v.into_iter().filter_map(|m| m.MemoryDevices).map(|n| n as usize).sum::<usize>())
@@ -414,7 +414,7 @@ $results | ConvertTo-Json -Depth 2 -Compress
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps])
                 .creation_flags(0x08000000)
                 .output_within(90).map_err(|e| e.to_string())?;
-            let text = String::from_utf8_lossy(&out.stdout);
+            let text = crate::maintenance::commands::decode_output(&out.stdout);
             let trimmed = text.trim();
             if trimmed.is_empty() || trimmed == "null" { return Ok(vec![]); }
             let items: Vec<serde_json::Value> = serde_json::from_str(trimmed)
@@ -722,7 +722,7 @@ $officeFullKey = Get-OfficeKey
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps])
                 .creation_flags(0x08000000).output_within(90).map_err(|e| e.to_string())?;
-            let text = String::from_utf8_lossy(&out.stdout);
+            let text = crate::maintenance::commands::decode_output(&out.stdout);
             let trimmed = text.trim();
             if trimmed.is_empty() || trimmed == "null" {
                 return Err("Licence Windows non trouvée".to_string());
@@ -789,7 +789,7 @@ foreach ($v in $vols) {\
                 .args(["-NoProfile", "-NonInteractive", "-Command", script])
                 .creation_flags(0x08000000)
                 .output_within(90)
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                .map(|o| crate::maintenance::commands::decode_output(&o.stdout).trim().to_string())
                 .unwrap_or_else(|e| format!("Erreur: {}", e));
             Ok(out)
         }

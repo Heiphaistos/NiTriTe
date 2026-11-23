@@ -52,7 +52,7 @@ pub fn check_security() -> (bool, bool) {
             r#"$fw = try { (Get-NetFirewallProfile -ErrorAction SilentlyContinue | Where-Object {$_.Enabled}).Count -gt 0 } catch { $false }; $def = try { (Get-MpComputerStatus -ErrorAction SilentlyContinue).RealTimeProtectionEnabled } catch { $false }; Write-Output "$fw,$def""#])
         .creation_flags(0x08000000).output();
     if let Ok(o) = out {
-        let s = String::from_utf8_lossy(&o.stdout);
+        let s = crate::maintenance::commands::decode_output(&o.stdout);
         let parts: Vec<&str> = s.trim().splitn(2, ',').collect();
         let fw = parts.first().map(|v| *v == "True").unwrap_or(false);
         let def = parts.get(1).map(|v| *v == "True").unwrap_or(false);
@@ -69,7 +69,7 @@ pub fn scan_suspicious_processes() -> Vec<SuspiciousProcess> {
             "Get-Process | Select-Object Id,ProcessName,Path | ConvertTo-Json -Depth 1 -Compress"])
         .creation_flags(0x08000000)
         .output();
-    let text = match output { Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(), Err(_) => return vec![] };
+    let text = match output { Ok(o) => crate::maintenance::commands::decode_output(&o.stdout).to_string(), Err(_) => return vec![] };
     let val: serde_json::Value = match serde_json::from_str(&text) { Ok(v) => v, Err(_) => return vec![] };
     let processes: Vec<serde_json::Value> = match val {
         serde_json::Value::Array(arr) => arr,
@@ -126,7 +126,7 @@ pub fn check_startup_and_reboot() -> (usize, bool) {
             r#"$sc = (Get-CimInstance -ClassName Win32_StartupCommand -ErrorAction SilentlyContinue | Measure-Object).Count; $rb = Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending" -ErrorAction SilentlyContinue; Write-Output "$sc,$rb""#])
         .creation_flags(0x08000000).output();
     if let Ok(o) = out {
-        let s = String::from_utf8_lossy(&o.stdout);
+        let s = crate::maintenance::commands::decode_output(&o.stdout);
         let parts: Vec<&str> = s.trim().splitn(2, ',').collect();
         let sc = parts.first().and_then(|v| v.parse().ok()).unwrap_or(0);
         let rb = parts.get(1).map(|v| *v == "True").unwrap_or(false);
@@ -167,7 +167,7 @@ pub fn get_listening_ports() -> Vec<u16> {
         .args(["-NoProfile", "-NonInteractive", "-Command",
             r#"Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object {$_.LocalAddress -eq '0.0.0.0' -or $_.LocalAddress -eq '::'} | Select-Object -ExpandProperty LocalPort | Sort-Object -Unique | Select-Object -First 30 | ConvertTo-Json -Compress"#])
         .creation_flags(0x08000000).output();
-    let text = match out { Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(), Err(_) => return vec![] };
+    let text = match out { Ok(o) => crate::maintenance::commands::decode_output(&o.stdout).to_string(), Err(_) => return vec![] };
     let val: Vec<serde_json::Value> = serde_json::from_str(text.trim()).unwrap_or_default();
     val.iter().filter_map(|v| v.as_u64().map(|p| p as u16)).collect()
 }
@@ -206,7 +206,7 @@ pub fn is_scoop_installed() -> bool {
         .args(["-NoProfile", "-NonInteractive", "-Command",
             "if (Get-Command scoop -ErrorAction SilentlyContinue) { 'true' } else { 'false' }"])
         .creation_flags(0x08000000).output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "true")
+        .map(|o| crate::maintenance::commands::decode_output(&o.stdout).trim() == "true")
         .unwrap_or(false)
 }
 
@@ -215,7 +215,7 @@ pub fn list_scoop_upgradable() -> Vec<String> {
         .args(["-NoProfile", "-NonInteractive", "-Command",
             r#"try { $lines = scoop status 2>&1; $res = @($lines | Where-Object { $_ -is [string] -and $_.Trim() -ne '' -and $_ -notmatch '^Name|^----|\s+Installed Version' } | Select-Object -First 25 | ForEach-Object { [string]$_.Trim() }); if ($res.Count -gt 0) { $res | ConvertTo-Json -Compress } else { '[]' } } catch { '[]' }"#])
         .creation_flags(0x08000000).output();
-    let text = match out { Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(), Err(_) => return vec![] };
+    let text = match out { Ok(o) => crate::maintenance::commands::decode_output(&o.stdout).to_string(), Err(_) => return vec![] };
     let val: Vec<serde_json::Value> = serde_json::from_str(text.trim()).unwrap_or_default();
     val.iter().filter_map(|v| v.as_str().filter(|s| !s.is_empty()).map(|s| s.to_string())).collect()
 }
@@ -272,7 +272,7 @@ pub fn run_sfc_verify() -> (String, String) {
             // sfc emet parfois en UTF-16 (detecte via octets nuls), sinon en OEM
             // (decode_output) plutot que from_utf8_lossy brut — la sortie FR
             // ("Aucune violation d'integrite...") est localisee.
-            let raw = String::from_utf8_lossy(&o.stdout).to_string();
+            let raw = crate::maintenance::commands::decode_output(&o.stdout).to_string();
             let text = if raw.contains('\0') {
                 let bytes = o.stdout.clone();
                 let utf16: Vec<u16> = bytes.chunks(2).map(|c| u16::from_le_bytes([c[0], c.get(1).copied().unwrap_or(0)])).collect();

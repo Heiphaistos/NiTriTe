@@ -10,7 +10,7 @@ fn get_hostname() -> String {
     Command::new("hostname")
         .creation_flags(0x08000000)
         .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .map(|o| crate::maintenance::commands::decode_output(&o.stdout).trim().to_string())
         .unwrap_or_else(|_| "unknown".to_string())
 }
 
@@ -238,7 +238,7 @@ pub fn ping_host(host: &str) -> Result<PingResult, NiTriTeError> {
         .args(["-n", "4", host])
         .creation_flags(0x08000000).output()?;
 
-    let text = String::from_utf8_lossy(&output.stdout).to_string();
+    let text = crate::maintenance::commands::decode_output(&output.stdout).to_string();
     let success = output.status.success();
 
     let mut min = 0.0f64;

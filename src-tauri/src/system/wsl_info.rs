@@ -169,8 +169,8 @@ fn wsl_run_command_blocking(distro: String, command: String) -> Result<String, S
             .creation_flags(0x08000000)
             .output()
             .map_err(|e| e.to_string())?;
-        let stdout = String::from_utf8_lossy(&o.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+        let stdout = crate::maintenance::commands::decode_output(&o.stdout).to_string();
+        let stderr = crate::maintenance::commands::decode_output(&o.stderr).to_string();
         if o.status.success() {
             return Ok(stdout);
         }
@@ -203,8 +203,8 @@ pub async fn wsl_long_action(action: String, distro: String, path: Option<String
                 .creation_flags(0x08000000)
                 .output()
                 .map_err(|e| e.to_string())?;
-            let out = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
+            let out = crate::maintenance::commands::decode_output(&o.stdout).trim().to_string();
+            let err = crate::maintenance::commands::decode_output(&o.stderr).trim().to_string();
             if o.status.success() { Ok(out) } else { Err(if err.is_empty() { out } else { err }) }
         }
         #[cfg(not(target_os = "windows"))]
@@ -232,7 +232,7 @@ fn wsl_set_default_version_blocking(version: u32) -> Result<String, String> {
             .creation_flags(0x08000000)
             .output()
             .map_err(|e| e.to_string())?;
-        let out = String::from_utf8_lossy(&o.stdout).to_string();
+        let out = crate::maintenance::commands::decode_output(&o.stdout).to_string();
         if o.status.success() {
             return Ok(format!("Version WSL par défaut : {}", v));
         }
