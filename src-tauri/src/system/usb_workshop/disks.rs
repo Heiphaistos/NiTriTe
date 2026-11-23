@@ -11,8 +11,12 @@ use std::path::{Path, PathBuf};
 /// Liste les disques USB en ligne, ni système, ni démarrage, ni lecture seule.
 const USB_REPORT: &str = r#"
 $ErrorActionPreference='Stop'
-$rows=@(Get-Disk | Where-Object {$_.BusType -eq 'USB' -and !$_.IsBoot -and !$_.IsSystem -and !$_.IsReadOnly -and !$_.IsOffline} | ForEach-Object {
+$drives=@(Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue)
+$physical=@(Get-PhysicalDisk -ErrorAction SilentlyContinue)
+$rows=@(Get-Disk | Where-Object {@('USB','SD','MMC') -contains [string]$_.BusType -and !$_.IsBoot -and !$_.IsSystem -and !$_.IsReadOnly -and !$_.IsOffline} | ForEach-Object {
   $disk=$_
+  $win=@($drives | Where-Object {$_.Index -eq $disk.Number} | Select-Object -First 1)
+  $phy=@($physical | Where-Object {[string]$_.DeviceId -eq [string]$disk.Number} | Select-Object -First 1)
   $parts=@(Get-Partition -DiskNumber $disk.Number -ErrorAction SilentlyContinue)
   $vol=@($parts | Get-Volume -ErrorAction SilentlyContinue)
   $ventoy=(@($vol | Where-Object {$_.FileSystemLabel -eq 'VTOYEFI' -and (($_.Size -ge 20MB) -and ($_.Size -le 64MB))}).Count -gt 0)
@@ -22,6 +26,8 @@ $rows=@(Get-Disk | Where-Object {$_.BusType -eq 'USB' -and !$_.IsBoot -and !$_.I
   if (!$diskID) { $diskID=$hardware }
   @{number=$disk.Number;name=[string]$disk.FriendlyName;serial=$diskID.Trim();size=$disk.Size;
     hardwareSerial=$hardware;diskPath=[string]$disk.Path;partitionStyle=[string]$disk.PartitionStyle;
+    busType=[string]$disk.BusType;mediaType=if($phy.Count){[string]$phy[0].MediaType}else{''};
+    removable=($win.Count -gt 0 -and [string]$win[0].MediaType -like '*Removable*');
     logicalSector=[int]$disk.LogicalSectorSize;
     accessPaths=@($parts | ForEach-Object {$_.AccessPaths} | Sort-Object -Unique);
     volumes=@($vol | ForEach-Object {
@@ -47,7 +53,7 @@ function Assert-TokaDisk([switch]$AfterWrite) {
   $hardware=([string]$disk.SerialNumber).Trim()
   $id=([string]$disk.UniqueId).Trim()
   if(!$id){$id=$hardware}
-  if($disk.BusType -ne 'USB' -or $disk.IsBoot -or $disk.IsSystem -or $disk.IsReadOnly -or $disk.IsOffline -or
+  if(@('USB','SD','MMC') -notcontains [string]$disk.BusType -or $disk.IsBoot -or $disk.IsSystem -or $disk.IsReadOnly -or $disk.IsOffline -or
      $disk.Size -ne $config.size -or ([string]$disk.FriendlyName) -cne $config.name -or
      ($config.diskPath -and $diskPath -ine $config.diskPath) -or
      ($config.hardwareSerial -and $hardware -cne $config.hardwareSerial) -or
@@ -112,6 +118,23 @@ pub struct UsbDisk {
     pub format: String,
     pub free: u64,
     pub ventoy: bool,
+    /// Type affiché : clé USB, disque dur externe, SSD externe, carte SD.
+    pub kind: String,
+}
+
+/// Plus de 2 Tio : la table MBR ne peut pas adresser tout le disque, Ventoy doit passer en GPT.
+pub const MBR_LIMIT: u64 = 2 * 1024 * 1024 * 1024 * 1024;
+
+/// Distingue clé et disque externe : type de bus, type de média Windows, amovible ou non, taille.
+pub fn disk_kind(bus: &str, media: &str, removable: bool, size: u64) -> &'static str {
+    match (bus.to_ascii_uppercase().as_str(), media.to_ascii_uppercase().as_str()) {
+        ("SD" | "MMC", _) => "Carte SD",
+        (_, "HDD") => "Disque dur externe",
+        (_, "SSD") if !removable => "SSD externe",
+        _ if removable => "Clé USB",
+        _ if size >= 256_000_000_000 => "Disque externe",
+        _ => "Clé USB",
+    }
 }
 
 impl UsbDisk {
@@ -199,6 +222,10 @@ pub fn parse_report(raw: &Value) -> Vec<UsbDisk> {
                 format: text(row, "format"),
                 free: num(row, "free"),
                 ventoy: row.get("ventoy").and_then(Value::as_bool).unwrap_or(false),
+                kind: disk_kind(
+                    &text(row, "busType"), &text(row, "mediaType"),
+                    row.get("removable").and_then(Value::as_bool).unwrap_or(false), size,
+                ).to_string(),
             })
         })
         .collect()
@@ -418,5 +445,15 @@ mod tests {
         assert!(is_drive_letter("E:"));
         assert!(!is_drive_letter("e:"));
         assert!(!is_drive_letter("E:\\"));
+    }
+
+    #[test]
+    fn distingue_cle_et_disque_externe() {
+        assert_eq!(disk_kind("USB", "Unspecified", true, 32_000_000_000), "Clé USB");
+        assert_eq!(disk_kind("USB", "HDD", false, 2_000_000_000_000), "Disque dur externe");
+        assert_eq!(disk_kind("USB", "SSD", false, 1_000_000_000_000), "SSD externe");
+        assert_eq!(disk_kind("USB", "Unspecified", false, 1_000_000_000_000), "Disque externe");
+        assert_eq!(disk_kind("SD", "", true, 64_000_000_000), "Carte SD");
+        assert_eq!(disk_kind("USB", "SSD", true, 128_000_000_000), "Clé USB");
     }
 }

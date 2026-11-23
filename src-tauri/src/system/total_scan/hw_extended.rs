@@ -107,14 +107,14 @@ try {
 $out.CpuTemp = "N/A"
 try {
     $t = Get-WmiObject -Namespace "root\LibreHardwareMonitor" -Class Sensor -ErrorAction SilentlyContinue |
-         Where-Object { $_.SensorType -eq 'Temperature' -and $_.Name -match 'CPU Package|CPU|Processeur' } |
+         Where-Object { $_.SensorType -eq 'Temperature' -and $_.Name -match 'CPU Package|CPU|Processeur' -and $_.Name -notmatch 'TjMax' } |
          Sort-Object { if ($_.Name -match 'Package') { 0 } else { 1 } } | Select-Object -First 1
     if ($t) { $out.CpuTemp = "$([math]::Round([double]$t.Value,1))°C" }
 } catch {}
 if ($out.CpuTemp -eq "N/A") {
     try {
         $t = Get-WmiObject -Namespace "root\OpenHardwareMonitor" -Class Sensor -ErrorAction SilentlyContinue |
-             Where-Object { $_.SensorType -eq 'Temperature' -and $_.Name -like '*CPU*' } |
+             Where-Object { $_.SensorType -eq 'Temperature' -and $_.Name -like '*CPU*' -and $_.Name -notmatch 'TjMax' } |
              Select-Object -First 1
         if ($t) { $out.CpuTemp = "$([math]::Round([double]$t.Value,1))°C" }
     } catch {}

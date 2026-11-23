@@ -26,12 +26,17 @@ pub(super) fn parse_json_arr(s: &str) -> Vec<serde_json::Value> {
 /// libellés netsh/docker) arrivaient en mojibake avec `from_utf8_lossy`.
 /// Le fast path UTF-8 laisse les sorties JSON/ASCII inchangées.
 pub(super) fn ps(script: &str) -> Result<String, String> {
-    let out = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| e.to_string())?;
-    Ok(crate::maintenance::commands::decode_output(&out.stdout).trim().to_string())
+    ps_timeout(script, 180)
+}
+
+/// `ps()` avec un délai maximal : un WMI ou un pilote figé ne bloque plus le
+/// thread indéfiniment (le sondage des températures restait sinon suspendu et
+/// la bannière d'alerte gardait une valeur périmée).
+pub(super) fn ps_timeout(script: &str, timeout_secs: u64) -> Result<String, String> {
+    let out = crate::maintenance::commands::execute_system_command(
+        "powershell", &["-NoProfile", "-NonInteractive", "-Command", script], timeout_secs,
+    ).map_err(|e| e.to_string())?;
+    Ok(out.stdout.trim().to_string())
 }
 
 /// Comme `ps()` mais tient compte du code de sortie : `Err` si le script sort

@@ -80,18 +80,18 @@ onMounted(() => { handle(() => ws.refreshDevices()); });
       <NCard>
         <h3>Support USB</h3>
         <div class="usbws-fields">
-          <label>Clé ou carte SD
+          <label>Clé USB, disque externe ou carte SD
             <select v-model="device" :disabled="busy">
-              <option value="">Sélectionner une clé</option>
+              <option value="">Sélectionner un support</option>
               <option v-for="row in disks" :key="row.id" :value="row.id">
-                {{ [row.drive, row.name, displayBytes(row.size), row.ventoy && "Ventoy"].filter(Boolean).join(" · ") }}
+                {{ [row.kind, row.drive, row.name, displayBytes(row.size), row.ventoy && "Ventoy"].filter(Boolean).join(" · ") }}
               </option>
             </select>
           </label>
           <NButton variant="secondary" size="sm" :disabled="busy" @click="handle(() => ws.refreshDevices())"><RefreshCw :size="14" /> Actualiser</NButton>
         </div>
         <p class="usbws-muted">{{ deviceInfo }} <NBadge v-if="drive?.ventoy" variant="success">Ventoy</NBadge></p>
-        <p class="usbws-muted">Seuls les disques USB amovibles, hors disque système et de démarrage, sont proposés.</p>
+        <p class="usbws-muted">Clés USB, disques durs et SSD externes (USB) et cartes SD sont proposés ; jamais le disque système ni le disque de démarrage.</p>
       </NCard>
     </div>
 

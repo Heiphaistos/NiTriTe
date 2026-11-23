@@ -2,7 +2,7 @@ use serde::Serialize;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
-use super::{parse_json_arr, ps, ps_ok};
+use super::{parse_json_arr, ps, ps_ok, ps_timeout};
 
 // ─── Températures ─────────────────────────────────────────────────────────────
 
@@ -28,13 +28,13 @@ fn get_temperatures_sync() -> Result<Vec<TemperatureReading>, String> {
     let script_lhm = r#"
 try {
     $sensors = Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Sensor -ErrorAction SilentlyContinue |
-        Where-Object { $_.SensorType -eq 'Temperature' -and $_.Value -gt 0 -and $_.Value -lt 120 } |
+        Where-Object { $_.SensorType -eq 'Temperature' -and $_.Value -gt 0 -and $_.Value -lt 120 -and $_.Name -notmatch 'TjMax' } |
         Select-Object Name, Value, Hardware
     if ($sensors) { $sensors | ConvertTo-Json -Compress -Depth 2 }
 } catch {}
 "#;
     let mut lhm_found = false;
-    if let Ok(out) = ps(script_lhm) {
+    if let Ok(out) = ps_timeout(script_lhm, 20) {
         if !out.is_empty() {
             let arr: Vec<serde_json::Value> = parse_json_arr(&out);
             for v in &arr {
@@ -58,11 +58,11 @@ try {
         let script_ohm = r#"
 try {
     $sensors = Get-CimInstance -Namespace root/OpenHardwareMonitor -ClassName Sensor -ErrorAction SilentlyContinue |
-        Where-Object { $_.SensorType -eq 'Temperature' -and $_.Value -gt 0 }
+        Where-Object { $_.SensorType -eq 'Temperature' -and $_.Value -gt 0 -and $_.Name -notmatch 'TjMax' }
     if ($sensors) { $sensors | Select-Object Name, Value | ConvertTo-Json -Compress }
 } catch {}
 "#;
-        if let Ok(out) = ps(script_ohm) {
+        if let Ok(out) = ps_timeout(script_ohm, 20) {
             if !out.is_empty() {
                 let arr: Vec<serde_json::Value> = parse_json_arr(&out);
                 for v in &arr {
@@ -79,12 +79,10 @@ try {
     }
 
     // 3. NVIDIA GPU via nvidia-smi
-    if let Ok(out) = std::process::Command::new("nvidia-smi")
-        .args(["--query-gpu=name,temperature.gpu,pci.sub_device_id", "--format=csv,noheader"])
-        .creation_flags(0x08000000)
-        .output()
-    {
-        let text = String::from_utf8_lossy(&out.stdout);
+    if let Ok(out) = crate::maintenance::commands::execute_system_command(
+        "nvidia-smi", &["--query-gpu=name,temperature.gpu,pci.sub_device_id", "--format=csv,noheader"], 10,
+    ) {
+        let text = out.stdout;
         for (i, line) in text.lines().enumerate() {
             let parts: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
             if parts.len() >= 2 {
@@ -111,7 +109,7 @@ try {
     } | ConvertTo-Json -Compress
 } catch {}
 "#;
-    if let Ok(out) = ps(script_disk) {
+    if let Ok(out) = ps_timeout(script_disk, 20) {
         if !out.is_empty() {
             let arr: Vec<serde_json::Value> = parse_json_arr(&out);
             for v in &arr {
@@ -132,7 +130,7 @@ try {
     if ($tz) { $tz | ForEach-Object { [PSCustomObject]@{ temp=[math]::Round(($_.CurrentTemperature/10)-273.15,1) } } | ConvertTo-Json -Compress }
 } catch {}
 "#;
-        if let Ok(out) = ps(script_acpi) {
+        if let Ok(out) = ps_timeout(script_acpi, 20) {
             if !out.is_empty() {
                 let arr: Vec<serde_json::Value> = parse_json_arr(&out);
                 for (i, v) in arr.iter().enumerate() {
@@ -255,7 +253,7 @@ try {
 # ── 2. OpenHardwareMonitor WMI ──────────────────────────────────────────
 try {
     $ohm = Get-CimInstance -Namespace root/OpenHardwareMonitor -ClassName Sensor -ErrorAction SilentlyContinue |
-           Where-Object { $_.SensorType -eq 'Temperature' -and $_.Name -match 'GPU|Core|Hot' }
+           Where-Object { $_.SensorType -eq 'Temperature' -and $_.Name -match 'GPU|Core|Hot' -and $_.Name -notmatch 'TjMax' }
     if ($ohm) {
         $ohm | ForEach-Object { Add-Entry $_.Name $_.Value 'OpenHardwareMonitor' }
     }

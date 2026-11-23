@@ -30,9 +30,23 @@ export const activeAlerts = ref<Array<{
 let monitorInterval: ReturnType<typeof setInterval> | null = null;
 let instanceCount = 0;
 
+// Sondages consécutifs au-dessus du seuil, par capteur : une seule lecture haute
+// (pic de charge au lancement de Nitrite) ne doit pas afficher « Surchauffe ».
+const tempHits = new Map<string, number>();
+const TEMP_CONFIRM_POLLS = 2;
+// Sondages de températures ratés d'affilée : au-delà, la valeur affichée est
+// périmée et l'alerte est retirée plutôt que laissée figée.
+let tempFailures = 0;
+const TEMP_STALE_FAILURES = 3;
+
 function addAlert(id: string, type: 'temp' | 'disk' | 'ram' | 'smart', severity: 'warning' | 'critical', message: string) {
   const existing = activeAlerts.value.find(a => a.id === id && !a.dismissed);
-  if (existing) return; // déjà présent
+  if (existing) {
+    // Valeur en direct : le texte suivait sinon la toute première lecture (ex. 100 °C)
+    existing.message = message;
+    existing.severity = severity;
+    return;
+  }
   activeAlerts.value.push({ id, type, severity, message, timestamp: new Date(), dismissed: false });
   // Notification système (si permission)
   if ('Notification' in window && Notification.permission === 'granted') {
@@ -58,6 +72,12 @@ export function dismissAlert(id: string) {
   if (alert) alert.dismissed = true;
 }
 
+/** Remet à zéro le suivi des sondages (tests). */
+export function resetAlertTracking() {
+  tempHits.clear();
+  tempFailures = 0;
+}
+
 export function dismissAll() {
   activeAlerts.value.forEach(a => { a.dismissed = true; });
 }
@@ -67,26 +87,45 @@ export function useProactiveAlerts(thresholds: AlertThresholds = DEFAULT_THRESHO
     try {
       // Vérifier températures
       const temps = await invoke<Array<{ sensor_name: string; temp_celsius: number; source: string }>>('get_temperatures');
+      tempFailures = 0;
       const currentTempIds = new Set<string>();
+      const over = (id: string, hot: boolean) => {
+        const hits = hot ? (tempHits.get(id) ?? 0) + 1 : 0;
+        if (hits) tempHits.set(id, hits); else tempHits.delete(id);
+        return hits >= TEMP_CONFIRM_POLLS;
+      };
       for (const t of temps) {
         if (t.temp_celsius <= 0) continue;
-        if (t.sensor_name.toLowerCase().includes('cpu') || t.source.toLowerCase().includes('cpu')) {
-          if (t.temp_celsius >= thresholds.cpuTempCritical) {
-            const id = `cpu-temp-${t.sensor_name}`;
-            addAlert(id, 'temp', 'critical', `CPU ${t.sensor_name}: ${t.temp_celsius}°C — Surchauffe critique!`);
+        const name = t.sensor_name.toLowerCase();
+        // « Distance to TjMax » = marge avant la limite (monte quand le CPU refroidit) ;
+        // zones ACPI = valeur souvent figée par le firmware : jamais d'alerte critique dessus.
+        if (name.includes('tjmax') || t.source.toLowerCase().includes('acpi')) continue;
+        const value = Math.round(t.temp_celsius);
+        if (name.includes('cpu') || t.source.toLowerCase().includes('cpu')) {
+          const id = `cpu-temp-${t.sensor_name}`;
+          if (over(id, t.temp_celsius >= thresholds.cpuTempCritical)) {
+            addAlert(id, 'temp', 'critical', `CPU ${t.sensor_name} : ${value} °C — Surchauffe critique !`);
             currentTempIds.add(id);
           }
         }
-        if (t.sensor_name.toLowerCase().includes('gpu')) {
-          if (t.temp_celsius >= thresholds.gpuTempCritical) {
-            const id = `gpu-temp-${t.sensor_name}`;
-            addAlert(id, 'temp', 'critical', `GPU ${t.sensor_name}: ${t.temp_celsius}°C — Surchauffe!`);
+        if (name.includes('gpu')) {
+          const id = `gpu-temp-${t.sensor_name}`;
+          if (over(id, t.temp_celsius >= thresholds.gpuTempCritical)) {
+            addAlert(id, 'temp', 'critical', `GPU ${t.sensor_name} : ${value} °C — Surchauffe !`);
             currentTempIds.add(id);
           }
         }
       }
       clearResolvedAlerts('temp', currentTempIds);
-    } catch { /* sondage échoué : état inconnu, ne pas toucher aux alertes existantes */ }
+    } catch {
+      // Sondage échoué : état inconnu. On garde l'alerte un temps, puis on la retire
+      // pour ne pas afficher indéfiniment une température périmée.
+      tempFailures++;
+      if (tempFailures >= TEMP_STALE_FAILURES) {
+        tempHits.clear();
+        clearResolvedAlerts('temp', new Set());
+      }
+    }
 
     try {
       // Vérifier utilisation disques/RAM

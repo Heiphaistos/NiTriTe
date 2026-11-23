@@ -3,6 +3,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import NButton from "@/components/ui/NButton.vue";
+import NBadge from "@/components/ui/NBadge.vue";
 import { useNotificationStore } from "@/stores/notifications";
 import { useClipboard } from "@/composables/useClipboard";
 import { FolderOpen, ExternalLink, Copy, ShieldCheck, Download } from "lucide-vue-next";
@@ -81,7 +82,7 @@ const summaries: Record<Operation, string> = {
 };
 
 interface PlanDevice { name: string; number: number; drive: string; size: number; free: number; format: string;
-  partitionStyle: string; hardwareSerial: string; volumes: UsbVolume[] }
+  partitionStyle: string; hardwareSerial: string; volumes: UsbVolume[]; kind?: string }
 interface Plan { token: string; confirm: string; operation: Operation; erases: boolean; device: PlanDevice; paths: { name: string; size: number }[] }
 interface Line { title: string; detail: string }
 interface MediaResult {
@@ -250,7 +251,7 @@ onMounted(() => { act(refreshWriters); selectionChanged(); });
       <template v-if="drive">
         <div class="usbws-row">
           <div class="usbws-row-main">
-            <strong>{{ drive.name || "Clé USB" }}</strong>
+            <strong>{{ drive.name || drive.kind }}</strong> <NBadge :variant="drive.kind === 'Clé USB' ? 'info' : 'warning'">{{ drive.kind }}</NBadge>
             <span>{{ [drive.drive || `Disque ${drive.number}`, displayBytes(drive.size), drive.partitionStyle, drive.format].filter(Boolean).join(" · ") }}</span>
           </div>
         </div>
@@ -265,7 +266,7 @@ onMounted(() => { act(refreshWriters); selectionChanged(); });
             <option v-for="key in available" :key="key" :value="key">{{ operations[key] }}</option>
           </select>
         </label>
-        <label v-if="operation === 'install'" class="usbws-check"><input v-model="gpt" type="checkbox" :disabled="busy" /> Utiliser GPT pour Ventoy</label>
+        <label v-if="operation === 'install'" class="usbws-check"><input v-model="gpt" type="checkbox" :disabled="busy" /> Utiliser GPT pour Ventoy<template v-if="drive && drive.size > 2 * 1024 ** 4"> (obligatoire au-delà de 2 To)</template></label>
         <label v-if="operation === 'storage'">Format de stockage
           <select v-model="filesystem" :disabled="busy"><option value="exFAT">exFAT</option><option value="NTFS">NTFS</option></select>
         </label>
@@ -283,6 +284,7 @@ onMounted(() => { act(refreshWriters); selectionChanged(); });
       <div v-if="valid" class="usbws-plan">
         <h3>Ce qui va se passer</h3>
         <p v-if="valid.plan.erases" class="usbws-warning">{{ eraseText }}</p>
+        <p v-if="valid.plan.erases && valid.plan.device.kind && valid.plan.device.kind !== 'Clé USB'" class="usbws-warning">Attention : c’est un {{ valid.plan.device.kind.toLowerCase() }} de {{ displayBytes(valid.plan.device.size) }}. Vérifie qu’il ne contient plus de sauvegardes avant de continuer.</p>
         <p class="usbws-muted">
           {{ operations[valid.plan.operation] }} sur {{ valid.plan.device.name }} ·
           {{ valid.plan.device.drive || `Disque ${valid.plan.device.number}` }} · {{ displayBytes(valid.plan.device.size) }}

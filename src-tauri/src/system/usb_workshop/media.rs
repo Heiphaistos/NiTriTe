@@ -146,7 +146,7 @@ pub fn file_stamp(path: &Path) -> Res<Value> {
 
 fn device_details(d: &UsbDisk) -> Value {
     json!({"id": d.id, "name": d.name, "number": d.number, "drive": d.drive, "size": d.size, "free": d.free,
-           "format": d.format, "ventoy": d.ventoy, "partitionStyle": d.partition_style,
+           "format": d.format, "ventoy": d.ventoy, "kind": d.kind, "partitionStyle": d.partition_style,
            "hardwareSerial": d.hardware_serial, "logicalSector": d.logical_sector, "volumes": d.volumes})
 }
 
@@ -193,7 +193,11 @@ pub fn preview(operation: &str, payload: &Value) -> Res<Plan> {
             if total_size(&paths) + 64 * super::MIB > device.size {
                 return Err("Les images sélectionnées dépassent la capacité de la clé.".into());
             }
-            options["gpt"] = json!(payload["gpt"].as_bool() == Some(true));
+            let gpt = payload["gpt"].as_bool() == Some(true);
+            if !gpt && device.size > disks::MBR_LIMIT {
+                return Err("Disque de plus de 2 To : coche « Utiliser GPT pour Ventoy », la table MBR ne couvrirait pas tout le disque.".into());
+            }
+            options["gpt"] = json!(gpt);
         }
         "copy" => {
             paths = media_paths(requested, MEDIA_SUFFIXES)?;

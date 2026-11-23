@@ -9,6 +9,7 @@ export interface UsbDisk {
   id: string; number: number; name: string; serial: string; size: number;
   hardwareSerial: string; diskPath: string; partitionStyle: string; logicalSector: number;
   accessPaths: string[]; volumes: UsbVolume[]; drive: string; format: string; free: number; ventoy: boolean;
+  kind: string;
 }
 export interface UsbImage { path: string; name: string; size: number; methods: Method[] }
 
