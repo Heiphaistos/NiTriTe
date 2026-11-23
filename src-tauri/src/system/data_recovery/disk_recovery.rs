@@ -74,7 +74,10 @@ try {{
                 name       = $_.Name
                 path       = $_.FullName
                 size_bytes = if ($_.PSIsContainer) {{ 0 }} else {{ try {{ $_.Length }} catch {{ 0 }} }}
-                modified   = try {{ $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') }} catch {{ '' }}
+                # $( ) obligatoire : `clé = try {{}} catch {{}}` suivi d'une autre clé est
+                # une erreur d'analyse PowerShell 5.1 (« littéral de hachage
+                # incomplet ») — tout le script échouait et la liste restait vide.
+                modified   = $(try {{ $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') }} catch {{ '' }})
                 is_dir     = $_.PSIsContainer
             }}
         }} catch {{}}
@@ -154,7 +157,7 @@ pub fn recover_files_safe(
                 let (retry, wait) = if safe_mode { ("0", "0") } else { ("3", "5") };
                 let status = std::process::Command::new("robocopy")
                     .args([src.as_str(), &dst, "/E", &format!("/R:{retry}"), &format!("/W:{wait}"),
-                           "/B", "/COPYALL", "/NP", "/NFL", "/NDL", "/NJH", "/NJS"])
+                           "/B", "/COPYALL", "/XJ", "/NP", "/NFL", "/NDL", "/NJH", "/NJS"])
                     .creation_flags(0x08000000).status();
                 match status {
                     Ok(s) if s.code().map(|c| c < 8).unwrap_or(false) => { ok += 1; }
@@ -261,4 +264,24 @@ try {{
         format!("{} récupéré(s), {} échec(s): {}", ok, fail, notices[..notices.len().min(3)].join("; "))
     };
     BatchRestoreResult { success: ok > 0, restored_count: ok, failed_count: fail, message: msg }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Régression : le script PowerShell ne s'analysait pas (try/catch en
+    /// valeur de table de hachage suivi d'une autre clé), la liste était
+    /// toujours vide quel que soit le dossier.
+    #[test]
+    fn browse_disk_path_lists_real_entries() {
+        let d = std::env::temp_dir().join(format!("nitrite_browse_{}", std::process::id()));
+        std::fs::create_dir_all(d.join("sous-dossier")).unwrap();
+        std::fs::write(d.join("fichier.txt"), b"abc").unwrap();
+        let entries = browse_disk_path(d.to_string_lossy().to_string());
+        let _ = std::fs::remove_dir_all(&d);
+        assert_eq!(entries.len(), 2, "{entries:?}");
+        assert!(entries.iter().any(|e| e.is_dir));
+        assert!(entries.iter().any(|e| !e.is_dir && e.size_bytes == 3 && !e.modified.is_empty()));
+    }
 }

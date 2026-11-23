@@ -89,7 +89,7 @@ async function runSnippet(s: Snippet) {
   try {
     const res = await invoke<{ output: string; success: boolean }>("execute_script", {
       content: s.content, scriptType: s.lang,
-    });
+    }, 310_000); // 300 s cote Rust (executor.rs), pas les 30 s par defaut
     runOutput.value[s.id] = res.output || "(pas de sortie)";
     // Ne pas afficher « terminé » (succès) si le script a échoué (exit non-zéro).
     if (res.success) notify.success("Script terminé");

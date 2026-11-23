@@ -76,9 +76,15 @@ async function majPortable(silencieux: boolean): Promise<boolean> {
  *                   « Verifier les mises a jour ».
  * @returns true si une mise a jour a ete lancee.
  */
+let enCours = false;
+
 export async function checkForUpdate(silencieux = true): Promise<boolean> {
   // En dev le binaire n'est pas installe : rien a remplacer.
   if (import.meta.env.DEV) return false;
+  // Une verification periodique ne doit pas ouvrir un 2e dialogue par-dessus
+  // celui encore affiche.
+  if (enCours) return false;
+  enCours = true;
 
   try {
     return (await invoke<boolean>("est_installee"))
@@ -92,5 +98,25 @@ export async function checkForUpdate(silencieux = true): Promise<boolean> {
       await message(`Verification impossible : ${e}`, { title: "Mise a jour", kind: "error" });
     }
     return false;
+  } finally {
+    enCours = false;
   }
+}
+
+// ── Verification automatique : au demarrage puis toutes les 6 h ─────────────
+const CLE_AUTO = "nitrite-maj-auto";
+const PERIODE_MS = 6 * 3600_000;
+
+/** Reglage « Rechercher les mises a jour automatiquement » (actif par defaut). */
+export function majAutoActive(): boolean {
+  try { return localStorage.getItem(CLE_AUTO) !== "0"; } catch { return true; }
+}
+export function setMajAuto(actif: boolean): void {
+  try { localStorage.setItem(CLE_AUTO, actif ? "1" : "0"); } catch { /* stockage indisponible */ }
+}
+
+/** A appeler une fois au demarrage. Relit le reglage a chaque echeance. */
+export function startAutoUpdate(): void {
+  if (majAutoActive()) void checkForUpdate();
+  setInterval(() => { if (majAutoActive()) void checkForUpdate(); }, PERIODE_MS);
 }

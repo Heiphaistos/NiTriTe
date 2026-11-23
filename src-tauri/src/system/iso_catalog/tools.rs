@@ -444,6 +444,13 @@ pub fn verify_manifest(payload: &Value, home: &Path) -> Res<Value> {
         let text = String::from_utf8_lossy(&std::fs::read(temp.join("manifest")).map_err(|e| e.to_string())?).to_string();
         manifest_entry(text.trim_start_matches('\u{feff}'), &media.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default())
     })();
+    // GnuPG 2.x peut démarrer gpg-agent/keyboxd sur ce --homedir : les arrêter pour ne laisser
+    // aucun processus après la vérification et pouvoir supprimer le dossier temporaire.
+    let gpgconf = binary.with_file_name("gpgconf.exe");
+    if gpgconf.is_file() {
+        let home_dir = temp.to_string_lossy().to_string();
+        let _ = execute_system_command(&gpgconf.to_string_lossy(), &["--homedir", &home_dir, "--kill", "all"], 10);
+    }
     let _ = std::fs::remove_dir_all(&temp);
     let expected = outcome?;
     let before = media.metadata().map_err(|e| e.to_string())?;

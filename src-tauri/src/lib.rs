@@ -409,6 +409,7 @@ pub fn run() {
             system::wsl_info::get_wsl_info,
             system::wsl_info::wsl_run_command,
             system::wsl_info::wsl_set_default_version,
+            system::wsl_info::wsl_long_action,
             // Bluetooth
             system::bluetooth::get_bluetooth_info,
             system::bluetooth::toggle_bluetooth,
@@ -496,6 +497,7 @@ pub fn run() {
             system::extras::get_local_ports,
             system::extras::get_disk_tree,
             system::extras::get_big_files,
+            system::extras::cancel_disk_scan,
             system::extras::trash_file,
             system::extras::find_duplicates,
             system::extras::get_temperatures,

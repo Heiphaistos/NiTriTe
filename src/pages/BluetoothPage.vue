@@ -35,8 +35,9 @@ const forgetting = ref<string | null>(null);
 function deviceIcon(cat: string) {
   const c = cat.toLowerCase();
   if (c.includes("audio") || c.includes("headph")) return Headphones;
-  if (c.includes("phone") || c.includes("mobile")) return Smartphone;
-  if (c.includes("mouse") || c.includes("hid")) return Mouse;
+  // Catégories renvoyées par le Rust en français (Souris, Clavier, Telephone…)
+  if (c.includes("phone") || c.includes("mobile") || c.includes("telephone")) return Smartphone;
+  if (c.includes("mouse") || c.includes("souris") || c.includes("clavier") || c.includes("hid")) return Mouse;
   if (c.includes("computer")) return Laptop;
   return Radio;
 }
@@ -81,7 +82,7 @@ async function toggleBt(enable: boolean) {
   if (!enable && !(await confirm("Désactiver le Bluetooth ? Cela déconnectera tous les appareils associés.", { title: "Nitrite", kind: "warning" }))) return;
   toggling.value = true;
   try {
-    await invoke("toggle_bluetooth", { enable });
+    await invoke("toggle_bluetooth", { enable }, 70_000);
     notify.success(enable ? "Bluetooth activé" : "Bluetooth désactivé");
     await load();
   } catch (e: unknown) {
@@ -165,7 +166,7 @@ onMounted(load);
             </div>
             <div class="adapter-info">
               <span class="adapter-name">{{ a.name }}</span>
-              <span class="adapter-meta">{{ a.manufacturer }} · v{{ a.driver_version }} · {{ a.address }}</span>
+              <span class="adapter-meta">{{ a.manufacturer }}<template v-if="a.driver_version"> · pilote {{ a.driver_version }}</template></span>
             </div>
             <NBadge :variant="a.enabled ? 'success' : 'neutral'">{{ a.enabled ? 'Activé' : 'Désactivé' }}</NBadge>
             <div class="adapter-btns">
@@ -188,7 +189,7 @@ onMounted(load);
         </div>
 
         <div v-else class="devices-grid">
-          <div v-for="d in report.devices" :key="d.address" class="device-card">
+          <div v-for="(d, i) in report.devices" :key="d.address || i" class="device-card">
             <div class="device-icon">
               <component :is="deviceIcon(d.category)" :size="20" />
             </div>

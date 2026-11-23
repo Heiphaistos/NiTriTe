@@ -139,7 +139,85 @@ pub fn model_catalog() -> Vec<ModelCatalogEntry> {
             vram_gb: 0,
             url: "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf".into(),
             filename: "Phi-3-mini-4k-instruct-q4.gguf".into(),
+            recommended: false,
+        },
+        // ── Generation 2025 (URL et tailles verifiees le 2026-11-23, HEAD HF) ──
+        ModelCatalogEntry {
+            id: "llama32-3b".into(),
+            name: "Llama 3.2 3B".into(),
+            description: "Meta 3B. Bon compromis pour PC modestes, réponses rapides.".into(),
+            size_gb: 2.02,
+            ram_gb: 6,
+            vram_gb: 0,
+            url: "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf".into(),
+            filename: "Llama-3.2-3B-Instruct-Q4_K_M.gguf".into(),
+            recommended: false,
+        },
+        ModelCatalogEntry {
+            id: "qwen3-4b".into(),
+            name: "Qwen 3 4B".into(),
+            description: "Alibaba 2025. Très bon en français et en diagnostic, léger. Recommandé.".into(),
+            size_gb: 2.5,
+            ram_gb: 6,
+            vram_gb: 0,
+            url: "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf".into(),
+            filename: "Qwen3-4B-Q4_K_M.gguf".into(),
             recommended: true,
+        },
+        ModelCatalogEntry {
+            id: "gemma3-4b".into(),
+            name: "Gemma 3 4B".into(),
+            description: "Google 2025. Explications claires, multilingue.".into(),
+            size_gb: 2.49,
+            ram_gb: 6,
+            vram_gb: 0,
+            url: "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf".into(),
+            filename: "google_gemma-3-4b-it-Q4_K_M.gguf".into(),
+            recommended: false,
+        },
+        ModelCatalogEntry {
+            id: "phi4-mini".into(),
+            name: "Phi-4 Mini 3.8B".into(),
+            description: "Microsoft 2025, successeur de Phi-3 Mini. Raisonnement solide.".into(),
+            size_gb: 2.49,
+            ram_gb: 6,
+            vram_gb: 0,
+            url: "https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/microsoft_Phi-4-mini-instruct-Q4_K_M.gguf".into(),
+            filename: "microsoft_Phi-4-mini-instruct-Q4_K_M.gguf".into(),
+            recommended: false,
+        },
+        ModelCatalogEntry {
+            id: "qwen3-8b".into(),
+            name: "Qwen 3 8B".into(),
+            description: "Alibaba 2025, 8B. Excellent généraliste FR pour l'assistance IT.".into(),
+            size_gb: 5.03,
+            ram_gb: 8,
+            vram_gb: 0,
+            url: "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf".into(),
+            filename: "Qwen3-8B-Q4_K_M.gguf".into(),
+            recommended: false,
+        },
+        ModelCatalogEntry {
+            id: "gemma3-12b".into(),
+            name: "Gemma 3 12B".into(),
+            description: "Google 2025, 12B. Analyses détaillées, 16 GB RAM conseillés.".into(),
+            size_gb: 7.3,
+            ram_gb: 14,
+            vram_gb: 0,
+            url: "https://huggingface.co/bartowski/google_gemma-3-12b-it-GGUF/resolve/main/google_gemma-3-12b-it-Q4_K_M.gguf".into(),
+            filename: "google_gemma-3-12b-it-Q4_K_M.gguf".into(),
+            recommended: false,
+        },
+        ModelCatalogEntry {
+            id: "qwen3-14b".into(),
+            name: "Qwen 3 14B".into(),
+            description: "Alibaba 2025, 14B. Le plus capable sans GPU dédié. 16 GB RAM.".into(),
+            size_gb: 9.0,
+            ram_gb: 16,
+            vram_gb: 0,
+            url: "https://huggingface.co/Qwen/Qwen3-14B-GGUF/resolve/main/Qwen3-14B-Q4_K_M.gguf".into(),
+            filename: "Qwen3-14B-Q4_K_M.gguf".into(),
+            recommended: false,
         },
         // ── Modèles moyens (CPU, 8–12 GB RAM) ─────────────────────────────────
         ModelCatalogEntry {
@@ -608,7 +686,59 @@ pub fn start_server(server_path: &str, model_path: &str, port: u16) -> Result<Ch
     ]);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(0x08000000);
-    cmd.spawn().map_err(|e| format!("Impossible de démarrer llama-server: {}", e))
+    // Filet si NiTriTe ne passe pas par cleanup_on_exit (relance apres mise a
+    // jour, plantage, processus tue) : l'enfant meurt avec l'application.
+    cmd.kill_on_drop(true);
+    let child = cmd.spawn().map_err(|e| format!("Impossible de démarrer llama-server: {}", e))?;
+    #[cfg(target_os = "windows")]
+    lier_a_l_application(&child);
+    Ok(child)
+}
+
+/// Range llama-server dans un Job Object KILL_ON_JOB_CLOSE dont la seule
+/// poignee appartient a NiTriTe : quand NiTriTe disparait, de quelque facon que
+/// ce soit, Windows ferme la poignee et tue le serveur. Sans cela il restait en
+/// memoire (plusieurs Go de modele) apres la fermeture.
+#[cfg(target_os = "windows")]
+fn lier_a_l_application(child: &Child) {
+    use std::sync::OnceLock;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+    // Poignee volontairement jamais fermee : sa fermeture EST le signal d'arret.
+    static JOB: OnceLock<Option<usize>> = OnceLock::new();
+    let job = JOB.get_or_init(|| unsafe {
+        let job = CreateJobObjectW(None, windows::core::PCWSTR::null()).ok()?;
+        let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        )
+        .ok()?;
+        Some(job.0 as usize)
+    });
+    let (Some(job), Some(process)) = (job, child.raw_handle()) else {
+        tracing::warn!("llama-server : Job Object indisponible, arret seulement a la fermeture normale");
+        return;
+    };
+    // SAFETY : `job` est une poignee valide gardee ouverte toute la vie du
+    // processus ; `process` est la poignee du Child, vivante pendant l'appel.
+    if let Err(e) = unsafe { AssignProcessToJobObject(HANDLE(*job as *mut _), HANDLE(process)) } {
+        tracing::warn!("llama-server : rattachement au Job Object impossible : {e}");
+    }
+}
+
+/// Arrete llama-server s'il tourne (fermeture de l'application).
+pub async fn stop_server(slot: &tokio::sync::Mutex<Option<Child>>) {
+    if let Some(mut child) = slot.lock().await.take() {
+        let _ = child.kill().await;
+    }
 }
 
 pub async fn is_server_ready(port: u16) -> bool {
@@ -668,7 +798,14 @@ fn parse_chat_completion(status: reqwest::StatusCode, result: serde_json::Value)
             .unwrap_or("réponse sans détail").to_string();
         return Err(NiTriTeError::OllamaUnavailable(format!("llama-server a renvoyé une erreur ({status}) : {detail}")));
     }
-    Ok(result["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string())
+    let content = result["choices"][0]["message"]["content"].as_str().unwrap_or("");
+    // Modeles « raisonnants » (Qwen 3, DeepSeek R1) : sans --jinja/--reasoning-format,
+    // llama-server laisse le bloc <think>...</think> dans la reponse.
+    let content = match content.rfind("</think>") {
+        Some(i) if content.contains("<think>") => &content[i + "</think>".len()..],
+        _ => content,
+    };
+    Ok(content.trim().to_string())
 }
 
 #[cfg(test)]
@@ -697,6 +834,23 @@ mod tests {
         let body = serde_json::json!({"choices": [{"message": {"role": "assistant", "content": "Bonjour"}}]});
         let r = parse_chat_completion(reqwest::StatusCode::OK, body).unwrap();
         assert_eq!(r, "Bonjour");
+    }
+
+    #[test]
+    fn parse_chat_completion_drops_reasoning_block() {
+        let body = serde_json::json!({"choices": [{"message": {"content": "<think>\nhmm\n</think>\n\nRéponse"}}]});
+        assert_eq!(parse_chat_completion(reqwest::StatusCode::OK, body).unwrap(), "Réponse");
+    }
+
+    #[test]
+    fn catalog_has_one_recommended_and_unique_ids() {
+        let c = model_catalog();
+        assert_eq!(c.iter().filter(|m| m.recommended).count(), 1);
+        let mut ids: Vec<_> = c.iter().map(|m| m.id.as_str()).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), c.len());
+        assert!(c.iter().all(|m| validate_download_url(&m.url).is_ok()));
     }
 
     #[test]

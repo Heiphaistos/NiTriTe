@@ -15,7 +15,7 @@ import { useDataCache } from "@/stores/dataCache";
 import { useProactiveAlerts } from "@/composables/useProactiveAlerts";
 import { logger } from "@/utils/logger";
 import { sdiRelease } from "@/utils/sdiGuard";
-import { checkForUpdate } from "@/composables/useAutoUpdate";
+import { startAutoUpdate } from "@/composables/useAutoUpdate";
 import { runLimited, startupConcurrency, pollMultiplier } from "@/utils/perfProfile";
 
 const { start: startAlerts, stop: stopAlerts } = useProactiveAlerts();
@@ -180,7 +180,7 @@ onMounted(async () => {
   // un service Windows Update fige -- la mise a jour n'etait jamais proposee de
   // la session. Elle n'a aucune raison d'attendre un inventaire de pilotes :
   // l'appel ne bloque pas (`void`), il vit sa vie pendant le chargement.
-  void checkForUpdate();
+  startAutoUpdate();
 
   // ── Tâche 0 : Interface (synchrone) ──
   loadTasks.value[0].status = "running";

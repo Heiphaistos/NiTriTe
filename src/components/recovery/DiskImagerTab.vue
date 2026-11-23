@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted } from "vue";
-import { invoke } from "@/utils/invoke";
+import { invoke, invokeRaw } from "@/utils/invoke";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import NButton from "@/components/ui/NButton.vue";
 import NProgress from "@/components/ui/NProgress.vue";
@@ -14,6 +14,7 @@ import {
 interface DiskSmartInfo {
   disk_index: number; label: string; health: string;
   size_gb: number; media_type: string; serial: string;
+  bus_type?: string; is_removable?: boolean;
   temperature?: number; power_on_hours?: number;
 }
 interface DiskImageResult {
@@ -69,7 +70,10 @@ async function startImaging() {
   });
 
   try {
-    const res = await invoke<DiskImageResult>("create_disk_image_cmd", {
+    // invokeRaw : une image de 1-2 To dure des heures ; invoke() coupait à
+    // 30 s côté interface (erreur affichée, bouton réactivé) pendant que
+    // l'imagerie continuait — un 2e clic lançait une 2e image en parallèle.
+    const res = await invokeRaw<DiskImageResult>("create_disk_image_cmd", {
       diskIndex: selectedDisk.value,
       outputPath: outputPath.value.trim(),
     });
@@ -90,7 +94,7 @@ async function startImaging() {
 async function openOutputDir() {
   const dir = outputPath.value.split("\\").slice(0, -1).join("\\") || "C:\\";
   try { await invoke("open_in_explorer", { path: dir }); }
-  catch {}
+  catch (e: unknown) { notify.error("Ouverture impossible", String(e)); }
 }
 
 const selectedDiskInfo = computed(() =>
@@ -157,7 +161,7 @@ loadDisks();
           <div class="disk-name">{{ disk.label || `Disque ${disk.disk_index}` }}</div>
           <div class="disk-meta">
             <span>{{ disk.size_gb.toFixed(1) }} GB</span>
-            <span>{{ disk.media_type }}</span>
+            <span>{{ disk.media_type }}{{ disk.bus_type === 'USB' ? (disk.is_removable ? ' · Clé USB' : ' · USB externe') : '' }}</span>
             <span v-if="disk.temperature">{{ disk.temperature }}°C</span>
           </div>
           <div class="disk-serial" v-if="disk.serial">S/N: {{ disk.serial }}</div>

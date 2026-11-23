@@ -14,6 +14,42 @@ use std::os::windows::process::CommandExt;
 use crate::error::NiTriTeError;
 use crate::utils::paths;
 
+/// `Command::output()` borné dans le temps. La sauvegarde enchaîne ~25
+/// commandes externes (winget, pip, code, wsl, cscript, PowerShell…) ; une
+/// seule qui se fige (winget qui réindexe ses sources, service WSL bloqué)
+/// laissait la sauvegarde en cours indéfiniment, la page en chargement
+/// infini. Au-delà du délai le processus est tué et la collecte concernée
+/// échoue proprement (les autres continuent).
+pub(crate) trait OutputTimeout {
+    fn output_timeout(&mut self) -> std::io::Result<std::process::Output>;
+}
+
+impl OutputTimeout for Command {
+    fn output_timeout(&mut self) -> std::io::Result<std::process::Output> {
+        const SECS: u64 = 120;
+        // Mêmes flux que output() : stdin nul (jamais d'attente d'une saisie).
+        let child = self
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?;
+        let pid = child.id();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || { let _ = tx.send(child.wait_with_output()); });
+        match rx.recv_timeout(std::time::Duration::from_secs(SECS)) {
+            Ok(r) => r,
+            Err(_) => {
+                #[cfg(target_os = "windows")]
+                let _ = Command::new("taskkill")
+                    .args(["/F", "/T", "/PID", &pid.to_string()])
+                    .creation_flags(0x08000000)
+                    .output();
+                Err(std::io::Error::new(std::io::ErrorKind::TimedOut, format!("commande interrompue après {SECS} s")))
+            }
+        }
+    }
+}
+
 /// Écrit le script PS dans un fichier .ps1 temporaire et l'exécute.
 /// - Nom unique via UUID (anti-TOCTOU, anti-collision)
 /// - ExecutionPolicy RemoteSigned (Bypass supprimé)
@@ -42,7 +78,7 @@ fn run_ps_temp(script: &str) -> Result<String, NiTriTeError> {
     let result = Command::new("powershell")
         .args(["-NoProfile", "-ExecutionPolicy", "RemoteSigned", "-File", tmp_str])
         .creation_flags(0x08000000)
-        .output()
+        .output_timeout()
         .map_err(|e| NiTriTeError::System(format!("Lancement PowerShell: {}", e)));
 
     // Cleanup garanti quel que soit le résultat
@@ -326,3 +362,15 @@ pub fn list_backups() -> Result<Vec<BackupEntryInfo>, NiTriTeError> {
     Ok(backups)
 }
 
+
+#[cfg(test)]
+mod timeout_tests {
+    use super::*;
+
+    #[test]
+    fn output_timeout_returns_output_of_quick_command() {
+        let o = Command::new("cmd").args(["/c", "echo", "ok"]).output_timeout().unwrap();
+        assert!(o.status.success());
+        assert!(String::from_utf8_lossy(&o.stdout).contains("ok"));
+    }
+}

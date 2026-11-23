@@ -48,6 +48,12 @@ pub struct AppConfig {
     pub font_size: String,
     #[serde(default = "default_json")]
     pub export_format: String,
+    /// Reglages purement interface (onglets Performance / Notifications de la
+    /// page Parametres : `notif_*`, `auto_save`, `gpu_acceleration`...). Sans ce
+    /// champ, serde les jetait en silence et la page annoncait « sauvegardes »
+    /// des valeurs revenues a leur defaut au chargement suivant.
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 impl Default for AppConfig {
@@ -70,6 +76,7 @@ impl Default for AppConfig {
             process_count: 10,
             font_size: "normal".to_string(),
             export_format: "json".to_string(),
+            extra: serde_json::Map::new(),
         }
     }
 }
@@ -117,6 +124,16 @@ mod tests {
         assert_eq!(restored.theme, original.theme);
         assert_eq!(restored.llamacpp_port, original.llamacpp_port);
         assert_eq!(restored.process_count, original.process_count);
+    }
+
+    #[test]
+    fn ui_only_settings_survive_a_round_trip() {
+        let json = r#"{"theme":"t","language":"fr","sidebar_collapsed":false,"monitor_interval_ms":2000,"notif_sounds":true,"dashboard_refresh_ms":5000}"#;
+        let c: AppConfig = serde_json::from_str(json).expect("parse");
+        let back: serde_json::Value = serde_json::to_value(&c).expect("ser");
+        assert_eq!(back["notif_sounds"], true);
+        assert_eq!(back["dashboard_refresh_ms"], 5000);
+        assert_eq!(back["llamacpp_port"], 8080);
     }
 
     #[test]

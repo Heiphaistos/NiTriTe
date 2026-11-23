@@ -133,6 +133,8 @@ pub fn official(item: &Official, folder: &Path) -> R<PathBuf> {
         return Ok(path);
     }
     let stage = path.with_extension("part");
+    // Un .part laissé par une fermeture brutale bloquerait `create_new` pour toujours.
+    let _ = std::fs::remove_file(&stage);
     let result = (|| -> R<()> {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(120))

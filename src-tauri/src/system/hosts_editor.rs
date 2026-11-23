@@ -1,7 +1,9 @@
 use serde::Serialize;
+#[cfg(target_os = "windows")]
 use std::process::Command;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+#[cfg(target_os = "windows")]
 use crate::maintenance::commands::decode_output;
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -13,7 +15,12 @@ pub struct HostsEntry {
     pub line_number: u32,
 }
 
-const HOSTS_PATH: &str = r"C:\Windows\System32\drivers\etc\hosts";
+/// Chemin du fichier hosts : `%SystemRoot%` plutôt que `C:\Windows` en dur
+/// (Windows installé sur un autre lecteur, WinPE).
+fn hosts_path() -> String {
+    let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_string());
+    format!(r"{}\System32\drivers\etc\hosts", root)
+}
 
 // Anti-freeze : lecture fichier hosts + résolutions associées peuvent
 // bloquer — jamais inline sur le thread de commande.
@@ -25,20 +32,16 @@ pub async fn get_hosts_entries() -> Vec<HostsEntry> {
 }
 
 fn get_hosts_entries_blocking() -> Vec<HostsEntry> {
-    let content = match std::fs::read_to_string(HOSTS_PATH) {
+    let path = hosts_path();
+    let content = match std::fs::read_to_string(&path) {
         Ok(c) => c,
         Err(_) => {
-            // Try PowerShell read. Ce repli n'est emprunté que lorsque le fichier
-            // hosts n'est PAS de l'UTF-8 valide (read_to_string a échoué) — donc
-            // exactement le cas où decode_output (repli OEM) est nécessaire ;
-            // from_utf8_lossy transformerait chaque caractère accentué d'un
-            // commentaire hérité (ANSI/OEM) en mojibake (confirmé : PowerShell
-            // réencode Get-Content -Raw en OEM sur la sortie standard, pas en UTF-8).
+            // Repli : fichier hosts non UTF-8 (commentaires hérités ANSI/OEM).
+            // decode_output gère le repli OEM, from_utf8_lossy donnerait du mojibake.
             #[cfg(target_os = "windows")]
             {
                 let o = Command::new("powershell")
-                    .args(["-NoProfile","-NonInteractive","-Command",
-                           &format!("Get-Content '{}' -Raw", HOSTS_PATH)])
+                    .args(["-NoProfile","-NonInteractive","-Command", "Get-Content -LiteralPath $env:SystemRoot\\System32\\drivers\\etc\\hosts -Raw"])
                     .creation_flags(0x08000000).output().ok();
                 if let Some(o) = o {
                     decode_output(&o.stdout)
@@ -48,35 +51,30 @@ fn get_hosts_entries_blocking() -> Vec<HostsEntry> {
             return vec![];
         }
     };
+    parse_hosts(&content)
+}
 
+fn parse_hosts(content: &str) -> Vec<HostsEntry> {
+    // BOM UTF-8 (fichier réécrit par Set-Content -Encoding UTF8 de PS 5.1) :
+    // sans ce retrait, une entrée en 1re ligne était ignorée.
+    let content = content.trim_start_matches('\u{feff}');
     let mut entries = Vec::new();
     for (i, line) in content.lines().enumerate() {
         let trimmed = line.trim();
         let active = !trimmed.starts_with('#');
-
-        // Parse active entry: "ip hostname # optional comment"
-        let parse_line = if active { trimmed } else {
-            trimmed.trim_start_matches('#').trim()
-        };
+        let parse_line = if active { trimmed } else { trimmed.trim_start_matches('#').trim() };
 
         let parts: Vec<&str> = parse_line.splitn(2, |c: char| c.is_whitespace()).collect();
         if !parts.is_empty() {
             let ip = parts[0].trim();
             let rest = parts.get(1).unwrap_or(&"").trim();
-
-            // Separate hostname and inline comment
             let (hostname, comment) = if let Some(ci) = rest.find('#') {
                 (rest[..ci].trim(), rest[ci+1..].trim())
             } else {
                 (rest, "")
             };
-
-            // Le bloc d'en-tete standard Windows ("# This file contains the
-            // mappings...", "# entry should be kept...") est du texte libre en
-            // commentaire, pas des entrees desactivees — sans cette validation,
-            // chaque ligne de commentaire etait parsee comme si son 1er mot etait
-            // une IP ("Copyright"/"(c)", "This"/"is", "entry"/"should"...),
-            // polluant la liste de fausses entrees a chaque fichier hosts par defaut.
+            // L'en-tête standard (« # This file contains... ») est du texte libre,
+            // pas des entrées désactivées : on n'accepte qu'une vraie IP en 1er mot.
             if !ip.is_empty() && !hostname.is_empty() && ip.parse::<std::net::IpAddr>().is_ok() {
                 entries.push(HostsEntry {
                     ip: ip.to_string(),
@@ -91,6 +89,106 @@ fn get_hosts_entries_blocking() -> Vec<HostsEntry> {
     entries
 }
 
+// ─── Édition au niveau octet ──────────────────────────────────────────────────
+// Les modifications se font directement en Rust sur les octets du fichier :
+// seule la ligne visée change, les autres restent identiques (encodage, CRLF,
+// BOM). L'ancienne version passait par Get-Content/Set-Content -Encoding UTF8
+// de PowerShell 5.1, qui relisait le fichier en ANSI et le réécrivait avec un
+// BOM à chaque modification.
+
+/// Découpe en lignes en gardant le `\n` final de chaque ligne.
+fn split_lines(bytes: &[u8]) -> Vec<&[u8]> {
+    bytes.split_inclusive(|b| *b == b'\n').collect()
+}
+
+fn line_body(line: &[u8]) -> &[u8] {
+    let l = line.strip_suffix(b"\n").unwrap_or(line);
+    l.strip_suffix(b"\r").unwrap_or(l)
+}
+
+fn trim_start_ws(b: &[u8]) -> &[u8] {
+    let n = b.iter().take_while(|c| c.is_ascii_whitespace()).count();
+    &b[n..]
+}
+
+/// Vérifie que la ligne visée porte bien le nom d'hôte affiché dans l'UI :
+/// si le fichier a changé entre l'affichage et l'action (autre outil, ajout
+/// sans rechargement), on refuse au lieu de modifier la mauvaise ligne.
+fn check_expected(line: &[u8], expected: Option<&str>) -> Result<(), String> {
+    let Some(exp) = expected.map(str::trim).filter(|e| !e.is_empty()) else { return Ok(()) };
+    let text = String::from_utf8_lossy(line_body(line));
+    let body = text.trim().trim_start_matches('#');
+    let body = body.split('#').next().unwrap_or("");
+    if body.split_whitespace().skip(1).any(|h| h.eq_ignore_ascii_case(exp)) {
+        Ok(())
+    } else {
+        Err("Le fichier hosts a changé depuis l'affichage : actualisez la liste avant de modifier.".to_string())
+    }
+}
+
+fn apply_delete(bytes: &[u8], line_number: u32, expected: Option<&str>) -> Result<Vec<u8>, String> {
+    let lines = split_lines(bytes);
+    let idx = (line_number as usize).checked_sub(1).ok_or("Numéro de ligne invalide")?;
+    let line = lines.get(idx).ok_or("Ligne introuvable")?;
+    check_expected(line, expected)?;
+    Ok(lines.iter().enumerate().filter(|(i, _)| *i != idx).flat_map(|(_, l)| l.iter().copied()).collect())
+}
+
+fn apply_toggle(bytes: &[u8], line_number: u32, enable: bool, expected: Option<&str>) -> Result<Vec<u8>, String> {
+    let lines = split_lines(bytes);
+    let idx = (line_number as usize).checked_sub(1).ok_or("Numéro de ligne invalide")?;
+    let line = *lines.get(idx).ok_or("Ligne introuvable")?;
+    check_expected(line, expected)?;
+    let body = line_body(line);
+    let ending = &line[body.len()..];
+    let start = trim_start_ws(body);
+    let new_body: Vec<u8> = if enable {
+        let n = start.iter().take_while(|c| **c == b'#').count();
+        trim_start_ws(&start[n..]).to_vec()
+    } else if start.starts_with(b"#") {
+        body.to_vec()
+    } else {
+        [b"# ".as_slice(), body].concat()
+    };
+    let mut out = Vec::with_capacity(bytes.len() + 2);
+    for (i, l) in lines.iter().enumerate() {
+        if i == idx { out.extend_from_slice(&new_body); out.extend_from_slice(ending); }
+        else { out.extend_from_slice(l); }
+    }
+    Ok(out)
+}
+
+fn apply_add(bytes: &[u8], ip: &str, host: &str, comment: &str) -> Result<Vec<u8>, String> {
+    let text = String::from_utf8_lossy(bytes);
+    if parse_hosts(&text).iter().any(|e| e.active && e.ip == ip && e.hostname.eq_ignore_ascii_case(host)) {
+        return Err(format!("Entrée déjà présente : {} -> {}", ip, host));
+    }
+    let mut out = bytes.to_vec();
+    if !out.is_empty() && !out.ends_with(b"\n") { out.extend_from_slice(b"\r\n"); }
+    let line = if comment.is_empty() { format!("{}\t{}\r\n", ip, host) } else { format!("{}\t{}\t# {}\r\n", ip, host, comment) };
+    out.extend_from_slice(line.as_bytes());
+    Ok(out)
+}
+
+/// Sauvegarde automatique (hosts.bak = état avant la dernière modification)
+/// puis écriture et relecture. Fail-closed : pas de sauvegarde, pas d'écriture.
+fn write_hosts_with_backup(new_bytes: &[u8]) -> Result<(), String> {
+    let path = hosts_path();
+    std::fs::copy(&path, format!("{}.bak", path))
+        .map_err(|e| format!("Sauvegarde préalable impossible, aucune modification faite ({}). Droits administrateur requis.", e))?;
+    std::fs::write(&path, new_bytes)
+        .map_err(|e| format!("Écriture du fichier hosts refusée ({}). Droits administrateur requis.", e))?;
+    // Relecture : un antivirus (Defender « HostsFileHijack ») peut annuler l'écriture.
+    if std::fs::read(&path).map_err(|e| e.to_string())? != new_bytes {
+        return Err("Le fichier hosts a été modifié ou restauré juste après l'écriture (antivirus ?).".to_string());
+    }
+    Ok(())
+}
+
+fn read_hosts_bytes() -> Result<Vec<u8>, String> {
+    std::fs::read(hosts_path()).map_err(|e| format!("Lecture du fichier hosts impossible : {}", e))
+}
+
 // Anti-freeze : écriture fichier hosts est bloquante — jamais inline sur le
 // thread de commande.
 #[tauri::command]
@@ -100,153 +198,61 @@ pub async fn add_hosts_entry(ip: String, hostname: String, comment: String) -> R
         .map_err(|e| e.to_string())?
 }
 
-fn add_hosts_entry_blocking(ip: String, hostname: String, comment: String) -> Result<String, String> {
-    // Suppression de tous les caractères de contrôle (newlines inclus) + guillemets
-    fn clean(s: &str) -> String {
-        s.chars().filter(|c| !c.is_control() && *c != '\'' && *c != '"').collect::<String>().trim().to_string()
-    }
-    // Whitelist stricte pour le commentaire : alphanumériques, espaces, tirets, underscores, points
-    // Évite l'injection PowerShell via caractères spéciaux (;, |, $, `, &, (, ))
-    fn clean_comment(s: &str) -> String {
-        s.chars()
-            .filter(|c| c.is_alphanumeric() || " -_.".contains(*c))
-            .collect::<String>()
-            .trim()
-            .to_string()
-    }
-    let ip_c = clean(&ip);
-    let host_c = clean(&hostname);
-    let comment_c = clean_comment(&comment);
-
+/// Valide et nettoie l'entrée. Le nom d'hôte suit RFC 1123 (ASCII, 253 car.
+/// max, étiquettes de 1 à 63 car. sans tiret en bordure ; `_` toléré).
+fn validate_entry(ip: &str, hostname: &str, comment: &str) -> Result<(String, String, String), String> {
+    let ip_c: String = ip.chars().filter(|c| !c.is_control()).collect::<String>().trim().to_string();
+    let host_c: String = hostname.chars().filter(|c| !c.is_control()).collect::<String>().trim().to_string();
+    let comment_c: String = comment.chars()
+        .filter(|c| c.is_alphanumeric() || " -_.".contains(*c))
+        .collect::<String>().trim().to_string();
     if ip_c.is_empty() || host_c.is_empty() {
         return Err("IP et hostname requis".to_string());
     }
-
-    // Validation IP basique (IPv4 ou IPv6)
-    let valid_ip = ip_c.parse::<std::net::IpAddr>().is_ok();
-    if !valid_ip {
+    if ip_c.parse::<std::net::IpAddr>().is_err() {
         return Err(format!("IP invalide : {}", ip_c));
     }
-
-    // Validation hostname : alphanumériques, tirets, points uniquement
-    let valid_host = host_c.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '.' || c == '_');
-    if !valid_host {
+    let labels_ok = host_c.len() <= 253 && host_c.split('.').all(|l| {
+        !l.is_empty() && l.len() <= 63 && !l.starts_with('-') && !l.ends_with('-')
+            && l.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    });
+    if !labels_ok {
         return Err(format!("Hostname invalide : {}", host_c));
     }
+    Ok((ip_c, host_c, comment_c))
+}
 
-    let line = if comment_c.is_empty() {
-        format!("\n{}\t{}", ip_c, host_c)
-    } else {
-        format!("\n{}\t{}\t# {}", ip_c, host_c, comment_c)
-    };
-    let ps = format!(r#"Add-Content -Path '{}' -Value '{}' -Encoding UTF8"#, HOSTS_PATH, line);
-    #[cfg(target_os = "windows")]
-    {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",&ps]).creation_flags(0x08000000).output().map_err(|e| e.to_string())?;
-        if !o.status.success() {
-            return Err(decode_output(&o.stderr));
-        }
-        // Add-Content peut rendre un exit code 0 meme quand l'ecriture echoue
-        // reellement (droits insuffisants sur un fichier systeme, process enfant
-        // powershell.exe non elevé) — sans cette relecture, l'utilisateur voit
-        // "Entrée ajoutée" alors que le fichier hosts reel n'a jamais change.
-        let content = std::fs::read_to_string(HOSTS_PATH).unwrap_or_default();
-        if !content.lines().any(|l| l.trim() == format!("{}\t{}", ip_c, host_c).trim() || (l.contains(&ip_c) && l.contains(&host_c))) {
-            return Err("L'écriture a échoué silencieusement (droits administrateur requis sur le fichier hosts)".to_string());
-        }
-        Ok(format!("Entrée ajoutée : {} -> {}", ip_c, host_c))
-    }
-    #[cfg(not(target_os = "windows"))]
-    Err("Non disponible".to_string())
+fn add_hosts_entry_blocking(ip: String, hostname: String, comment: String) -> Result<String, String> {
+    let (ip_c, host_c, comment_c) = validate_entry(&ip, &hostname, &comment)?;
+    let new_bytes = apply_add(&read_hosts_bytes()?, &ip_c, &host_c, &comment_c)?;
+    write_hosts_with_backup(&new_bytes)?;
+    Ok(format!("Entrée ajoutée : {} -> {}", ip_c, host_c))
 }
 
 // Anti-freeze : écriture fichier hosts est bloquante — jamais inline sur le
 // thread de commande.
 #[tauri::command]
-pub async fn delete_hosts_entry(line_number: u32) -> Result<String, String> {
-    tokio::task::spawn_blocking(move || delete_hosts_entry_blocking(line_number))
-        .await
-        .map_err(|e| e.to_string())?
-}
-
-fn delete_hosts_entry_blocking(line_number: u32) -> Result<String, String> {
-    if line_number == 0 {
-        return Err("Numéro de ligne invalide".to_string());
-    }
-    let before = std::fs::read_to_string(HOSTS_PATH).unwrap_or_default();
-    let before_count = before.lines().count();
-    // -SkipIndex n'existe qu'en PowerShell 6+ ; boucle indexée compatible Windows PowerShell 5.1
-    let ps = format!(r#"
-$lines = @(Get-Content '{}')
-$idx = {}
-if ($idx -ge $lines.Count) {{ throw "Ligne introuvable" }}
-$new = @(for ($i = 0; $i -lt $lines.Count; $i++) {{ if ($i -ne $idx) {{ $lines[$i] }} }})
-$new | Set-Content '{}' -Encoding UTF8
-"#, HOSTS_PATH, line_number - 1, HOSTS_PATH);
-    #[cfg(target_os = "windows")]
-    {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",&ps]).creation_flags(0x08000000).output().map_err(|e| e.to_string())?;
-        if !o.status.success() {
-            return Err(decode_output(&o.stderr));
-        }
-        // Meme piege que add_hosts_entry : exit code 0 ne garantit pas que
-        // l'ecriture a reellement eu lieu — on verifie que le fichier a
-        // vraiment une ligne de moins.
-        let after_count = std::fs::read_to_string(HOSTS_PATH).unwrap_or_default().lines().count();
-        if after_count >= before_count {
-            return Err("La suppression a échoué silencieusement (droits administrateur requis sur le fichier hosts)".to_string());
-        }
+pub async fn delete_hosts_entry(line_number: u32, expected_hostname: Option<String>) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let new_bytes = apply_delete(&read_hosts_bytes()?, line_number, expected_hostname.as_deref())?;
+        write_hosts_with_backup(&new_bytes)?;
         Ok("Entrée supprimée".to_string())
-    }
-    #[cfg(not(target_os = "windows"))]
-    Err("Non disponible".to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // Anti-freeze : écriture fichier hosts est bloquante — jamais inline sur le
 // thread de commande.
 #[tauri::command]
-pub async fn toggle_hosts_entry(line_number: u32, enable: bool) -> Result<String, String> {
-    tokio::task::spawn_blocking(move || toggle_hosts_entry_blocking(line_number, enable))
-        .await
-        .map_err(|e| e.to_string())?
-}
-
-fn toggle_hosts_entry_blocking(line_number: u32, enable: bool) -> Result<String, String> {
-    if line_number == 0 {
-        return Err("Numéro de ligne invalide".to_string());
-    }
-    let ps = format!(r#"
-$lines = @(Get-Content '{}')
-$idx = {}
-if ($idx -ge 0 -and $idx -lt $lines.Count) {{
-    $line = $lines[$idx]
-    if ({}) {{
-        $lines[$idx] = $line.TrimStart('#').TrimStart()
-    }} else {{
-        if (-not $line.StartsWith('#')) {{ $lines[$idx] = '# ' + $line }}
-    }}
-    $lines | Set-Content '{}' -Encoding UTF8
-    "Modifié"
-}} else {{ throw "Ligne introuvable" }}
-"#, HOSTS_PATH, line_number - 1, if enable { "$true" } else { "$false" }, HOSTS_PATH);
-    #[cfg(target_os = "windows")]
-    {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",&ps]).creation_flags(0x08000000).output().map_err(|e| e.to_string())?;
-        if !o.status.success() {
-            return Err(decode_output(&o.stderr));
-        }
-        // Meme piege : verifier que la ligne ciblee a reellement le prefixe '#'
-        // attendu apres coup, pas juste que powershell.exe est sorti en 0.
-        let lines: Vec<String> = std::fs::read_to_string(HOSTS_PATH).unwrap_or_default().lines().map(|l| l.to_string()).collect();
-        let idx = (line_number - 1) as usize;
-        let actually_enabled = lines.get(idx).map(|l| !l.trim_start().starts_with('#')).unwrap_or(false);
-        if actually_enabled != enable {
-            return Err("La modification a échoué silencieusement (droits administrateur requis sur le fichier hosts)".to_string());
-        }
+pub async fn toggle_hosts_entry(line_number: u32, enable: bool, expected_hostname: Option<String>) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let new_bytes = apply_toggle(&read_hosts_bytes()?, line_number, enable, expected_hostname.as_deref())?;
+        write_hosts_with_backup(&new_bytes)?;
         Ok("Modifié".to_string())
-    }
-    #[cfg(not(target_os = "windows"))]
-    Err("Non disponible".to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // Anti-freeze : I/O fichier — jamais inline sur le thread de commande.
@@ -258,8 +264,9 @@ pub async fn backup_hosts() -> Result<String, String> {
 }
 
 fn backup_hosts_blocking() -> Result<String, String> {
-    let backup = format!("{}.bak", HOSTS_PATH);
-    std::fs::copy(HOSTS_PATH, &backup).map(|_| format!("Sauvegarde : {}", backup)).map_err(|e| e.to_string())
+    let path = hosts_path();
+    let backup = format!("{}.bak", path);
+    std::fs::copy(&path, &backup).map(|_| format!("Sauvegarde : {}", backup)).map_err(|e| e.to_string())
 }
 
 // Anti-freeze : I/O fichier — jamais inline sur le thread de commande.
@@ -271,7 +278,7 @@ pub async fn get_hosts_raw() -> String {
 }
 
 fn get_hosts_raw_blocking() -> String {
-    std::fs::read_to_string(HOSTS_PATH).unwrap_or_default()
+    std::fs::read_to_string(hosts_path()).unwrap_or_default()
 }
 
 // Anti-freeze : résolution DNS est bloquante — jamais inline sur le thread de commande.
@@ -306,56 +313,94 @@ pub fn import_hosts_blocklist(url: String, _list_name: String) -> Result<String,
 
 #[cfg(test)]
 mod tests {
-    
+    use super::*;
 
-    // add_hosts_entry is tested in isolation by extracting its validation logic
-    // (the actual file write is platform-gated and won't run in tests)
-
-    fn validate_hosts_input(ip: &str, hostname: &str) -> Result<(), String> {
-        fn clean(s: &str) -> String {
-            s.chars().filter(|c| !c.is_control() && *c != '\'' && *c != '"').collect::<String>().trim().to_string()
-        }
-        let ip_c = clean(ip);
-        let host_c = clean(hostname);
-        if ip_c.is_empty() || host_c.is_empty() { return Err("IP et hostname requis".into()); }
-        if ip_c.parse::<std::net::IpAddr>().is_err() { return Err(format!("IP invalide: {}", ip_c)); }
-        let valid_host = host_c.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '.' || c == '_');
-        if !valid_host { return Err(format!("Hostname invalide: {}", host_c)); }
-        Ok(())
-    }
+    const SAMPLE: &[u8] = b"# Copyright (c) 1993-2009 Microsoft Corp.\r\n#\r\n# 127.0.0.1 localhost\r\n10.0.0.5\tnas.lan\t# NAS\r\n0.0.0.0 ads.example.com\r\n";
 
     #[test]
     fn valid_ipv4_and_hostname() {
-        assert!(validate_hosts_input("192.168.1.10", "local.dev").is_ok());
-        assert!(validate_hosts_input("127.0.0.1", "my-server").is_ok());
+        assert!(validate_entry("192.168.1.10", "local.dev", "").is_ok());
+        assert!(validate_entry("127.0.0.1", "my-server", "").is_ok());
+        assert!(validate_entry("127.0.0.1", "_dmarc.example.com", "").is_ok());
     }
 
     #[test]
     fn valid_ipv6() {
-        assert!(validate_hosts_input("::1", "localhost6").is_ok());
-        assert!(validate_hosts_input("2001:db8::1", "test.host").is_ok());
+        assert!(validate_entry("::1", "localhost6", "").is_ok());
+        assert!(validate_entry("2001:db8::1", "test.host", "").is_ok());
     }
 
     #[test]
     fn invalid_ip_rejected() {
-        assert!(validate_hosts_input("not-an-ip", "host.local").is_err());
-        assert!(validate_hosts_input("999.999.999.999", "host.local").is_err());
-        assert!(validate_hosts_input("", "host.local").is_err());
+        assert!(validate_entry("not-an-ip", "host.local", "").is_err());
+        assert!(validate_entry("999.999.999.999", "host.local", "").is_err());
+        assert!(validate_entry("", "host.local", "").is_err());
     }
 
     #[test]
-    fn hostname_with_special_chars_rejected() {
-        // clean() ne supprime PAS ;|$ — ils sont bloqués par la whitelist hostname [a-z0-9-._]
-        assert!(validate_hosts_input("127.0.0.1", "evil;whoami").is_err());
-        assert!(validate_hosts_input("127.0.0.1", "host|cmd").is_err());
+    fn hostname_rules() {
+        assert!(validate_entry("127.0.0.1", "evil;whoami", "").is_err());
+        assert!(validate_entry("127.0.0.1", "host|cmd", "").is_err());
+        assert!(validate_entry("127.0.0.1", "a b", "").is_err());
+        assert!(validate_entry("127.0.0.1", "-bad.com", "").is_err());
+        assert!(validate_entry("127.0.0.1", "bad..com", "").is_err());
+        assert!(validate_entry("127.0.0.1", &"a".repeat(64), "").is_err());
+        // Caractères de contrôle retirés (pas de saut de ligne injecté)
+        let (_, h, _) = validate_entry("127.0.0.1", "host\nevil", "").unwrap();
+        assert_eq!(h, "hostevil");
     }
 
     #[test]
-    fn quotes_stripped_from_ip_and_host() {
-        // Single/double quote-only inputs become empty after stripping → rejected
-        assert!(validate_hosts_input("'", "host").is_err());
-        assert!(validate_hosts_input("\"\"", "host").is_err());
-        // Control characters stripped — but valid chars survive
-        assert!(validate_hosts_input("127.0.0.1", "host\x00evil").is_ok()); // null stripped, "hostevil" is valid
+    fn comment_is_whitelisted() {
+        let (_, _, c) = validate_entry("127.0.0.1", "h", "a;b|c\r\n# d").unwrap();
+        assert_eq!(c, "abc d");
+    }
+
+    #[test]
+    fn parse_ignores_header_and_bom() {
+        let mut with_bom = "\u{feff}".as_bytes().to_vec();
+        with_bom.extend_from_slice(b"1.2.3.4 first.lan\r\n");
+        let e = parse_hosts(&String::from_utf8_lossy(&with_bom));
+        assert_eq!(e.len(), 1);
+        assert_eq!(e[0].hostname, "first.lan");
+        let e = parse_hosts(&String::from_utf8_lossy(SAMPLE));
+        assert_eq!(e.len(), 3);
+        assert!(!e[0].active && e[0].hostname == "localhost" && e[0].line_number == 3);
+        assert_eq!((e[1].line_number, e[1].comment.as_str()), (4, "NAS"));
+    }
+
+    #[test]
+    fn toggle_only_touches_target_line() {
+        let out = apply_toggle(SAMPLE, 5, false, Some("ads.example.com")).unwrap();
+        assert_eq!(out, b"# Copyright (c) 1993-2009 Microsoft Corp.\r\n#\r\n# 127.0.0.1 localhost\r\n10.0.0.5\tnas.lan\t# NAS\r\n# 0.0.0.0 ads.example.com\r\n");
+        let back = apply_toggle(&out, 5, true, Some("ads.example.com")).unwrap();
+        assert_eq!(back, SAMPLE);
+        // Ré-activer une entrée déjà active : inchangé
+        assert_eq!(apply_toggle(SAMPLE, 4, true, None).unwrap(), SAMPLE);
+    }
+
+    #[test]
+    fn delete_removes_one_line() {
+        let out = apply_delete(SAMPLE, 4, Some("nas.lan")).unwrap();
+        assert!(!String::from_utf8_lossy(&out).contains("nas.lan"));
+        assert_eq!(split_lines(&out).len(), split_lines(SAMPLE).len() - 1);
+        assert!(apply_delete(SAMPLE, 0, None).is_err());
+        assert!(apply_delete(SAMPLE, 99, None).is_err());
+    }
+
+    #[test]
+    fn stale_line_number_refused() {
+        // La ligne 4 n'est plus nas.lan : refuser au lieu de modifier la mauvaise ligne
+        assert!(apply_delete(SAMPLE, 4, Some("ads.example.com")).is_err());
+        assert!(apply_toggle(SAMPLE, 5, false, Some("nas.lan")).is_err());
+    }
+
+    #[test]
+    fn add_appends_and_refuses_duplicates() {
+        let out = apply_add(b"1.1.1.1 a", "2.2.2.2", "b.lan", "").unwrap();
+        assert_eq!(out, b"1.1.1.1 a\r\n2.2.2.2\tb.lan\r\n");
+        assert!(apply_add(SAMPLE, "10.0.0.5", "NAS.lan", "").is_err());
+        // Entrée désactivée identique : on peut la rajouter active
+        assert!(apply_add(SAMPLE, "127.0.0.1", "localhost", "").is_ok());
     }
 }

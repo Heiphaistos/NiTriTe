@@ -201,8 +201,8 @@ const TERMINAL_READONLY_COMMANDS: &[&str] = &[
     "ipconfig /all",
     "ping -n 4 8.8.8.8",
     "tasklist /fo table",
-    "wmic logicaldisk get caption,freespace,size",
-    "wmic /namespace:\\\\root\\wmi PATH MSAcpi_ThermalZoneTemperature get CurrentTemperature",
+    r#"powershell -NoProfile -Command "Get-CimInstance Win32_LogicalDisk | Format-Table DeviceID,FreeSpace,Size""#,
+    r#"powershell -NoProfile -Command "Get-CimInstance -Namespace root/wmi MSAcpi_ThermalZoneTemperature | Format-Table InstanceName,CurrentTemperature""#,
     "net statistics workstation | findstr /i statistics",
     "netstat -ano | findstr LISTENING",
     "set",
@@ -377,11 +377,15 @@ async fn get_startup_programs() -> Result<Vec<maintenance::cleanup::StartupEntry
 }
 
 #[tauri::command]
-async fn run_system_command(cmd: String, args: Vec<String>) -> Result<maintenance::commands::CommandResult, NiTriTeError> {
+async fn run_system_command(cmd: String, args: Vec<String>, timeout_secs: Option<u64>) -> Result<maintenance::commands::CommandResult, NiTriTeError> {
     validate_ui_command(&cmd, &args)?;
+    // 60 s par défaut ; les opérations longues (scan Defender : plusieurs
+    // minutes à plusieurs heures) passent `timeoutSecs`, sinon elles étaient
+    // tuées à 60 s et signalées en erreur. Borné à 12 h, jamais illimité.
+    let timeout = timeout_secs.unwrap_or(60).clamp(1, 12 * 3600);
     tokio::task::spawn_blocking(move || {
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-        maintenance::commands::execute_system_command(&cmd, &args_refs, 60)
+        maintenance::commands::execute_system_command(&cmd, &args_refs, timeout)
     })
     .await
     .map_err(|e| NiTriTeError::System(e.to_string()))?
@@ -466,11 +470,17 @@ fn is_own_temp_entry(name: &str) -> bool {
 // === Nettoyage sortie ===
 
 #[tauri::command]
-async fn cleanup_on_exit(app: tauri::AppHandle) -> Result<(), NiTriTeError> {
+async fn cleanup_on_exit(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<(), NiTriTeError> {
+    // 0. Aucun processus enfant ne survit : llama-server gardait le modele
+    //    (plusieurs Go) en memoire apres la fermeture.
+    ai::llamacpp::stop_server(&state.llamacpp_process).await;
+
     tokio::task::spawn_blocking(move || {
-        // 1. Logs applicatif (.logs/ à la racine du projet — dev uniquement)
+        // 1. Logs applicatif (.logs/ a cote de l'exe, la ou logging.rs ecrit).
+        //    Surtout pas `current_dir()` : lance depuis un terminal ouvert dans
+        //    un autre projet, NiTriTe effacait le `.logs` de CE projet.
         let logs_candidates = [
-            std::env::current_dir().ok().map(|d| d.join(".logs")),
+            Some(crate::utils::paths::app_root_dir().join(".logs")),
             std::env::var("APPDATA").ok().map(|a| std::path::PathBuf::from(a).join("com.nitrite.tool").join("logs")),
         ];
         for candidate in logs_candidates.iter().flatten() {
@@ -549,8 +559,9 @@ mod tests {
     fn terminal_asks_confirmation_for_anything_but_the_readonly_quick_commands() {
         assert!(!terminal_needs_confirmation("ipconfig /all"));
         assert!(!terminal_needs_confirmation(
-            "wmic /namespace:\\\\root\\wmi PATH MSAcpi_ThermalZoneTemperature get CurrentTemperature"
+            r#"powershell -NoProfile -Command "Get-CimInstance -Namespace root/wmi MSAcpi_ThermalZoneTemperature | Format-Table InstanceName,CurrentTemperature""#
         ));
+        assert!(terminal_needs_confirmation("wmic logicaldisk get caption,freespace,size"));
         assert!(terminal_needs_confirmation("ipconfig /all & del /q C:\\x"));
         assert!(terminal_needs_confirmation("powershell -EncodedCommand AAAA"));
         assert!(terminal_needs_confirmation(""));

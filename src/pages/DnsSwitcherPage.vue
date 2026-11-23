@@ -10,7 +10,7 @@ import { Globe, RefreshCw, Trash2, Zap, Activity, FlaskConical, History, ShieldC
 
 const notify = useNotificationStore();
 
-interface DnsPreset  { id: string; name: string; primary: string; secondary: string; description: string; }
+interface DnsPreset  { id: string; name: string; primary: string; secondary: string; primary6: string; secondary6: string; description: string; }
 interface AdapterInfo { name: string; description: string; status: string; current_dns: string[]; }
 
 interface DnsTestResult {
@@ -189,8 +189,10 @@ async function applyDns() {
   const secondary = showCustom.value ? customSecondary.value : preset!.secondary;
   applying.value = true;
   try {
-    await invoke("switch_dns", { adapter: selectedAdapter.value, primary, secondary });
-    notify.success("DNS change", `Adaptateur : ${selectedAdapter.value}`);
+    // IPv6 du fournisseur : sinon les DNS IPv6 de la box restent actifs et contournent un DNS filtrant
+    const ipv6 = preset ? [preset.primary6, preset.secondary6].filter(Boolean) : [];
+    const msg = await invoke<string>("switch_dns", { adapter: selectedAdapter.value, primary, secondary, ipv6 }, 90_000);
+    notify.success("DNS change", `${selectedAdapter.value} : ${msg}`);
     adapters.value = await invoke<AdapterInfo[]>("get_network_adapters_for_dns");
 
     // Save to history
@@ -326,6 +328,7 @@ function bestPreset(): string {
               <div v-if="p.primary" style="display:flex;gap:4px;margin-top:4px;align-items:center">
                 <code class="dns-ip">{{ p.primary }}</code>
                 <code v-if="p.secondary" class="dns-ip">{{ p.secondary }}</code>
+                <code v-if="p.primary6" class="dns-ip" title="IPv6 appliqué aussi">IPv6</code>
                 <NBadge v-if="latencies[p.id] !== undefined" :variant="latencyVariant(latencies[p.id])" size="sm">
                   {{ latencyLabel(latencies[p.id]) }}
                 </NBadge>

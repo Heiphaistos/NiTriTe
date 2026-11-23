@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted } from "vue";
-import { invoke, isTauriContext } from "@/utils/invoke";
+import { invoke, invokeRaw, isTauriContext } from "@/utils/invoke";
 import type { ShellResult } from "@/types/diagnostic";
 import NButton from "@/components/ui/NButton.vue";
 import { Terminal, Trash2, Send, Clock, ChevronRight } from "lucide-vue-next";
@@ -23,8 +23,10 @@ const QUICK_COMMANDS: { label: string; cmd: string; shell?: string }[] = [
   { label: "IP Config",      cmd: "ipconfig /all" },
   { label: "Ping Google",    cmd: "ping -n 4 8.8.8.8" },
   { label: "Processus",      cmd: "tasklist /fo table" },
-  { label: "Disques",        cmd: "wmic logicaldisk get caption,freespace,size" },
-  { label: "Temp CPU",       cmd: "wmic /namespace:\\\\root\\wmi PATH MSAcpi_ThermalZoneTemperature get CurrentTemperature" },
+  // wmic est retire de Windows 11 24H2/25H2 : equivalents CIM (meme liste
+  // exacte que TERMINAL_READONLY_COMMANDS cote Rust).
+  { label: "Disques",        cmd: "powershell -NoProfile -Command \"Get-CimInstance Win32_LogicalDisk | Format-Table DeviceID,FreeSpace,Size\"" },
+  { label: "Temp CPU",       cmd: "powershell -NoProfile -Command \"Get-CimInstance -Namespace root/wmi MSAcpi_ThermalZoneTemperature | Format-Table InstanceName,CurrentTemperature\"" },
   { label: "Uptime",         cmd: "net statistics workstation | findstr /i statistics" },
   { label: "Ports ouverts",  cmd: "netstat -ano | findstr LISTENING" },
   { label: "Vars env",       cmd: "set", shell: "cmd" },
@@ -128,7 +130,10 @@ async function executeCommand(cmd?: string) {
   running.value = true;
 
   try {
-    const result = await invoke<ShellResult>("run_in_shell", {
+    // Sans plafond cote interface : le Rust attend la confirmation de
+    // l'utilisateur puis borne la commande a 120 s. Les 30 s par defaut
+    // d'invoke affichaient « timeout » alors que la commande tournait encore.
+    const result = await invokeRaw<ShellResult>("run_in_shell", {
       shellId: activeShell.value,
       command: raw,
     });

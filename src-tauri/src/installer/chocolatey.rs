@@ -7,7 +7,6 @@ use tauri::Emitter;
 
 use crate::error::NiTriTeError;
 use crate::installer::winget::InstallResult;
-use crate::maintenance::commands::decode_output;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ChocoPackage {
@@ -36,25 +35,13 @@ pub fn choco_exe() -> String {
 }
 
 pub fn check_chocolatey() -> bool {
-    Command::new(choco_exe())
-        .arg("--version")
-        .creation_flags(0x08000000)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    crate::maintenance::commands::execute_system_command(&choco_exe(), &["--version"], 20).is_ok_and(|r| r.success)
 }
 
 pub fn list_chocolatey_upgrades() -> Result<Vec<ChocoPackage>, NiTriTeError> {
-    let output = Command::new(choco_exe())
-        .args(["outdated", "-r", "--no-color"])
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| NiTriTeError::System(format!("Chocolatey introuvable: {}", e)))?;
-
-    // decode_output : par cohérence avec bootstrap_chocolatey() (cassé confirmé
-    // en direct sur cette machine) — substitution sûre même si non déclenché
-    // par les paquets choco actuels (majoritairement anglophones).
-    let text = decode_output(&output.stdout);
+    // Timeout : `choco outdated` interroge chaque source, peut bloquer sur un
+    // proxy/source morte. La sortie est decodee par decode_output.
+    let text = crate::maintenance::commands::execute_system_command(&choco_exe(), &["outdated", "-r", "--no-color"], 180)?.stdout;
     let mut packages = Vec::new();
 
     for line in text.lines() {
@@ -87,14 +74,11 @@ pub fn upgrade_chocolatey_all(excluded: Vec<String>) -> Result<ChocoUpgradeResul
     if !cleaned.is_empty() {
         args.push(format!("--except=\"{}\"", cleaned.join(",")));
     }
-    let output = Command::new(choco_exe())
-        .args(&args)
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| NiTriTeError::System(format!("Erreur upgrade choco: {}", e)))?;
-
-    let stdout = decode_output(&output.stdout);
-    let success = output.status.success();
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let output = crate::maintenance::commands::execute_system_command(&choco_exe(), &arg_refs, 60 * 60)?;
+    let stdout = output.stdout.clone();
+    // 3010/1641 = redemarrage requis : mises a jour bien appliquees.
+    let success = output.success || output.exit_code == 3010 || output.exit_code == 1641;
 
     // Nombre de paquets mis à jour : choco termine par une ligne récapitulative
     // "Chocolatey upgraded 2/3 packages." — on en extrait N (fiable), plutôt que
@@ -119,8 +103,8 @@ pub fn upgrade_chocolatey_all(excluded: Vec<String>) -> Result<ChocoUpgradeResul
     let message = if success {
         format!("{} paquet(s) mis à jour", upgraded)
     } else {
-        let stderr = decode_output(&output.stderr);
-        format!("Erreur: {}", stderr.lines().next().unwrap_or("inconnue"))
+        let detail = output.stderr.lines().chain(output.stdout.lines()).map(str::trim).find(|l| !l.is_empty()).unwrap_or("inconnue").to_string();
+        format!("Erreur (code {}) : {}", output.exit_code, detail)
     };
 
     Ok(ChocoUpgradeResult {
@@ -140,16 +124,10 @@ pub fn bootstrap_chocolatey() -> Result<(), NiTriTeError> {
     let ps = "Set-ExecutionPolicy Bypass -Scope Process -Force; \
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
         iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))";
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", ps])
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| NiTriTeError::System(format!("Erreur bootstrap Chocolatey: {}", e)))?;
-    if !output.status.success() || !check_chocolatey() {
-        // decode_output : message d'erreur PowerShell réel (ex. « Impossible
-        // de se connecter au serveur distant ») corrompu par from_utf8_lossy —
-        // confirmé en direct sur cette machine.
-        let stderr = decode_output(&output.stderr);
+    let output = crate::maintenance::commands::execute_system_command("powershell", &["-NoProfile", "-NonInteractive", "-Command", ps], 600)?;
+    if !output.success || !check_chocolatey() {
+        // stderr decode par decode_output (messages PowerShell FR accentues).
+        let stderr = output.stderr;
         return Err(NiTriTeError::System(format!("Installation de Chocolatey echouee: {}", stderr.lines().next().unwrap_or("inconnue"))));
     }
     Ok(())
@@ -174,9 +152,9 @@ pub fn search_choco_id(name: &str) -> Option<String> {
     let run_search = |query: &str, exact: bool| -> Option<Vec<(String, String)>> {
         let mut args = vec!["search", query, "--limit-output", "--no-progress"];
         if exact { args.push("--exact"); }
-        let output = Command::new(choco_exe()).args(&args).creation_flags(0x08000000).output().ok()?;
-        if !output.status.success() { return None; }
-        let text = decode_output(&output.stdout);
+        let output = crate::maintenance::commands::execute_system_command(&choco_exe(), &args, 90).ok()?;
+        if !output.success { return None; }
+        let text = output.stdout;
         Some(text.lines().filter_map(|l| {
             let mut parts = l.splitn(2, '|');
             let id = parts.next()?.trim().to_string();
@@ -235,10 +213,12 @@ pub fn install_via_chocolatey(package_id: &str, window: &tauri::Window) -> Resul
         }
     }
 
-    let status = child.wait()?;
+    let status = crate::installer::winget::wait_with_watchdog(child, std::time::Duration::from_secs(30 * 60))?;
+    // 3010/1641 : installe, redemarrage requis.
+    let ok = status.success() || matches!(status.code(), Some(3010 | 1641));
     Ok(InstallResult {
-        success: status.success(),
+        success: ok,
         app_id: package_id.to_string(),
-        message: if status.success() { "Installation reussie (Chocolatey)".into() } else { format!("Code: {}", status.code().unwrap_or(-1)) },
+        message: if ok { "Installation reussie (Chocolatey)".into() } else { format!("Code: {}", status.code().unwrap_or(-1)) },
     })
 }

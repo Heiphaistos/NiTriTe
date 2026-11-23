@@ -22,7 +22,7 @@ interface PartitionInfo {
 }
 interface DiskInfo {
   index: number; label: string; size_gb: number; disk_type: string;
-  bus_type: string; partitions: PartitionInfo[];
+  bus_type: string; is_removable?: boolean; partitions: PartitionInfo[];
 }
 interface CloneProgress { step: string; percent: number; message: string; }
 interface CloneResult { success: boolean; method: string; message: string; duration_secs: number; }
@@ -52,9 +52,15 @@ const drivesWithLetters = computed(() =>
   disks.value.flatMap(d =>
     d.partitions
       .filter(p => p.letter)
-      .map(p => ({ ...p, disk_label: d.label, disk_index: d.index }))
+      .map(p => ({ ...p, disk_label: d.label, disk_index: d.index, kind: diskKind(d) }))
   )
 );
+/** « Clé USB » vs « Disque USB » : BusType vaut USB pour les deux. */
+function diskKind(d: DiskInfo): string {
+  if (d.bus_type !== "USB") return "";
+  return d.is_removable ? "Clé USB" : "Disque USB";
+}
+
 const availableTargets = computed(() =>
   drivesWithLetters.value.filter(p =>
     // p.letter garde le ':' (ex: "C:") alors que sourceDrive ne l'a pas (ex: "C",
@@ -64,6 +70,9 @@ const availableTargets = computed(() =>
     // système sur cet onglet), mais incohérent avec le reste du fichier qui
     // normalise systématiquement via .replace(':', '') avant de comparer.
     !p.is_system && !p.is_boot && p.letter.replace(':', '') !== sourceDrive.value
+    // wbadmin -allCritical refuse une cible sur le disque qui porte Windows
+    // (D: sur le même SSD que C:) : ne pas la proposer.
+    && p.disk_index !== systemDrive.value?.disk_index
   )
 );
 const systemDrive = computed(() =>
@@ -340,7 +349,7 @@ const spaceCheck = computed(() => {
             <select v-model="targetDrive" class="drive-select">
               <option value="">— Choisir un lecteur cible —</option>
               <option v-for="p in availableTargets" :key="p.letter" :value="p.letter.replace(':', '')">
-                {{ p.letter }} — {{ p.disk_label }} — {{ formatSize(p.size_gb) }} ({{ formatSize(p.free_gb) }} libres)
+                {{ p.letter }} — {{ p.disk_label }}{{ p.kind ? ` (${p.kind})` : '' }} — {{ formatSize(p.size_gb) }} ({{ formatSize(p.free_gb) }} libres)
               </option>
             </select>
             <p class="config-hint">⚠ Le lecteur cible doit avoir plus d'espace que le système source</p>
@@ -375,7 +384,7 @@ const spaceCheck = computed(() => {
       <template v-if="activeTab === 'robocopy'">
         <div class="info-banner info">
           <Info :size="14" />
-          <span>Robocopy /MIR clone tous les fichiers avec attributs et permissions. Idéal pour migrer des données. Ne copie pas le secteur de démarrage.</span>
+          <span>Robocopy /E copie tous les fichiers avec attributs et horodatages (jonctions, fichier d'échange et corbeille exclus). Idéal pour migrer des données. Ne copie pas le secteur de démarrage : le disque cible ne sera pas amorçable.</span>
         </div>
 
         <div class="config-grid">
@@ -399,7 +408,7 @@ const spaceCheck = computed(() => {
                 :key="p.letter"
                 :value="p.letter.replace(':', '')"
               >
-                {{ p.letter }} — {{ p.label || p.disk_label }} — {{ formatSize(p.size_gb) }} ({{ formatSize(p.free_gb) }} libres)
+                {{ p.letter }} — {{ p.label || p.disk_label }}{{ p.kind ? ` (${p.kind})` : '' }} — {{ formatSize(p.size_gb) }} ({{ formatSize(p.free_gb) }} libres)
               </option>
             </select>
           </div>
@@ -416,7 +425,7 @@ const spaceCheck = computed(() => {
         <div class="confirm-row">
           <label class="confirm-label">
             <input type="checkbox" v-model="confirmed" />
-            Je confirme que la destination peut être écrasée (les fichiers existants seront supprimés avec /MIR)
+            Je confirme que les fichiers de même nom sur la destination peuvent être écrasés (les autres fichiers sont conservés)
           </label>
         </div>
 
@@ -489,7 +498,7 @@ const spaceCheck = computed(() => {
             <div class="disk-icon"><HardDrive :size="16" /></div>
             <div class="disk-info">
               <span class="disk-name">Disque {{ disk.index }} — {{ disk.label }}</span>
-              <span class="disk-meta">{{ formatSize(disk.size_gb) }} · {{ disk.disk_type }} · {{ disk.bus_type }}</span>
+              <span class="disk-meta">{{ formatSize(disk.size_gb) }} · {{ disk.disk_type }} · {{ diskKind(disk) || disk.bus_type }}</span>
             </div>
           </div>
           <div class="partitions-list">

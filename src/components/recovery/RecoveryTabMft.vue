@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { invoke, isTauriContext } from "@/utils/invoke";
+import { invoke, invokeRaw, isTauriContext } from "@/utils/invoke";
 import { Search, Database } from "lucide-vue-next";
 import NSpinner from "@/components/ui/NSpinner.vue";
 import NButton from "@/components/ui/NButton.vue";
@@ -26,7 +26,7 @@ async function loadDrives() {
 async function scanMft() {
   loadingMft.value = true; mftFiles.value = [];
   try {
-    mftFiles.value = await invoke<RecoveredFile[]>("scan_deleted_files", { drive: mftDrive.value });
+    mftFiles.value = await invokeRaw<RecoveredFile[]>("scan_deleted_files", { drive: mftDrive.value });
   } catch (e: unknown) { notify.error("Erreur scan MFT", (e instanceof Error ? e.message : String(e)).slice(0, 120)); }
   loadingMft.value = false; hasScanned.value = true;
 }
@@ -34,7 +34,7 @@ async function scanMft() {
 async function scanAllMft() {
   loadingMft.value = true; mftFiles.value = [];
   try {
-    mftFiles.value = await invoke<RecoveredFile[]>("scan_all_deleted_files");
+    mftFiles.value = await invokeRaw<RecoveredFile[]>("scan_all_deleted_files");
   } catch (e: unknown) { notify.error("Erreur scan global", (e instanceof Error ? e.message : String(e)).slice(0, 120)); }
   loadingMft.value = false; hasScanned.value = true;
 }

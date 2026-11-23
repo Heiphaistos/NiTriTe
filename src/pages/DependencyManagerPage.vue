@@ -110,7 +110,10 @@ async function checkAll() {
     }
   });
 
-  invoke("scan_dependencies_stream").catch(() => { loading.value = false; });
+  // 60 s : chaque vérification est bornée à 20 s côté Rust (en parallèle).
+  invoke("scan_dependencies_stream", undefined, 60_000)
+    .catch((e: unknown) => notify.error("Analyse des dépendances", String(e).slice(0, 160)))
+    .finally(() => { loading.value = false; });
 }
 
 async function installDep(dep: Dependency) {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineOptions({ name: "DiskVisualizerPage" });
-import { ref, shallowRef, computed } from "vue";
+import { ref, shallowRef, computed, onMounted } from "vue";
+import { localDataDir } from "@tauri-apps/api/path";
 import { invoke, invokeRaw } from "@/utils/invoke";
 import NCard from "@/components/ui/NCard.vue";
 import NButton from "@/components/ui/NButton.vue";
@@ -59,10 +60,15 @@ async function scan() {
     currentNode.value = node;
     breadcrumb.value = [node];
   } catch (e: unknown) {
-    notify.error("Erreur scan", String(e));
+    if (String(e).includes("annulée")) notify.info("Analyse annulée", "Analyse interrompue.");
+    else notify.error("Erreur scan", String(e));
   } finally {
     loading.value = false;
   }
+}
+
+function cancelScan() {
+  invoke("cancel_disk_scan").catch((e: unknown) => notify.error("Annulation", String(e)));
 }
 
 function navigate(node: DiskNode) {
@@ -80,16 +86,22 @@ function navigateBreadcrumb(node: DiskNode) {
 }
 
 async function openInExplorer(path: string) {
-  try { await invoke("open_path", { path }); } catch {}
+  try { await invoke("open_path", { path }); }
+  catch (e: unknown) { notify.error("Ouverture impossible", String(e)); }
 }
 
-const commonPaths = [
+const commonPaths = ref([
   { label: "C:\\", path: "C:\\" },
   { label: "Users", path: "C:\\Users" },
   { label: "Program Files", path: "C:\\Program Files" },
   { label: "Temp", path: "C:\\Windows\\Temp" },
-  { label: "AppData Local", path: "C:\\Users\\Public\\AppData\\Local" },
-];
+]);
+// L'ancien raccourci « C:\Users\Public\AppData\Local » n'existe pas : on
+// résout le vrai %LOCALAPPDATA% de l'utilisateur.
+onMounted(async () => {
+  try { commonPaths.value.push({ label: "AppData Local", path: await localDataDir() }); }
+  catch { /* hors Tauri (tests) : raccourci simplement absent */ }
+});
 </script>
 
 <template>
@@ -180,6 +192,7 @@ const commonPaths = [
 
     <div v-if="loading" style="display:flex;justify-content:center;padding:40px;align-items:center;gap:12px">
       <NSpinner :size="28" /><span style="color:var(--text-muted)">Analyse en cours...</span>
+      <NButton variant="ghost" size="sm" @click="cancelScan">Annuler</NButton>
     </div>
   </div>
 </template>

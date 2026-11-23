@@ -98,9 +98,12 @@ fn plus_recente(distante: &str, locale: &str) -> bool {
     }
 }
 
-async fn client() -> Result<reqwest::Client, String> {
+/// `delai` couvre toute la requete, corps compris : 30 s suffisent au
+/// manifeste, pas aux ~21 Mo du binaire sur une ligne lente (< 6 Mbit/s).
+async fn client(delai: Duration) -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(30))
+        .timeout(delai)
         .user_agent(concat!("Nitrite/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|e| e.to_string())
@@ -111,7 +114,7 @@ async fn client() -> Result<reqwest::Client, String> {
 pub async fn portable_maj_verifier() -> Result<Option<MajPortable>, String> {
     let actuelle = env!("CARGO_PKG_VERSION");
 
-    let texte = client()
+    let texte = client(Duration::from_secs(30))
         .await?
         .get(MANIFESTE)
         .send()
@@ -174,7 +177,8 @@ fn verifier_signature(octets: &[u8], signature_b64: &str) -> Result<(), String> 
 /// declenche par l'appelant.
 #[tauri::command]
 pub async fn portable_maj_appliquer(maj: MajPortable) -> Result<(), String> {
-    let reponse = client()
+    // 280 s : juste sous les 300 s accordes par useAutoUpdate.ts.
+    let reponse = client(Duration::from_secs(280))
         .await?
         .get(&maj.url)
         .send()

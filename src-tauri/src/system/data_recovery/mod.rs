@@ -1,6 +1,4 @@
 /// data_recovery/mod.rs — Re-exports de tous les sous-modules
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 pub mod shadow_vss;
 pub mod disk_recovery;
@@ -12,20 +10,15 @@ pub use backup_folders::*;
 
 // ─── Utilitaire PowerShell partagé ────────────────────────────────────────────
 
+/// Délai maximal des scripts de récupération (VSS, USN, corbeille) : un
+/// lecteur USB débranché ou un service VSS figé ne doit plus bloquer le thread
+/// indéfiniment (l'UI restait en chargement sans fin).
+const PS_TIMEOUT_SECS: u64 = 900;
+
 pub(super) fn run_ps(script: &str) -> Option<String> {
-    #[cfg(target_os = "windows")]
-    {
-        let o = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", script])
-            .creation_flags(0x08000000)
-            .output().ok()?;
-        // decode_output : noms de fichiers/dossiers récupérés (Documents,
-        // Téléchargements…) sont couramment accentués FR — sans $OutputEncoding
-        // préalable dans les scripts, from_utf8_lossy les mojibake.
-        Some(crate::maintenance::commands::decode_output(&o.stdout))
-    }
-    #[cfg(not(target_os = "windows"))]
-    None
+    crate::maintenance::commands::execute_system_command(
+        "powershell", &["-NoProfile", "-NonInteractive", "-Command", script], PS_TIMEOUT_SECS,
+    ).ok().map(|o| o.stdout)
 }
 
 /// Comme `run_ps` mais passe des arguments supplémentaires accessibles via `$args[0]`, `$args[1]`, …
@@ -35,18 +28,13 @@ pub(super) fn run_ps(script: &str) -> Option<String> {
 /// de commande suivants (silencieusement $null, jamais d'erreur) — seule une invocation
 /// de scriptblock reelle (`& { }`) les reçoit. Confirmé en testant les deux formes cote a
 /// cote sur une machine reelle : nu -> $args[0] est $null ; enveloppé -> $args[0] correct.
+/// decode_output (via execute_system_command) : noms de fichiers/dossiers
+/// récupérés couramment accentués FR.
 pub(super) fn run_ps_with_args(script: &str, extra_args: &[&str]) -> Option<String> {
-    #[cfg(target_os = "windows")]
-    {
-        let wrapped = format!("& {{ {} }}", script);
-        let mut cmd = std::process::Command::new("powershell");
-        cmd.args(["-NoProfile", "-NonInteractive", "-Command", &wrapped]);
-        for arg in extra_args {
-            cmd.arg(arg);
-        }
-        let o = cmd.creation_flags(0x08000000).output().ok()?;
-        Some(crate::maintenance::commands::decode_output(&o.stdout))
-    }
-    #[cfg(not(target_os = "windows"))]
-    None
+    let wrapped = format!("& {{ {} }}", script);
+    let mut args = vec!["-NoProfile", "-NonInteractive", "-Command", wrapped.as_str()];
+    args.extend_from_slice(extra_args);
+    crate::maintenance::commands::execute_system_command("powershell", &args, PS_TIMEOUT_SECS)
+        .ok()
+        .map(|o| o.stdout)
 }

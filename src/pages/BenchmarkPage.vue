@@ -203,7 +203,9 @@ async function runDisk() {
   notify.info("Benchmark Disque", "Test lecture/écriture 256 MB + IOPS 4K (≈15s)…");
   try {
     diskResult.value = await invoke<BenchResult>("run_disk_bench", { drive: null });
-    notify.success("Disque terminé", `Score : ${diskResult.value.score} pts`);
+    // Score 0 = test en échec (le backend met la cause dans details).
+    if (diskResult.value.score > 0) notify.success("Disque terminé", `Score : ${diskResult.value.score} pts`);
+    else notify.error("Erreur Disque", diskResult.value.details || "Test disque en échec");
   } catch (e: unknown) { notify.error("Erreur Disque", String(e)); }
   stopTimer("disk");
   runningDisk.value = false;

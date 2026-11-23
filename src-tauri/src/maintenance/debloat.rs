@@ -33,17 +33,16 @@ try {{
 {script}
 }} catch {{ Write-Output $_.Exception.Message; exit 1 }}"#
     );
-    let out = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &wrapped])
-        .creation_flags(0x08000000)
-        .output();
+    // Timeout : une action bloquée (Appx, WMI) ne doit pas laisser la page en attente sans fin.
+    let out = crate::maintenance::commands::execute_system_command(
+        "powershell", &["-NoProfile", "-NonInteractive", "-Command", &wrapped], 300);
 
     match out {
         Ok(o) => {
-            let stdout = crate::maintenance::commands::decode_output(&o.stdout).trim().to_string();
-            let success = o.status.success();
+            let stdout = o.stdout.trim().to_string();
+            let success = o.success;
             let message = if !success && stdout.is_empty() {
-                crate::maintenance::commands::decode_output(&o.stderr).trim().to_string()
+                o.stderr.trim().to_string()
             } else {
                 stdout
             };
@@ -253,7 +252,9 @@ pub fn run_extra_action(action: &str) -> DebloatResult {
         "#),
         "disable_widgets" => run_ps(r#"
             reg add "HKLM\SOFTWARE\Policies\Microsoft\Dsh" /v AllowNewsAndInterests /t REG_DWORD /d 0 /f
-            reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarDa /t REG_DWORD /d 0 /f
+            # TaskbarDa est protégé par le pilote UCPD depuis 2024 (accès refusé hors
+            # Explorer) : best-effort, la stratégie ci-dessus fait autorité.
+            try { Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name TaskbarDa -Value 0 -Type DWord -ErrorAction Stop } catch {}
             Write-Output "Widgets desactives"
         "#),
         "disable_ads" => run_ps(r#"
@@ -281,16 +282,18 @@ pub fn run_extra_action(action: &str) -> DebloatResult {
             Write-Output "Prefetch vide"
         "#),
         "remove_teams" => run_ps(r#"
-            $pkg = Get-AppxPackage -Name 'MicrosoftTeams' -ErrorAction SilentlyContinue
+            # 'MSTeams' = nouveau Teams (Windows 11 23H2+), 'MicrosoftTeams' = ancien Teams grand public.
+            $pkg = @('MicrosoftTeams','MSTeams') | ForEach-Object { Get-AppxPackage -Name $_ -ErrorAction SilentlyContinue }
             if ($pkg) { $pkg | Remove-AppxPackage }
-            if (Get-AppxPackage -Name 'MicrosoftTeams' -ErrorAction SilentlyContinue) { throw "Echec suppression du package Teams" }
+            if (@('MicrosoftTeams','MSTeams') | ForEach-Object { Get-AppxPackage -Name $_ -ErrorAction SilentlyContinue }) { throw "Echec suppression du package Teams" }
             $path = "${env:ProgramData}\Microsoft\Teams"
             if (Test-Path $path) { Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue }
             Write-Output "Teams supprime"
         "#),
         "disable_recall" => run_ps(r#"
             reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI" /v DisableAIDataAnalysis /t REG_DWORD /d 1 /f
-            Disable-WindowsOptionalFeature -FeatureName "Recall" -Online -ErrorAction SilentlyContinue
+            reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI" /v AllowRecallEnablement /t REG_DWORD /d 0 /f
+            Disable-WindowsOptionalFeature -FeatureName "Recall" -Online -NoRestart -ErrorAction SilentlyContinue | Out-Null
             Write-Output "Windows Recall desactive"
         "#),
         "disable_ink_workspace" => run_ps(r#"
@@ -414,6 +417,10 @@ pub fn run_extra_action(action: &str) -> DebloatResult {
             netsh int ip reset
             Write-Output "TCP/IP reinitialise (redemarrage requis)"
         "#),
+        "disable_mdns" => run_ps(r#"
+            reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v EnableMDNS /t REG_DWORD /d 0 /f
+            Write-Output "mDNS desactive (effectif apres redemarrage)"
+        "#),
         "disable_rdp" => run_ps(r#"
             reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 1 /f
             Write-Output "Bureau a distance desactive"
@@ -426,7 +433,9 @@ public class MemUtil { [DllImport("psapi.dll")] public static extern int EmptyWo
 "@
             Add-Type -TypeDefinition $code -ErrorAction SilentlyContinue
             Get-Process | ForEach-Object { try { [MemUtil]::EmptyWorkingSet($_.Handle) | Out-Null } catch {} }
-            Write-Output "Memoire en veille liberee"
+            # EmptyWorkingSet réduit la mémoire de travail des processus ; la liste
+            # « standby » du système n'est pas purgée par cet appel.
+            Write-Output "Memoire de travail des processus compactee"
         "#),
         "disable_search_index" => run_ps(r#"
             Stop-Service WSearch -Force -ErrorAction SilentlyContinue
@@ -477,8 +486,10 @@ public class MemUtil { [DllImport("psapi.dll")] public static extern int EmptyWo
             Write-Output "Mode MSI (Message Signaled Interrupts) : configurer via Device Manager > Properties > Interrupts"
         "#),
         "clean_old_shadows" => run_ps(r#"
-            vssadmin delete shadows /for=C: /oldest /quiet
-            Write-Output "Anciens points de restauration supprimes"
+            $o = vssadmin delete shadows /for=C: /oldest /quiet 2>&1
+            # vssadmin n'est pas couvert par les shims : sans ce test, « supprimés » même en échec.
+            if ($LASTEXITCODE -ne 0) { throw "Aucun cliche supprime : $($o -join ' ')" }
+            Write-Output "Plus ancien point de restauration supprime"
         "#),
         "set_power_min_processor" => run_ps(r#"
             powercfg /SETACVALUEINDEX SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 5

@@ -6,7 +6,6 @@ use tauri::Emitter;
 
 use crate::error::NiTriTeError;
 use crate::installer::winget::InstallResult;
-use crate::maintenance::commands::decode_output;
 
 /// Chemin connu de scoop.exe/scoop.cmd (shim sous le profil de l'utilisateur
 /// courant). Meme raison que pour Chocolatey : un bootstrap effectue pendant
@@ -35,12 +34,7 @@ pub fn scoop_exe() -> String {
 }
 
 pub fn check_scoop() -> bool {
-    Command::new(scoop_exe())
-        .arg("--version")
-        .creation_flags(0x08000000)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    crate::maintenance::commands::execute_system_command(&scoop_exe(), &["--version"], 30).is_ok_and(|r| r.success)
 }
 
 /// Installe Scoop lui-meme via le script officiel (idempotent). Scoop refuse
@@ -56,16 +50,10 @@ pub fn bootstrap_scoop() -> Result<(), NiTriTeError> {
     let ps = "Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force; \
         $s = irm get.scoop.sh; \
         & ([scriptblock]::Create($s)) -RunAsAdmin";
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", ps])
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| NiTriTeError::System(format!("Erreur bootstrap Scoop: {}", e)))?;
-    if !output.status.success() || !check_scoop() {
-        // decode_output : message d'erreur PowerShell réel (ex. « Impossible de
-        // se connecter au serveur distant ») corrompu par from_utf8_lossy —
-        // confirmé en direct sur cette machine.
-        let stderr = decode_output(&output.stderr);
+    let output = crate::maintenance::commands::execute_system_command("powershell", &["-NoProfile", "-NonInteractive", "-Command", ps], 600)?;
+    if !output.success || !check_scoop() {
+        // stderr decode par decode_output (messages PowerShell FR accentues).
+        let stderr = output.stderr;
         return Err(NiTriTeError::System(format!("Installation de Scoop echouee: {}", stderr.lines().next().unwrap_or("inconnue"))));
     }
     Ok(())
@@ -81,18 +69,11 @@ fn normalize_pkg_name(s: &str) -> String {
 /// uniquement — jamais le premier resultat au hasard, qui installerait le
 /// mauvais logiciel si le nom ne correspond qu'approximativement.
 pub fn search_scoop_id(name: &str) -> Option<String> {
-    let output = Command::new(scoop_exe())
-        .args(["search", name])
-        .creation_flags(0x08000000)
-        .output()
-        .ok()?;
-    if !output.status.success() {
+    let output = crate::maintenance::commands::execute_system_command(&scoop_exe(), &["search", name], 90).ok()?;
+    if !output.success {
         return None;
     }
-    // decode_output : par cohérence avec bootstrap_scoop() — les buckets Scoop
-    // communautaires peuvent inclure des noms/paquets non-ASCII, substitution
-    // sûre (repli UTF-8 en premier) même si non déclenché sur cette machine.
-    let text = decode_output(&output.stdout);
+    let text = output.stdout;
     let normalized_query = normalize_pkg_name(name);
     // Format : lignes "'<bucket>' bucket:\n    <name> (<version>) ..."
     for line in text.lines() {
@@ -135,7 +116,7 @@ pub fn install_via_scoop(package_id: &str, window: &tauri::Window) -> Result<Ins
         }
     }
 
-    let status = child.wait()?;
+    let status = crate::installer::winget::wait_with_watchdog(child, std::time::Duration::from_secs(30 * 60))?;
     Ok(InstallResult {
         success: status.success(),
         app_id: package_id.to_string(),

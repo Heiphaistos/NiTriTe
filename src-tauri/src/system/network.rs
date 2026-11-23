@@ -90,7 +90,8 @@ try {
     # Passerelle par defaut
     $gw = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -EA SilentlyContinue | Sort-Object RouteMetric | Select-Object -First 1).NextHop
     # DNS
-    $dns = @((Get-DnsClientServerAddress -AddressFamily IPv4 -EA SilentlyContinue).ServerAddresses | Select-Object -Unique)
+    # IPv4 + IPv6 (fec0:0:0:ffff::* = valeurs par défaut Windows sans DNS IPv6, pas de vrais serveurs)
+    $dns = @((Get-DnsClientServerAddress -EA SilentlyContinue).ServerAddresses | Where-Object { $_ -notlike 'fec0:0:0:ffff::*' } | Select-Object -Unique)
     # Proxy
     $p = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -EA SilentlyContinue
     @{
@@ -105,14 +106,14 @@ try {
 }
 "#;
 
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-Command", ps])
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| NiTriTeError::System(e.to_string()))?;
-
-    let text = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(text.trim()).unwrap_or(serde_json::Value::Null);
+    // Délai borné : un Get-NetAdapter figé (pilote VPN/Hyper-V) gelait la page.
+    let output = crate::maintenance::commands::execute_system_command(
+        "powershell", &["-NoProfile", "-NonInteractive", "-Command", ps], 60,
+    )?;
+    let v: serde_json::Value = serde_json::from_str(output.stdout.trim()).unwrap_or(serde_json::Value::Null);
+    if let Some(err) = v["error"].as_str() {
+        return Err(NiTriTeError::System(format!("Lecture réseau impossible : {}", err)));
+    }
 
     let interfaces = v["interfaces"].as_array().unwrap_or(&vec![]).iter().map(|a| {
         let to_str_vec = |val: &serde_json::Value| -> Vec<String> {
@@ -166,13 +167,20 @@ fn get_local_ip() -> String {
 }
 
 pub fn get_connections() -> Result<Vec<ConnectionInfo>, NiTriTeError> {
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-Command",
-            "Get-NetTCPConnection | Select-Object -First 100 LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess | ConvertTo-Json"])
-        .creation_flags(0x08000000).output()?;
-
-    let text = String::from_utf8_lossy(&output.stdout);
-    let parsed: Vec<serde_json::Value> = serde_json::from_str(&text).unwrap_or_default();
+    let output = crate::maintenance::commands::execute_system_command(
+        "powershell",
+        &["-NoProfile", "-NonInteractive", "-Command",
+          "Get-NetTCPConnection | Select-Object -First 100 LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess | ConvertTo-Json -Compress"],
+        60,
+    )?;
+    let text = output.stdout.trim();
+    // Une seule connexion : ConvertTo-Json renvoie un objet, pas un tableau
+    // (l'ancien code rendait alors une liste vide).
+    let parsed: Vec<serde_json::Value> = if text.starts_with('{') {
+        serde_json::from_str(text).map(|v| vec![v]).unwrap_or_default()
+    } else {
+        serde_json::from_str(text).unwrap_or_default()
+    };
 
     // Resoudre les noms de process via sysinfo
     let mut sys = sysinfo::System::new();

@@ -135,8 +135,9 @@ async function cleanAll() {
             <span class="muted" style="font-size:11px;margin-left:8px">{{ f.path }}</span>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
-            <NBadge :variant="f.size_mb > 10240 ? 'danger' : f.size_mb > 1024 ? 'warning' : 'default'">
-              {{ sizeStr(f.size_mb) }}
+            <NBadge :variant="f.size_mb > 10240 ? 'danger' : f.size_mb > 1024 ? 'warning' : 'default'"
+              :title="f.partial ? 'Mesure partielle (dossier trop gros ou sous-dossiers protégés) : taille minimale' : undefined">
+              {{ f.partial ? '≥ ' : '' }}{{ sizeStr(f.size_mb) }}
             </NBadge>
             <span class="muted" style="font-size:11px">{{ f.file_count.toLocaleString() }} fichiers</span>
 

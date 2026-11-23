@@ -63,7 +63,7 @@ export const kbHardware: KBCategory[] = [
           "Vérifier la tension Vcore dans HWiNFO64 sous charge (>1.45V constant = trop chaud)",
           "PBO peut augmenter températures de 10-15°C — s'assurer d'un bon refroidissement",
         ],
-        command: "wmic cpu get name, maxclockspeed, currentclockspeed, numberofcores, numberoflogicalprocessors",
+        command: "powershell -c \"Get-CimInstance Win32_Processor | Select Name, MaxClockSpeed, CurrentClockSpeed, NumberOfCores, NumberOfLogicalProcessors\"",
         note: "PBO laisse le CPU décider de ses propres limites. Sur AM5 (Ryzen 7000) : températures de 90-95°C boost = absolument normal.",
       },
       {
@@ -227,7 +227,7 @@ export const kbHardware: KBCategory[] = [
           "Si instable avec XMP : essayer XMP Profile 2 ou mettre à jour le BIOS carte mère",
           "Sur Ryzen : EXPO est préférable à XMP pour la stabilité sur plateforme AMD",
         ],
-        command: "wmic memorychip get speed, banklabel, capacity, manufacturer, memorytype",
+        command: "powershell -c \"Get-CimInstance Win32_PhysicalMemory | Select Speed, BankLabel, Capacity, Manufacturer, SMBIOSMemoryType\"",
         note: "XMP/EXPO est désactivé par défaut pour compatibilité. La majorité des kits DDR4/DDR5 haut débit nécessitent son activation.",
       },
       {
@@ -256,7 +256,7 @@ export const kbHardware: KBCategory[] = [
           "Tenter d'augmenter légèrement la tension DRAM dans le BIOS (DDR4 : 1.35V → 1.40V max)",
           "Mettre à jour le BIOS (améliore souvent la compatibilité mémoire)",
         ],
-        code: "# Analyser les dumps BSOD avec WinDbg Preview (Microsoft Store)\n# Chemin des mini-dumps :\nGet-ChildItem 'C:\\Windows\\Minidump' | Sort-Object LastWriteTime -Descending | Select-Object -First 5\n\n# Voir erreurs mémoire dans l'Event Viewer :\nGet-WinEvent -LogName System | Where-Object { $_.Id -in @(41, 1001, 1003, 6008) } | Select-Object -First 10 TimeCreated, Message\n\n# Vérifier l'état de la RAM :\nwmic memorychip get BankLabel, Capacity, Speed, Manufacturer",
+        code: "# Analyser les dumps BSOD avec WinDbg Preview (Microsoft Store)\n# Chemin des mini-dumps :\nGet-ChildItem 'C:\\Windows\\Minidump' | Sort-Object LastWriteTime -Descending | Select-Object -First 5\n\n# Voir erreurs mémoire dans l'Event Viewer :\nGet-WinEvent -LogName System | Where-Object { $_.Id -in @(41, 1001, 1003, 6008) } | Select-Object -First 10 TimeCreated, Message\n\n# Vérifier l'état de la RAM :\nGet-CimInstance Win32_PhysicalMemory | Select-Object BankLabel, Capacity, Speed, Manufacturer",
         note: "Un seul test rapide peut manquer les erreurs. MemTest86 doit tourner plusieurs passes pour être fiable.",
       },
       {
@@ -323,7 +323,7 @@ export const kbHardware: KBCategory[] = [
           "Si statut 'Attention' : sauvegarder immédiatement sur autre support, planifier remplacement",
           "Pour SSD avec erreurs : tenter un Secure Erase (efface tout, peut restaurer les performances)",
         ],
-        command: "wmic diskdrive get Status, Model, Size, SerialNumber",
+        command: "powershell -c \"Get-PhysicalDisk | Select FriendlyName, HealthStatus, MediaType, Size, SerialNumber\"",
         note: "TBW d'un SSD 1TB consumer : ~600 TBW. À 50 Go/jour d'écriture, il durera 32 ans. La durée de vie n'est pas le problème principal.",
       },
       {

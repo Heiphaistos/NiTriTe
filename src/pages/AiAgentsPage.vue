@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted } from "vue";
-import { invoke, isTauriContext } from "@/utils/invoke";
+import { invoke, invokeRaw, isTauriContext, InvokeTimeoutError } from "@/utils/invoke";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import NCard from "@/components/ui/NCard.vue";
@@ -60,7 +60,9 @@ async function setupDownloadListener() {
 async function downloadServer() {
   downloadingServer.value = true;
   try {
-    const path = await invoke<string>("ai_download_server");
+    // Sans plafond : le delai par defaut d'invoke (30 s) declarait « echoue »
+    // un telechargement qui continuait en arriere-plan.
+    const path = await invokeRaw<string>("ai_download_server");
     serverBin.value = path;
     notify.success("llama-server", "Installé dans logiciel/AI/");
   } catch (e: unknown) {
@@ -72,7 +74,7 @@ async function downloadServer() {
 async function downloadModel(entry: CatalogEntry) {
   downloadingModel.value = entry.id;
   try {
-    const path = await invoke<string>("ai_download_model", { url: entry.url, filename: entry.filename });
+    const path = await invokeRaw<string>("ai_download_model", { url: entry.url, filename: entry.filename });
     await scanGgufModels();
     selectedGguf.value = path;
     notify.success(entry.name, "Modèle téléchargé dans models/");
@@ -141,7 +143,8 @@ async function startServer() {
   startingServer.value = false;
 }
 async function stopServer() {
-  try { await invoke("ai_stop_llamacpp"); serverRunning.value = false; } catch {}
+  try { await invoke("ai_stop_llamacpp"); serverRunning.value = false; }
+  catch (e: unknown) { notify.error("llama.cpp", `Arrêt impossible : ${String(e)}`); }
 }
 async function checkLlamacppStatus() {
   serverChecking.value = true;
@@ -324,22 +327,21 @@ async function sendMessage() {
   scrollChat();
   const history = messages.value.slice(0, -1).slice(-20).map(m => ({ role: m.role, content: m.content }));
   try {
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("TIMEOUT")), 30_000)
-    );
-    const queryPromise = invoke<string>("ai_query", {
+    // 300 s = la limite cote Rust. L'ancien plafond de 30 s (et celui, par
+    // defaut, d'invoke) coupait un modele 7B sur CPU avant sa reponse.
+    const response = await invoke<string>("ai_query", {
       model: activeModel.value || undefined,
       prompt: text,
       systemPrompt: activeSystemPrompt.value || null,
       history: history.length ? history : null,
-    });
-    const response = await Promise.race([queryPromise, timeoutPromise]);
+      backend: backend.value,
+    }, 300_000);
     messages.value.push({ role: "assistant", content: response, command: extractCommand(response) ?? undefined });
     saveCurrentConversation();
   } catch (err: unknown) {
-    const isTimeout = String(err).includes("TIMEOUT");
+    const isTimeout = err instanceof InvokeTimeoutError;
     const hint = isTimeout
-      ? "Délai dépassé — le modèle n'a pas répondu dans les 30 secondes. Vérifiez la charge du serveur."
+      ? "Délai dépassé — le modèle n'a pas répondu en 5 minutes. Essayez un modèle plus léger ou vérifiez la charge du serveur."
       : (backend.value === "llamacpp" ? "Vérifiez que le serveur est démarré." : "Lancez `ollama serve`.");
     messages.value.push({ role: "assistant", content: `⚠ ${isTimeout ? "Délai dépassé." : "Erreur IA."}\n\n${hint}${isTimeout ? "" : `\n\nDétail : ${String(err)}`}` });
   } finally { sending.value = false; scrollChat(); }
@@ -350,7 +352,8 @@ async function executeCommand(i: number) {
   if (!msg.command) return;
   msg.commandRunning = true;
   try {
-    const r = await invoke<{ success: boolean; stdout: string; stderr: string }>("ai_execute_command", { command: msg.command });
+    // 70 s : la commande a 60 s cote Rust avant d'etre tuee.
+    const r = await invoke<{ success: boolean; stdout: string; stderr: string }>("ai_execute_command", { command: msg.command }, 70_000);
     msg.commandResult = r.stdout || r.stderr || "Aucune sortie";
     // Toast selon le vrai résultat : un toast « succès » vert pour une commande
     // échouée serait un faux signal.

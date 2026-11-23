@@ -636,7 +636,9 @@ impl Engine {
         if job.personal {
             resolves_public(&url).map_err(Failure::Invalid)?;
         }
-        let mut request = http.get(url).header("User-Agent", download_agent(&job.url)).header("Accept-Encoding", "identity").timeout(Duration::from_secs(20));
+        // Pas de `.timeout()` par requête : dans reqwest il borne TOUT le corps (une ISO de 6 Go
+        // échouerait au bout de 20 s). Le délai du client (`client(20)`) s'applique à chaque lecture.
+        let mut request = http.get(url).header("User-Agent", download_agent(&job.url)).header("Accept-Encoding", "identity");
         if can_resume {
             request = request.header("Range", format!("bytes={size}-"));
             if !cross {

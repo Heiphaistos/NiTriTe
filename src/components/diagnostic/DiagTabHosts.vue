@@ -101,7 +101,7 @@
               :disabled="importingList !== null"
               @click="importBlocklist(bl)">
               <span v-if="importingList === bl.name">...</span>
-              <span v-else>+ Importer</span>
+              <span v-else>Ouvrir la liste</span>
             </button>
           </div>
           <div v-if="importMsg" style="font-size:12px;padding:6px 10px;border-radius:5px"
@@ -109,7 +109,7 @@
             {{ importMsg }}
           </div>
           <div style="font-size:11px;color:var(--text-muted);border-top:1px solid var(--border);padding-top:8px">
-            ⚠ L'import de blocklists ajoute un grand nombre d'entrées. Utilisez "Sauvegarde .bak" avant d'importer.
+            ⚠ Import automatique non disponible : la liste s'ouvre dans le navigateur. Une liste de plus de 100 000 entrées peut ralentir le service Client DNS de Windows ; faites une « Sauvegarde .bak » avant de l'ajouter à la main.
           </div>
         </div>
       </div>
@@ -157,7 +157,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { confirm } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@/utils/invoke";
 import { FileText, RefreshCw, Save, Plus, Trash2 } from 'lucide-vue-next'
 
@@ -237,13 +236,12 @@ const importingList = ref<string | null>(null);
 const importMsg = ref("");
 
 async function importBlocklist(bl: Blocklist) {
-  if (!(await confirm(`Importer "${bl.name}" (~${bl.count} entrées) ? Cela ajoutera des entrées au fichier hosts.`, { title: "Nitrite", kind: "warning" }))) return;
+  // Le backend `import_hosts_blocklist` renvoie toujours une erreur (import en ligne
+  // non implémenté) : l'ancienne confirmation promettait un ajout qui échouait à coup sûr.
   importingList.value = bl.name;
-  importMsg.value = "Téléchargement en cours...";
   try {
-    const result = await invoke<string>("import_hosts_blocklist", { url: bl.url, listName: bl.name });
-    importMsg.value = result || `Import "${bl.name}" terminé ✓`;
-    await loadEntries();
+    await invoke("open_url", { url: bl.url });
+    importMsg.value = `Liste « ${bl.name} » ouverte dans le navigateur`;
   } catch (e: unknown) {
     importMsg.value = "Erreur import : " + String(e);
   }

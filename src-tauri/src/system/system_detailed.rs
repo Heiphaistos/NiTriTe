@@ -1,3 +1,4 @@
+use crate::maintenance::commands::TimedOutput;
 use serde::Serialize;
 use wmi::WMIConnection;
 #[cfg(target_os = "windows")]
@@ -157,7 +158,7 @@ fn nvidia_vram_map() -> std::collections::HashMap<String, u64> {
     {
         let Ok(out) = std::process::Command::new("nvidia-smi")
             .args(["--query-gpu=name,memory.total", "--format=csv,noheader,nounits"])
-            .creation_flags(0x08000000).output()
+            .creation_flags(0x08000000).output_within(90)
         else { return map; };
         if !out.status.success() { return map; }
         for line in String::from_utf8_lossy(&out.stdout).lines() {
@@ -295,7 +296,7 @@ pub async fn get_ram_detailed() -> Result<RamDetailed, String> {
                 .args(["-NoProfile", "-NonInteractive", "-Command",
                     "(Get-WmiObject Win32_PhysicalMemoryArray | Measure-Object -Property MemoryDevices -Sum).Sum"])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .ok()
                 .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<usize>().ok());
             let raw = ps_count.unwrap_or_else(|| wmi_con().ok()
@@ -412,7 +413,7 @@ $results | ConvertTo-Json -Depth 2 -Compress
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps])
                 .creation_flags(0x08000000)
-                .output().map_err(|e| e.to_string())?;
+                .output_within(90).map_err(|e| e.to_string())?;
             let text = String::from_utf8_lossy(&out.stdout);
             let trimmed = text.trim();
             if trimmed.is_empty() || trimmed == "null" { return Ok(vec![]); }
@@ -507,7 +508,7 @@ public class GdiDpi {
 "#;
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps])
-                .creation_flags(0x08000000).output().map_err(|e| e.to_string())?;
+                .creation_flags(0x08000000).output_within(90).map_err(|e| e.to_string())?;
             // decode_output : MonitorManufacturer générique renvoie souvent un
             // libellé accentué FR ("Moniteur PnP générique").
             let text = crate::maintenance::commands::decode_output(&out.stdout);
@@ -543,7 +544,7 @@ pub async fn get_power_plans() -> Result<Vec<PowerPlan>, String> {
         #[cfg(target_os = "windows")]
         {
             let out = std::process::Command::new("powercfg")
-                .args(["/LIST"]).creation_flags(0x08000000).output().map_err(|e| e.to_string())?;
+                .args(["/LIST"]).creation_flags(0x08000000).output_within(90).map_err(|e| e.to_string())?;
             let mut plans = Vec::new();
             // decode_output : noms de plans Windows par défaut sont accentués FR
             // ("Équilibré", "Économie d'énergie") — powercfg écrit en OEM.
@@ -720,7 +721,7 @@ $officeFullKey = Get-OfficeKey
 "#;
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps])
-                .creation_flags(0x08000000).output().map_err(|e| e.to_string())?;
+                .creation_flags(0x08000000).output_within(90).map_err(|e| e.to_string())?;
             let text = String::from_utf8_lossy(&out.stdout);
             let trimmed = text.trim();
             if trimmed.is_empty() || trimmed == "null" {
@@ -787,7 +788,7 @@ foreach ($v in $vols) {\
             let out = Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", script])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
                 .unwrap_or_else(|e| format!("Erreur: {}", e));
             Ok(out)

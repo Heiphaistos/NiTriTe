@@ -1,3 +1,4 @@
+use crate::maintenance::commands::TimedOutput;
 use serde::Serialize;
 use std::process::Command;
 #[cfg(target_os = "windows")]
@@ -131,7 +132,7 @@ $out | ConvertTo-Json -Depth 4 -Compress
         let output = Command::new("powershell")
             .args(["-NoProfile", "-NonInteractive", "-Command", ps])
             .creation_flags(0x08000000)
-            .output();
+            .output_within(90);
 
         if let Ok(o) = output {
             // decode_output : valeurs Run/IFEO/Winlogon peuvent contenir des
@@ -225,7 +226,7 @@ try {{
     #[cfg(target_os = "windows")]
     cmd.creation_flags(0x08000000);
 
-    if let Ok(out) = cmd.output() {
+    if let Ok(out) = cmd.output_within(90) {
         let stdout = crate::maintenance::commands::decode_output(&out.stdout);
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&stdout) {
             let subkeys = v["Subkeys"].as_array()
@@ -268,7 +269,7 @@ fn registry_set_value_blocking(path: String, name: String, data: String) -> Resu
     cmd.args(["-NoProfile", "-NonInteractive", "-Command", &ps]);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(0x08000000);
-    let out = cmd.output().map_err(|e| e.to_string())?;
+    let out = cmd.output_within(90).map_err(|e| e.to_string())?;
     if out.status.success() { Ok("Valeur mise à jour".to_string()) }
     else { Err(crate::maintenance::commands::decode_output(&out.stderr).trim().to_string()) }
 }
@@ -291,7 +292,7 @@ fn registry_delete_value_blocking(path: String, name: String) -> Result<String, 
     cmd.args(["-NoProfile", "-NonInteractive", "-Command", &ps]);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(0x08000000);
-    let out = cmd.output().map_err(|e| e.to_string())?;
+    let out = cmd.output_within(90).map_err(|e| e.to_string())?;
     if out.status.success() { Ok("Valeur supprimée".to_string()) }
     else { Err(crate::maintenance::commands::decode_output(&out.stderr).trim().to_string()) }
 }

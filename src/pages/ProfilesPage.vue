@@ -92,8 +92,10 @@ async function applyProfile(profile: Profile) {
   applying.value = profile.name;
   try {
     const cfg = profile.config;
-    // Appliquer la config Rust
-    await invoke("save_config", { config: cfg });
+    // Fusion sur la config actuelle : un profil importe incomplet (sans
+    // `monitor_interval_ms`, `language`...) faisait echouer save_config.
+    const current = await invoke<AppConfig>("get_config");
+    await invoke("save_config", { config: { ...current, ...cfg } });
     // Appliquer le thème + UI
     if (cfg.theme)           appStore.setTheme(cfg.theme);
     if (cfg.font_size)       appStore.setFontSize(cfg.font_size);
@@ -107,7 +109,7 @@ async function applyProfile(profile: Profile) {
     // Appliquer config IA
     if (cfg.ollama_url)         aiStore.ollamaUrl   = cfg.ollama_url;
     if (cfg.ollama_model)       aiStore.ollamaModel = cfg.ollama_model;
-    if (cfg.ollama_temperature) aiStore.temperature = cfg.ollama_temperature;
+    if (typeof cfg.ollama_temperature === "number") aiStore.temperature = cfg.ollama_temperature;
     notify.success("Profil appliqué", `Configuration "${profile.name}" chargée`);
   } catch (e: unknown) { notify.error("Erreur", String(e)); }
   applying.value = null;

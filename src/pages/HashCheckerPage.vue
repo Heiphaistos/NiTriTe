@@ -20,6 +20,9 @@ const vtResults    = ref<Record<string, VtResult>>({});
 const loading      = ref(false);
 const selectedAlgo = ref("SHA256");
 const algos        = ["MD5", "SHA1", "SHA256"];
+// Un ISO de plusieurs Go sur disque USB dépasse largement les 30 s par défaut ;
+// le délai réel est borné côté Rust (1 h, processus tué au-delà).
+const HASH_TIMEOUT_MS = 3_660_000;
 const verifyHash   = ref("");
 const referenceHash = ref("");
 const dragOver     = ref(false);
@@ -46,7 +49,7 @@ async function hashPath(path: string) {
   if (!path) return;
   loading.value = true;
   try {
-    const r = await invoke<HashResult>("hash_file", { path, algorithm: selectedAlgo.value });
+    const r = await invoke<HashResult>("hash_file", { path, algorithm: selectedAlgo.value }, HASH_TIMEOUT_MS);
     const idx = results.value.findIndex(x => x.path === path && x.algorithm === selectedAlgo.value);
     if (idx !== -1) results.value.splice(idx, 1);
     results.value.unshift(r);
@@ -61,7 +64,7 @@ async function hashPath(path: string) {
 async function hashFolder(path: string) {
   loading.value = true; batchMode.value = true; batchDone.value = 0; batchTotal.value = 0;
   try {
-    const res = await invoke<HashResult[]>("hash_folder", { path, algorithm: selectedAlgo.value, maxFiles: 200 });
+    const res = await invoke<HashResult[]>("hash_folder", { path, algorithm: selectedAlgo.value, maxFiles: 200 }, HASH_TIMEOUT_MS);
     batchTotal.value = res.length;
     for (const r of res) {
       results.value.unshift(r);

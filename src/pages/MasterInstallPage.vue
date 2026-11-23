@@ -267,26 +267,23 @@ const checkingUpdateIds = ref<Set<string>>(new Set());
 async function checkAppUpdate(app: AppItem) {
   if (!app.winget_id) { notifications.warning(`Vérification indisponible pour ${app.name} (pas d'ID WinGet)`); return; }
   checkingUpdateIds.value = new Set([...checkingUpdateIds.value, app.id]);
+  // LECTURE SEULE. Avant : `winget upgrade --id X`, qui ne vérifie pas mais
+  // INSTALLE la mise à jour (sans --exact, sans acceptation des contrats) et
+  // se faisait tuer au bout de 60 s en pleine installation.
+  // `list --upgrade-available` sort en 0 avec une ligne si une MAJ existe,
+  // sinon en code non nul ; un 2e `list` distingue « à jour » de « absent ».
+  type Cmd = { success: boolean; stdout: string };
+  const base = ["list", "--id", app.winget_id, "--exact", "--accept-source-agreements", "--disable-interactivity"];
   try {
-    const result = await invoke<{ stdout?: string }>("run_system_command", {
-      cmd: "winget",
-      args: ["upgrade", "--id", app.winget_id],
-    });
-    const out = result?.stdout ?? "";
-    const low = out.toLowerCase();
-    // winget renvoie un exit code non-zéro même quand l'app est déjà à jour
-    // (quirk winget : "upgrade --id Git.Git" à jour → exit -1978335189) —
-    // seul le texte distingue les 3 issues réelles. Sur Windows FR, winget
-    // répond "Mise à niveau disponible introuvable." / "Aucune version de
-    // package plus récente n'est disponible...".
-    const upToDate = out.includes("No applicable upgrade")
-      || low.includes("disponible introuvable")
-      || low.includes("n'est disponible à partir des sources");
-    const notFound = low.includes("ne correspond aux critères") || low.includes("no installed package found");
-    if (upToDate) notifications.success(`${app.name} est à jour`);
-    else if (notFound) notifications.error(`${app.name} introuvable via WinGet`, "L'ID WinGet ne correspond à aucun package installé.");
-    else if (out.trim()) notifications.info(`MAJ disponible pour ${app.name}`, out.split("\n").slice(0, 3).join(" "));
-    else notifications.info(`Vérification terminée pour ${app.name}`);
+    const upg = await invoke<Cmd>("run_system_command", { cmd: "winget", args: [...base, "--upgrade-available"] }, 90_000);
+    const row = upg.stdout.split("\n").find((l) => l.toLowerCase().includes(app.winget_id!.toLowerCase()));
+    if (upg.success && row) {
+      notifications.info(`MAJ disponible pour ${app.name}`, row.trim().replace(/\s{2,}/g, " · "));
+    } else {
+      const inst = await invoke<Cmd>("run_system_command", { cmd: "winget", args: base }, 90_000);
+      if (inst.success) notifications.success(`${app.name} est à jour`);
+      else notifications.error(`${app.name} introuvable via WinGet`, "Aucun paquet installé ne correspond à cet identifiant WinGet.");
+    }
   } catch (e: unknown) {
     notifications.error(`Impossible de vérifier MAJ pour ${app.name}`, String(e));
   }

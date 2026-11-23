@@ -94,6 +94,8 @@ async function loadVolumes() {
     const raw = await invoke<CommandResult>("run_system_command", {
       cmd: "docker", args: ["volume", "ls", "--format", "{{.Name}}|{{.Driver}}|{{.Mountpoint}}|{{.CreatedAt}}"],
     });
+    // Daemon arrete : code non nul et stdout vide, affiche avant comme « aucun volume ».
+    if (!raw.success) throw new Error((raw.stderr || `code ${raw.exit_code}`).trim());
     volumes.value = (raw?.stdout ?? "").trim().split("\n").filter(Boolean).map(line => {
       const [name, driver, mountpoint, created] = line.split("|");
       return { name: name ?? "", driver: driver ?? "", mountpoint: mountpoint ?? "", created: created?.slice(0, 16) ?? "" };
@@ -165,7 +167,7 @@ async function inspectContainer(c: DockerContainer) {
     const raw = await invoke<CommandResult>("run_system_command", {
       cmd: "docker", args: ["inspect", c.id],
     });
-    inspectData.value = { ...inspectData.value, [c.id]: raw?.stdout ?? "" };
+    inspectData.value = { ...inspectData.value, [c.id]: raw.success ? raw.stdout : `Erreur : ${(raw.stderr || raw.stdout).trim()}` };
   } catch (e: unknown) {
     inspectData.value = { ...inspectData.value, [c.id]: `Erreur : ${String(e)}` };
   } finally {

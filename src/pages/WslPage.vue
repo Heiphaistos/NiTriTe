@@ -121,8 +121,7 @@ async function exportDistro(d: WslDistro) {
 
   exportingDistro.value = d.name;
   try {
-    const r = await invokeRaw<{ success: boolean; stderr: string }>("run_system_command", { cmd: "wsl", args: ["--export", d.name, exportPath] });
-    if (!r.success) throw new Error(r.stderr?.trim() || "L'export WSL a échoué");
+    await invokeRaw<string>("wsl_long_action", { action: "export", distro: d.name, path: exportPath });
     notify.success("Export terminé", exportPath);
   } catch (e: unknown) {
     notify.error("Erreur export", String(e));
@@ -134,8 +133,7 @@ async function convertToWsl2(d: WslDistro) {
   if (!(await confirm(`Convertir "${d.name}" de WSL 1 vers WSL 2 ? Cette opération peut prendre plusieurs minutes.`, { title: "Nitrite", kind: "warning" }))) return;
   convertingDistro.value = d.name;
   try {
-    const r = await invoke<{ success: boolean; stderr: string }>("run_system_command", { cmd: "wsl", args: ["--set-version", d.name, "2"] });
-    if (!r.success) throw new Error(r.stderr?.trim() || "La conversion WSL a échoué");
+    await invokeRaw<string>("wsl_long_action", { action: "convert", distro: d.name });
     notify.success("Conversion terminée", `${d.name} → WSL 2`);
     await load();
   } catch (e: unknown) {

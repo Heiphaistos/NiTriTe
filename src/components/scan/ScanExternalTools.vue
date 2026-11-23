@@ -12,10 +12,10 @@ const tools: AntivirusTool[] = [
   { name: "Malwarebytes Free", url: "https://www.malwarebytes.com/mwb-download", desc: "Anti-malware référence — détection avancée PUP/rootkit", category: "scan-local" },
   { name: "AdwCleaner", url: "https://toolslib.net/downloads/viewdownload/1-adwcleaner/", desc: "Nettoyeur adware, PUP, barre d'outils — par Malwarebytes", category: "scan-local" },
   { name: "RogueKiller", url: "https://www.adlice.com/roguekiller/", desc: "Anti-rootkit et anti-rogue avancé", category: "scan-local" },
-  { name: "HitmanPro (SurfRight)", url: "https://www.hitmanpro.com/en-us/downloads", desc: "Second avis anti-malware — cloud-based", category: "scan-local" },
-  { name: "Emsisoft Emergency Kit", url: "https://www.emsisoft.com/en/home/emergencykit/", desc: "Kit portable — aucune installation requise", category: "scan-local" },
+  { name: "HitmanPro (Sophos)", url: "https://www.sophos.com/en-us/free-tools/hitmanpro", desc: "Second avis anti-malware — cloud-based", category: "scan-local" },
+  { name: "Emsisoft Emergency Kit", url: "https://www.emsisoft.com/en/emergency-kit/", desc: "Kit portable — aucune installation requise", category: "scan-local" },
   { name: "Kaspersky Removal Tool", url: "https://support.kaspersky.com/kvrt2020", desc: "Outil de désinfection Kaspersky — sans installation", category: "scan-local" },
-  { name: "Microsoft Safety Scanner", url: "https://docs.microsoft.com/security/intelligence/safety-scanner-download", desc: "Outil officiel Microsoft pour scan ponctuel", category: "scan-local" },
+  { name: "Microsoft Safety Scanner", url: "https://learn.microsoft.com/fr-fr/defender-endpoint/safety-scanner-download", desc: "Outil officiel Microsoft pour scan ponctuel", category: "scan-local" },
   { name: "Dr.Web CureIt!", url: "https://free.drweb.com/cureit/", desc: "Scanner portable Dr.Web — très efficace sur ransomwares", category: "scan-local" },
   // Scan en ligne
   { name: "VirusTotal", url: "https://www.virustotal.com", desc: "Analyser un fichier ou URL avec 70+ moteurs AV", category: "scan-online" },
@@ -25,7 +25,6 @@ const tools: AntivirusTool[] = [
   { name: "Jotti Malware Scan", url: "https://virusscan.jotti.org/", desc: "Scan fichier avec plusieurs moteurs AV", category: "scan-online" },
   // Suppression
   { name: "Rkill", url: "https://www.bleepingcomputer.com/download/rkill/", desc: "Stoppe les processus malware avant désinfection", category: "removal" },
-  { name: "TDSSKiller (Kaspersky)", url: "https://www.kaspersky.com/downloads/tdsskiller", desc: "Suppression bootkits et rootkits TDSS", category: "removal" },
   { name: "Microsoft Defender Offline", url: "https://support.microsoft.com/windows/run-microsoft-defender-offline-9306d528-64bf-4668-5b80-ff533f183d6c", desc: "Scan hors-ligne officiel Windows — détecte rootkits", category: "removal" },
 ];
 

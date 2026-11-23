@@ -324,7 +324,7 @@
   },
   {
     "name": "Windows ISO",
-    "description": "Télécharger l'ISO Windows 10",
+    "description": "Télécharger l'ISO Windows 10 (fin de support : octobre 2025)",
     "command": "https://www.microsoft.com/fr-fr/software-download/windows10ISO",
     "is_url": true,
     "section": "Activation & Téléchargements",
@@ -340,8 +340,8 @@
   },
   {
     "name": "Media Creation Tool",
-    "description": "Outil de création de média Windows",
-    "command": "https://www.microsoft.com/fr-fr/software-download/windows10",
+    "description": "Outil de création de média Windows 11",
+    "command": "https://www.microsoft.com/fr-fr/software-download/windows11",
     "is_url": true,
     "section": "Activation & Téléchargements",
     "icon": "🔑"
@@ -389,7 +389,7 @@
   {
     "name": "Patch My PC",
     "description": "Mettre à jour tous les logiciels",
-    "command": "https://patchmypc.com/home-updater",
+    "command": "https://patchmypc.com/product/home-updater/",
     "is_url": true,
     "section": "Activation & Téléchargements",
     "icon": "🔑"
@@ -397,15 +397,7 @@
   {
     "name": "Windows Toolkit",
     "description": "Boîte à outils Windows Chris Titus",
-    "command": "https://christitustech.github.io/winutil/",
-    "is_url": true,
-    "section": "Activation & Téléchargements",
-    "icon": "🔑"
-  },
-  {
-    "name": "KMS Tools",
-    "description": "Outils KMS d'activation",
-    "command": "https://www.tgbus.com/",
+    "command": "https://winutil.christitus.com/",
     "is_url": true,
     "section": "Activation & Téléchargements",
     "icon": "🔑"
@@ -444,8 +436,8 @@
   },
   {
     "name": "Ultimate Windows Tweaker",
-    "description": "Tweaker avancé pour Windows",
-    "command": "https://www.thewindowsclub.com/ultimate-windows-tweaker-4-windows-10",
+    "description": "Tweaker avancé pour Windows 11 (version 5)",
+    "command": "https://www.thewindowsclub.com/ultimate-windows-tweaker-5-for-windows-11",
     "is_url": true,
     "section": "Activation & Téléchargements",
     "icon": "🔑"
@@ -615,14 +607,6 @@
     "name": "Privazer",
     "description": "Nettoyeur de traces de confidentialité",
     "command": "https://privazer.com/",
-    "is_url": true,
-    "section": "Maintenance & Nettoyage",
-    "icon": "🧹"
-  },
-  {
-    "name": "CleanMyPC",
-    "description": "Nettoyeur système par MacPaw",
-    "command": "https://macpaw.com/cleanmypc",
     "is_url": true,
     "section": "Maintenance & Nettoyage",
     "icon": "🧹"
@@ -1699,14 +1683,6 @@
     "icon": "⚙️"
   },
   {
-    "name": "Cortana",
-    "description": "Paramètres Cortana",
-    "command": "ms-settings:cortana",
-    "is_url": true,
-    "section": "Paramètres Windows",
-    "icon": "⚙️"
-  },
-  {
     "name": "Apps & Features",
     "description": "Applications et fonctionnalités",
     "command": "ms-settings:appsfeatures",
@@ -1757,7 +1733,7 @@
   {
     "name": "Acer",
     "description": "Support Acer France",
-    "command": "https://www.acer.com/ac/fr/FR/content/support",
+    "command": "https://www.acer.com/fr-fr/support",
     "is_url": true,
     "section": "Support Fabricants",
     "icon": "🏭"
@@ -1821,7 +1797,7 @@
   {
     "name": "NVIDIA",
     "description": "Téléchargement pilotes NVIDIA",
-    "command": "https://www.nvidia.fr/Download/index.aspx",
+    "command": "https://www.nvidia.com/fr-fr/drivers/",
     "is_url": true,
     "section": "Support Fabricants",
     "icon": "🏭"
@@ -1875,14 +1851,6 @@
     "icon": "🛒"
   },
   {
-    "name": "Acadia Info",
-    "description": "Grossiste Acadia Info",
-    "command": "https://www.acadiainfo.fr",
-    "is_url": true,
-    "section": "Fournisseurs & Achats",
-    "icon": "🛒"
-  },
-  {
     "name": "Flexit",
     "description": "Grossiste Flexit",
     "command": "https://www.flexit.fr",
@@ -1894,14 +1862,6 @@
     "name": "1fo Discount",
     "description": "Grossiste 1fo Discount",
     "command": "https://www.1fodiscount.com",
-    "is_url": true,
-    "section": "Fournisseurs & Achats",
-    "icon": "🛒"
-  },
-  {
-    "name": "Noriak Distri",
-    "description": "Grossiste Noriak Distribution",
-    "command": "https://www.noriakdistri.com",
     "is_url": true,
     "section": "Fournisseurs & Achats",
     "icon": "🛒"
@@ -2435,14 +2395,6 @@
     "icon": "🛒"
   },
   {
-    "name": "IT-Discount",
-    "description": "Matériel informatique discount",
-    "command": "https://www.it-discount.fr/",
-    "is_url": true,
-    "section": "Fournisseurs & Achats",
-    "icon": "🛒"
-  },
-  {
     "name": "iFixit",
     "description": "Guides réparation et pièces détachées",
     "command": "https://www.ifixit.com/",
@@ -2457,14 +2409,6 @@
     "is_url": true,
     "section": "Fournisseurs & Achats",
     "icon": "🔧"
-  },
-  {
-    "name": "LDLC Pro",
-    "description": "LDLC espace professionnel B2B",
-    "command": "https://pro.ldlc.com/",
-    "is_url": true,
-    "section": "Fournisseurs & Achats",
-    "icon": "🛒"
   },
   {
     "name": "Cdiscount Pro",
@@ -2621,7 +2565,7 @@
   {
     "name": "F-Secure",
     "description": "Solution sécurité F-Secure télécharger",
-    "command": "https://www.f-secure.com/fr/home/downloads",
+    "command": "https://www.f-secure.com/fr",
     "is_url": true,
     "section": "Fournisseurs & Achats",
     "icon": "🛡️"
@@ -2709,7 +2653,7 @@
   {
     "name": "AS SSD Benchmark",
     "description": "Benchmark SSD",
-    "command": "https://www.alex-is.de/PHP/fusion/downloads.php",
+    "command": "https://www.alex-is.de/",
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "📊"
@@ -2909,7 +2853,7 @@
   {
     "name": "ADATA SSD Toolbox",
     "description": "Outil SSD ADATA",
-    "command": "https://www.adata.com/en/ss/software-6/",
+    "command": "https://www.adata.com/en/support/",
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "📊"
@@ -2917,15 +2861,7 @@
   {
     "name": "Basemark GPU",
     "description": "Benchmark GPU multiplateforme",
-    "command": "https://www.basemark.com/benchmarks/basemark-gpu/",
-    "is_url": true,
-    "section": "Benchmark & Tests",
-    "icon": "📊"
-  },
-  {
-    "name": "GFXBench",
-    "description": "Benchmark graphique cross-platform",
-    "command": "https://gfxbench.com",
+    "command": "https://www.basemark.com/",
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "📊"
@@ -3019,14 +2955,6 @@
     "icon": "🖥️"
   },
   {
-    "name": "RealBench ASUS",
-    "description": "Benchmark système complet ASUS RealBench",
-    "command": "https://rog.asus.com/rog-pro/realbench-v2-benchmark-tool/",
-    "is_url": true,
-    "section": "Benchmark & Tests",
-    "icon": "🔍"
-  },
-  {
     "name": "Unigine Suite",
     "description": "Suite benchmarks Unigine Heaven Valley Superposition",
     "command": "https://benchmark.unigine.com/",
@@ -3073,30 +3001,6 @@
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "🧠"
-  },
-  {
-    "name": "DiskSpeed",
-    "description": "Benchmark vitesse disque simple Microsoft Store",
-    "command": "https://apps.microsoft.com/detail/9nblggh4bfk3",
-    "is_url": true,
-    "section": "Benchmark & Tests",
-    "icon": "💾"
-  },
-  {
-    "name": "Parkdale",
-    "description": "Benchmark lecture écriture disques et réseau",
-    "command": "https://www.quartetcomputers.com/parkdale.html",
-    "is_url": true,
-    "section": "Benchmark & Tests",
-    "icon": "💾"
-  },
-  {
-    "name": "Anvil Storage Utilities",
-    "description": "Benchmark stockage SSD complet Anvil",
-    "command": "https://anvilbenchmark.com/",
-    "is_url": true,
-    "section": "Benchmark & Tests",
-    "icon": "💾"
   },
   {
     "name": "CrystalDiskInfo",
@@ -3261,7 +3165,7 @@
   {
     "name": "ThrottleStop",
     "description": "Gestion throttling et températures CPU",
-    "command": "https://www.techpowerup.com/download/throttlestop/",
+    "command": "https://www.techpowerup.com/download/techpowerup-throttlestop/",
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "🌡️"
@@ -3380,14 +3284,6 @@
     "icon": "⚡"
   },
   {
-    "name": "CompuBench",
-    "description": "Benchmark GPU calcul généraliste CompuBench",
-    "command": "https://compubench.com/",
-    "is_url": true,
-    "section": "Benchmark & Tests",
-    "icon": "⚡"
-  },
-  {
     "name": "Intel MLC",
     "description": "Mesure latence mémoire Intel MLC",
     "command": "https://www.intel.com/content/www/us/en/download/736633/multi-core-latency-checker.html",
@@ -3398,7 +3294,7 @@
   {
     "name": "Sapphire TriXX",
     "description": "Overclocking et monitoring GPU AMD Sapphire",
-    "command": "https://www.sapphiretech.com/en/trixx",
+    "command": "https://www.sapphiretech.com/en/software",
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "🖥️"
@@ -3494,7 +3390,7 @@
   {
     "name": "NVIDIA Drivers",
     "description": "Pilotes NVIDIA officiels",
-    "command": "https://www.nvidia.fr/Download/index.aspx",
+    "command": "https://www.nvidia.com/fr-fr/drivers/",
     "is_url": true,
     "section": "Drivers",
     "icon": "💿"
@@ -3558,7 +3454,7 @@
   {
     "name": "Realtek Drivers",
     "description": "Pilotes audio Realtek HD",
-    "command": "https://www.realtek.com/en/component/zoo/category/pc-audio-codecs-high-definition-audio-codecs-software",
+    "command": "https://www.realtek.com/Download/List?cate_id=593",
     "is_url": true,
     "section": "Drivers",
     "icon": "💿"
@@ -3599,14 +3495,6 @@
     "name": "PowerShell Docs",
     "description": "Documentation PowerShell",
     "command": "https://learn.microsoft.com/en-us/powershell/",
-    "is_url": true,
-    "section": "Documentation",
-    "icon": "📚"
-  },
-  {
-    "name": "TechNet",
-    "description": "Microsoft TechNet",
-    "command": "https://technet.microsoft.com",
     "is_url": true,
     "section": "Documentation",
     "icon": "📚"
@@ -3756,14 +3644,6 @@
     "icon": "🔍"
   },
   {
-    "name": "DPC Latency Checker",
-    "description": "Vérifier latence DPC pour audio professionnel",
-    "command": "https://www.thesycon.de/eng/latency_check.shtml",
-    "is_url": true,
-    "section": "Benchmark & Tests",
-    "icon": "🔍"
-  },
-  {
     "name": "Aida64 System Stability",
     "description": "Test stabilité système AIDA64",
     "command": "https://www.aida64.com/downloads",
@@ -3810,14 +3690,6 @@
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "🧠"
-  },
-  {
-    "name": "Disk Detective",
-    "description": "Analyse performance et santé disque",
-    "command": "https://diskdetective.io/",
-    "is_url": true,
-    "section": "Benchmark & Tests",
-    "icon": "💾"
   },
   {
     "name": "StorageMark",
@@ -3968,7 +3840,7 @@
   {
     "name": "GPU Tweak III",
     "description": "Overclocking GPU ASUS GPU Tweak III",
-    "command": "https://www.asus.com/campaign/gpu-tweak-III/",
+    "command": "https://www.asus.com/campaign/GPU-Tweak-III/",
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "🖥️"
@@ -3980,14 +3852,6 @@
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "🖥️"
-  },
-  {
-    "name": "Watt Meter Online",
-    "description": "Calculateur consommation électrique PC",
-    "command": "https://outervision.com/power-supply-calculator",
-    "is_url": true,
-    "section": "Benchmark & Tests",
-    "icon": "⚡"
   },
   {
     "name": "PSU Calculator",
@@ -4008,7 +3872,7 @@
   {
     "name": "Kingston Memory Search",
     "description": "Recherche mémoire compatible Kingston",
-    "command": "https://www.kingston.com/fr/memory/search",
+    "command": "https://www.kingston.com/fr/memory",
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "🧠"
@@ -4017,14 +3881,6 @@
     "name": "NotebookCheck",
     "description": "Tests et benchmarks portables NotebookCheck",
     "command": "https://www.notebookcheck.net/",
-    "is_url": true,
-    "section": "Benchmark & Tests",
-    "icon": "🔍"
-  },
-  {
-    "name": "AnandTech",
-    "description": "Analyses hardware approfondies AnandTech",
-    "command": "https://www.anandtech.com/",
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "🔍"
@@ -4072,7 +3928,7 @@
   {
     "name": "CoolerMaster Calc",
     "description": "Calculateur refroidissement CoolerMaster",
-    "command": "https://www.coolermaster.com/en-global/cases/cooling-solutions/",
+    "command": "https://www.coolermaster.com/en-global/power-supply-calculator/",
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "🌡️"
@@ -4144,7 +4000,7 @@
   {
     "name": "AMD Adrenalin OC",
     "description": "Overclocking GPU AMD Radeon Software",
-    "command": "https://www.amd.com/fr/technologies/software",
+    "command": "https://www.amd.com/fr/products/software/adrenalin.html",
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "🖥️"
@@ -4192,7 +4048,7 @@
   {
     "name": "ASUS Store",
     "description": "ASUS France boutique officielle",
-    "command": "https://fr.asus.com/",
+    "command": "https://www.asus.com/fr/",
     "is_url": true,
     "section": "Fournisseurs & Achats",
     "icon": "🛒"
@@ -4328,7 +4184,7 @@
   {
     "name": "TeamGroup",
     "description": "Mémoire et SSD TeamGroup boutique",
-    "command": "https://www.teamgroupinc.com/fr/",
+    "command": "https://www.teamgroupinc.com/en/",
     "is_url": true,
     "section": "Fournisseurs & Achats",
     "icon": "🛒"
@@ -4361,14 +4217,6 @@
     "name": "Camelcamelcamel",
     "description": "Historique prix Amazon",
     "command": "https://fr.camelcamelcamel.com/",
-    "is_url": true,
-    "section": "Fournisseurs & Achats",
-    "icon": "🛒"
-  },
-  {
-    "name": "LDLC Occasion",
-    "description": "LDLC produits d'occasion reconditionnés",
-    "command": "https://www.ldlc.com/occasion/",
     "is_url": true,
     "section": "Fournisseurs & Achats",
     "icon": "🛒"
@@ -4416,7 +4264,7 @@
   {
     "name": "Microsoft Store",
     "description": "Microsoft Store applications et jeux",
-    "command": "https://www.microsoft.com/fr-fr/store/apps/windows",
+    "command": "https://apps.microsoft.com/",
     "is_url": true,
     "section": "Fournisseurs & Achats",
     "icon": "🛒"
@@ -4446,14 +4294,6 @@
     "icon": "🛒"
   },
   {
-    "name": "IT4Store",
-    "description": "Boutique IT professionnelle FR",
-    "command": "https://www.it4store.com/",
-    "is_url": true,
-    "section": "Fournisseurs & Achats",
-    "icon": "🛒"
-  },
-  {
     "name": "inet.de",
     "description": "Revendeur composants PC Suede",
     "command": "https://www.inet.se/",
@@ -4476,14 +4316,6 @@
     "is_url": true,
     "section": "Benchmark & Tests",
     "icon": "💾"
-  },
-  {
-    "name": "Network Benchmark",
-    "description": "Test bande passante reseau local",
-    "command": "https://www.networkbenchmark.net/",
-    "is_url": true,
-    "section": "Benchmark & Tests",
-    "icon": "🌐"
   },
   {
     "name": "CPUID CPU-Z Validator",

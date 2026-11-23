@@ -1,7 +1,7 @@
 <script setup lang="ts">
 defineOptions({ name: "DataRecoveryPage" });
 import { ref, computed, onMounted } from "vue";
-import { invoke, isTauriContext } from "@/utils/invoke";
+import { invoke, invokeRaw, isTauriContext } from "@/utils/invoke";
 import { formatWmiDateTime } from "@/utils/wmiDate";
 import NButton from "@/components/ui/NButton.vue";
 import NSpinner from "@/components/ui/NSpinner.vue";
@@ -35,7 +35,7 @@ const creatingShadow = ref(false);
 async function createShadow() {
   creatingShadow.value = true;
   try {
-    const id = await invoke<string>("create_shadow_copy_cmd", { volume: createShadowVolume.value });
+    const id = await invokeRaw<string>("create_shadow_copy_cmd", { volume: createShadowVolume.value });
     notify.success("Shadow copy créée", `ID : ${id}`);
     await loadShadows();
   } catch (e: unknown) { notify.error("Erreur création", String(e)); }
@@ -86,7 +86,7 @@ const generatingReport = ref(false);
 async function runDeepScan() {
   scanningDeep.value = true; deepFiles.value = [];
   try {
-    deepFiles.value = await invoke<DeepMftFile[]>("deep_mft_scan_advanced_cmd", { drive: deepDrive.value });
+    deepFiles.value = await invokeRaw<DeepMftFile[]>("deep_mft_scan_advanced_cmd", { drive: deepDrive.value });
   } catch (e: unknown) { notify.error("Erreur scan MFT", String(e)); }
   scanningDeep.value = false;
 }
@@ -252,7 +252,7 @@ async function searchInShadow() {
   isSearching.value = true;
   selectedFiles.value = new Set();
   try {
-    shadowFiles.value = await invoke<RecoveredFile[]>("search_shadow_copy", {
+    shadowFiles.value = await invokeRaw<RecoveredFile[]>("search_shadow_copy", {
       devicePath: selectedShadow.value.device_path,
       query: searchQuery.value.trim(),
       basePath: browsingPath.value,
@@ -281,7 +281,7 @@ async function batchRestore() {
   if (selectedFiles.value.size === 0) return;
   batchRestoring.value = true;
   try {
-    const result = await invoke<BatchRestoreResult>("restore_files_batch", {
+    const result = await invokeRaw<BatchRestoreResult>("restore_files_batch", {
       files: Array.from(selectedFiles.value),
       targetFolder: restoreTarget.value,
     });
@@ -296,7 +296,7 @@ async function batchRestore() {
 
 async function restoreFromShadow(file: RecoveredFile) {
   try {
-    const result = await invoke<RestoreResult>("restore_from_shadow", {
+    const result = await invokeRaw<RestoreResult>("restore_from_shadow", {
       sourcePath: file.path,
       targetFolder: restoreTarget.value,
     });

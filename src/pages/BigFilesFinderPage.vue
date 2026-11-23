@@ -105,15 +105,21 @@ async function scan() {
     if (files.value.length === 0) notify.info("Aucun fichier", "Aucun gros fichier trouvé");
     else notify.success("Scan terminé", `${files.value.length} fichier(s) — ${formatSize(totalSize.value)} au total`);
   } catch (e: unknown) {
-    notify.error("Erreur scan", String(e));
+    if (String(e).includes("annulée")) notify.info("Analyse annulée", "Recherche interrompue.");
+    else notify.error("Erreur scan", String(e));
   } finally {
     loading.value = false;
   }
 }
 
+function cancelScan() {
+  invoke("cancel_disk_scan").catch((e: unknown) => notify.error("Annulation", String(e)));
+}
+
 async function openFolder(path: string) {
   const folder = path.substring(0, path.lastIndexOf("\\"));
-  try { await invoke("open_path", { path: folder }); } catch {}
+  try { await invoke("open_path", { path: folder }); }
+  catch (e: unknown) { notify.error("Ouverture impossible", String(e)); }
 }
 
 function copyPath(path: string) {
@@ -129,15 +135,11 @@ async function deleteFile(f: BigFile) {
   deleting.value = f.path;
   try {
     if (trashMode.value) {
-      try {
-        await invoke("trash_file", { path: f.path });
-        notify.success("Corbeille", f.name);
-      } catch {
-        // trash_file non supporté — suppression définitive
-        notify.warning("Corbeille indisponible — suppression définitive", f.name);
-        await invoke("delete_file", { path: f.path });
-        notify.success("Supprimé définitivement", f.name);
-      }
+      // Pas de repli automatique sur la suppression définitive : l'utilisateur
+      // a choisi la corbeille ; en cas d'échec il décoche « Corbeille » s'il
+      // veut vraiment supprimer définitivement.
+      await invoke("trash_file", { path: f.path });
+      notify.success("Corbeille", f.name);
     } else {
       await invoke("delete_file", { path: f.path });
       notify.success("Supprimé définitivement", f.name);
@@ -302,6 +304,7 @@ function exportCsv() {
     <div v-if="loading" style="display:flex;justify-content:center;padding:40px;gap:12px;align-items:center">
       <NSpinner :size="24" />
       <span style="color:var(--text-muted)">Analyse récursive en cours (dossiers exclus : {{ excludedFolders.length }})...</span>
+      <NButton variant="ghost" size="sm" @click="cancelScan">Annuler</NButton>
     </div>
   </div>
 </template>

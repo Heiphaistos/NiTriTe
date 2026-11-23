@@ -83,46 +83,18 @@ pub async fn get_pe_system_info() -> Result<PeSystemInfo, NiTriTeError> {
     tokio::task::spawn_blocking(|| {
         let is_winpe = detect_winpe();
 
-        // CPU
-        let cpu = {
-            #[cfg(target_os = "windows")]
-            {
-                let out = std::process::Command::new("wmic")
-                    .args(["cpu", "get", "name", "/value"])
-                    .creation_flags(NO_WINDOW)
-                    .output()
-                    .map(|o| o.stdout)
-                    .unwrap_or_default();
-                String::from_utf8_lossy(&out)
-                    .lines()
-                    .find(|l| l.starts_with("Name="))
-                    .map(|l| l.trim_start_matches("Name=").trim().to_string())
-                    .unwrap_or_else(|| "Inconnu".to_string())
-            }
-            #[cfg(not(target_os = "windows"))]
-            { "Inconnu".to_string() }
-        };
-
-        // RAM
-        let ram_gb = {
-            #[cfg(target_os = "windows")]
-            {
-                let out = std::process::Command::new("wmic")
-                    .args(["ComputerSystem", "get", "TotalPhysicalMemory", "/value"])
-                    .creation_flags(NO_WINDOW)
-                    .output()
-                    .map(|o| o.stdout)
-                    .unwrap_or_default();
-                let raw = String::from_utf8_lossy(&out);
-                raw.lines()
-                    .find(|l| l.starts_with("TotalPhysicalMemory="))
-                    .and_then(|l| l.trim_start_matches("TotalPhysicalMemory=").trim().parse::<u64>().ok())
-                    .map(|b| b as f64 / 1_073_741_824.0)
-                    .unwrap_or(0.0)
-            }
-            #[cfg(not(target_os = "windows"))]
-            { 0.0 }
-        };
+        // CPU et RAM par l'API Windows (sysinfo), sans processus externe :
+        // `wmic` est retire de Windows 11 24H2/25H2 (et des WinPE recents) et
+        // PowerShell est un composant facultatif de WinPE. Avec wmic absent,
+        // la page affichait « Inconnu », 0 Go et AUCUN lecteur.
+        let mut sys = sysinfo::System::new();
+        sys.refresh_cpu_list(sysinfo::CpuRefreshKind::nothing());
+        sys.refresh_memory();
+        let cpu = sys.cpus().first()
+            .map(|c| c.brand().trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "Inconnu".to_string());
+        let ram_gb = sys.total_memory() as f64 / 1_073_741_824.0;
 
         // Drives
         let drives = collect_pe_drives();
@@ -163,41 +135,25 @@ fn get_pe_version() -> Option<String> {
 }
 
 fn collect_pe_drives() -> Vec<PeDrive> {
-    #[cfg(target_os = "windows")]
-    {
-        let out = std::process::Command::new("wmic")
-            .args(["logicaldisk", "get", "DeviceID,VolumeName,Size,FreeSpace,FileSystem", "/format:csv"])
-            .creation_flags(NO_WINDOW)
-            .output()
-            .map(|o| o.stdout)
-            .unwrap_or_default();
-        let raw = String::from_utf8_lossy(&out);
-        raw.lines()
-            .skip(2) // header + blank
-            .filter(|l| !l.trim().is_empty())
-            .filter_map(|line| {
-                let cols: Vec<&str> = line.split(',').collect();
-                if cols.len() < 6 { return None; }
-                let letter = cols[1].trim().to_string();
-                if letter.is_empty() { return None; }
-                let free_bytes = cols[2].trim().parse::<u64>().unwrap_or(0);
-                let fs = cols[3].trim().to_string();
-                let size_bytes = cols[4].trim().parse::<u64>().unwrap_or(0);
-                let label = cols[5].trim().to_string();
-                let is_system = letter == "C:" || letter == "X:";
-                Some(PeDrive {
-                    letter,
-                    label,
-                    size_gb: size_bytes as f64 / 1_073_741_824.0,
-                    free_gb: free_bytes as f64 / 1_073_741_824.0,
-                    fs,
-                    is_system,
-                })
+    // API Windows (sysinfo) plutot que `wmic logicaldisk` : voir get_pe_system_info.
+    let disks = sysinfo::Disks::new_with_refreshed_list();
+    let mut drives: Vec<PeDrive> = disks.iter()
+        .filter_map(|d| {
+            let letter: String = d.mount_point().to_string_lossy().trim_end_matches('\\').to_uppercase();
+            if letter.len() != 2 || !letter.ends_with(':') { return None; }
+            let is_system = letter == "C:" || letter == "X:";
+            Some(PeDrive {
+                label: d.name().to_string_lossy().into_owned(),
+                size_gb: d.total_space() as f64 / 1_073_741_824.0,
+                free_gb: d.available_space() as f64 / 1_073_741_824.0,
+                fs: d.file_system().to_string_lossy().into_owned(),
+                is_system,
+                letter,
             })
-            .collect()
-    }
-    #[cfg(not(target_os = "windows"))]
-    { vec![] }
+        })
+        .collect();
+    drives.sort_by(|a, b| a.letter.cmp(&b.letter));
+    drives
 }
 
 #[tauri::command]
@@ -397,10 +353,19 @@ pub async fn list_offline_users(windows_dir: String) -> Result<Vec<OfflineUser>,
                 return Err(NiTriTeError::System(format!("SAM introuvable: {}", sam_path)));
             }
             // Charge la ruche dans HKLM\OFFLINE_SAM
-            let _ = std::process::Command::new("reg")
+            // Echec ignore avant : liste vide sans explication (ruche du Windows
+            // en cours verrouillee, droits admin manquants).
+            let charge = std::process::Command::new("reg")
                 .args(["load", r"HKLM\OFFLINE_SAM", &sam_path])
                 .creation_flags(NO_WINDOW)
-                .status();
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if !charge {
+                return Err(NiTriTeError::System(format!(
+                    "Impossible de charger la ruche {sam_path} (Windows en cours d'exécution ou droits administrateur manquants)."
+                )));
+            }
 
             // Guard RAII : décharge la ruche à la sortie du scope (succès ou erreur)
             let _hive_guard = RegHiveGuard { hive_key: r"HKLM\OFFLINE_SAM".to_string() };
@@ -442,8 +407,9 @@ pub async fn reset_user_password(windows_dir: String, username: String, new_pass
     tokio::task::spawn_blocking(move || {
         #[cfg(target_os = "windows")]
         {
+            garde_net_user(&username, Some(&new_password))?;
             // Utilise net user via l'image offline (Windows installé) — nécessite que l'OS soit accessible
-            let drive = if windows_dir.len() >= 2 { windows_dir[..2].to_string() } else { "C:".to_string() };
+            let drive = windows_dir.get(..2).unwrap_or("C:").to_string();
             let system32 = format!("{}\\Windows\\System32", drive);
             let net_exe = format!("{}\\net.exe", system32);
 
@@ -483,13 +449,23 @@ pub async fn disk_wipe(disk_index: u32, method: String) -> Result<RepairResult, 
     // Refus catégorique du disque 0 (disque système en WinPE)
     if disk_index == 0 {
         return Err(NiTriTeError::System(
-            "Cannot wipe disk 0 (system disk). Operation refused for safety.".to_string(),
+            "Effacement du disque 0 refusé (disque système le plus probable).".to_string(),
         ));
     }
 
     tokio::task::spawn_blocking(move || {
         #[cfg(target_os = "windows")]
         {
+            // Le seul refus du disque 0 laissait effacer le disque du Windows en
+            // cours quand il n'est pas le n°0 (ordre NVMe/SATA variable), ou la
+            // cle WinPE elle-meme.
+            match super::winpe_disques::disques_proteges(detect_winpe()) {
+                Ok(p) if p.contains(&disk_index) => return Err(NiTriTeError::System(format!(
+                    "Effacement refusé : le disque {} porte le Windows en cours ou NiTriTe lui-même.", disk_index))),
+                Ok(_) => {}
+                Err(e) => return Err(NiTriTeError::System(format!(
+                    "Effacement refusé : impossible de vérifier le disque système ({e})."))),
+            }
             // method: "quick" = clean, "secure" = clean all (zeros)
             let diskpart_cmd = if method == "secure" {
                 format!("select disk {}\nclean all\n", disk_index)
@@ -695,12 +671,35 @@ pub async fn unlock_bitlocker(drive: String, recovery_key: String) -> Result<Rep
 
 // ── Outils mot de passe avancés ───────────────────────────────────────────────
 
+/// Garde commune des actions `net user` « hors ligne ».
+///
+/// `net.exe` agit TOUJOURS sur les comptes du Windows en cours d'execution,
+/// jamais sur la ruche SAM de l'installation choisie. Hors WinPE (page ouverte
+/// sur un Windows normal, avec un 2e Windows en double amorcage), « Définir
+/// MDP » changeait donc le mot de passe du compte homonyme du PC en marche, et
+/// « Activer compte » pouvait activer son Administrateur. Fail-closed.
+/// Un argument commencant par `/` est une option de net.exe : un mot de passe
+/// « /delete » supprimait le compte.
+fn garde_net_user(username: &str, mot_de_passe: Option<&str>) -> Result<(), NiTriTeError> {
+    if !detect_winpe() {
+        return Err(NiTriTeError::CommandDenied(
+            "Action réservée au mode WinPE : hors WinPE, net.exe modifierait les comptes du Windows en cours d'exécution, pas ceux de l'installation choisie.".into(),
+        ));
+    }
+    let invalide = |s: &str| s.starts_with('/') || s.chars().any(|c| c.is_control());
+    if username.trim().is_empty() || invalide(username) || mot_de_passe.is_some_and(invalide) {
+        return Err(NiTriTeError::CommandDenied("Nom d'utilisateur ou mot de passe invalide (pas de « / » en tête).".into()));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn clear_offline_password(windows_dir: String, username: String) -> Result<RepairResult, NiTriTeError> {
     tokio::task::spawn_blocking(move || {
         #[cfg(target_os = "windows")]
         {
-            let drive = if windows_dir.len() >= 2 { windows_dir[..2].to_string() } else { "C:".to_string() };
+            garde_net_user(&username, None)?;
+            let drive = windows_dir.get(..2).unwrap_or("C:").to_string();
             let net_exe = format!("{}\\Windows\\System32\\net.exe", drive);
             if !std::path::Path::new(&net_exe).exists() {
                 return Ok(RepairResult { success: false, output: format!("net.exe introuvable dans {}", drive), command: "net user".to_string() });
@@ -731,7 +730,8 @@ pub async fn enable_offline_account(windows_dir: String, username: String) -> Re
     tokio::task::spawn_blocking(move || {
         #[cfg(target_os = "windows")]
         {
-            let drive = if windows_dir.len() >= 2 { windows_dir[..2].to_string() } else { "C:".to_string() };
+            garde_net_user(&username, None)?;
+            let drive = windows_dir.get(..2).unwrap_or("C:").to_string();
             let net_exe = format!("{}\\Windows\\System32\\net.exe", drive);
             if !std::path::Path::new(&net_exe).exists() {
                 return Ok(RepairResult { success: false, output: format!("net.exe introuvable dans {}", drive), command: "net user".to_string() });
@@ -889,6 +889,20 @@ pub async fn winpe_run_command(command: String) -> Result<RepairResult, NiTriTeE
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Ce PC n'est pas en WinPE : les actions net user doivent etre refusees
+    // (elles modifieraient les comptes du Windows en cours).
+    #[test]
+    fn net_user_refuse_hors_winpe() {
+        assert!(!detect_winpe());
+        assert!(garde_net_user("Momo", Some("x")).is_err());
+    }
+
+    #[test]
+    fn drives_viennent_de_l_api_windows() {
+        let d = collect_pe_drives();
+        assert!(d.iter().any(|x| x.letter == "C:" && x.size_gb > 0.0));
+    }
 
     #[test]
     fn winpe_cmd_allowed_list() {

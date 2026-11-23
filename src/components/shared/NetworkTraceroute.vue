@@ -24,7 +24,7 @@ async function runTraceroute() {
   try {
     hops.value = await invoke<TracertHop[]>("run_traceroute", {
       host: tracerouteHost.value.trim(),
-    });
+    }, 130_000); // 20 sauts x 3 essais x 1 s dépassent les 30 s par défaut ; borné à 120 s côté Rust
     ran.value = true;
   } catch (e: unknown) {
     if (isTauriContext()) {

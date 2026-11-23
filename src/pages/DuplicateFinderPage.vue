@@ -29,7 +29,7 @@ const dupeFiles   = computed(() => groups.value.reduce((s, g) => s + g.files.len
 const visibleGroups = computed(() => groups.value.slice(0, displayCount.value));
 
 const scanModes = [
-  { value: "hash" as const, label: "Hash", icon: "🔑", desc: "Fichiers identiques bit à bit (MD5)" },
+  { value: "hash" as const, label: "Hash", icon: "🔑", desc: "Fichiers identiques bit à bit (SHA-256)" },
   { value: "name" as const, label: "Nom",  icon: "📝", desc: "Même nom de fichier (tailles différentes possibles)" },
 ];
 
@@ -66,32 +66,32 @@ async function scan() {
     if (groups.value.length === 0) notify.info("Aucun doublon", "Aucun fichier dupliqué trouvé");
     else notify.success("Scan terminé", `${groups.value.length} groupe(s) — ${formatSize(totalWasted.value)} récupérable(s)`);
   } catch (e: unknown) {
-    notify.error("Erreur scan", String(e));
+    if (String(e).includes("annulée")) notify.info("Analyse annulée", "Recherche interrompue.");
+    else notify.error("Erreur scan", String(e));
   } finally {
     loading.value = false;
   }
+}
+
+function cancelScan() {
+  invoke("cancel_disk_scan").catch((e: unknown) => notify.error("Annulation", String(e)));
 }
 
 async function deleteFile(path: string, group: DuplicateGroup) {
   deleting.value.add(path);
   const gi = groups.value.indexOf(group);
   if (gi < 0) { deleting.value.delete(path); return; }
+  // Corbeille uniquement : l'ancien repli silencieux sur delete_file
+  // supprimait DÉFINITIVEMENT un fichier que l'utilisateur croyait envoyer à
+  // la corbeille (fichier verrouillé, lecteur sans corbeille).
   try {
     await invoke("trash_file", { path });
     groups.value[gi].files = groups.value[gi].files.filter(f => f !== path);
     groups.value[gi].wasted_bytes -= groups.value[gi].size_bytes;
     if (groups.value[gi].files.length <= 1) groups.value.splice(gi, 1);
     notify.success("Envoyé à la corbeille", filename(path));
-  } catch (_) {
-    try {
-      await invoke("delete_file", { path });
-      groups.value[gi].files = groups.value[gi].files.filter(f => f !== path);
-      groups.value[gi].wasted_bytes -= groups.value[gi].size_bytes;
-      if (groups.value[gi].files.length <= 1) groups.value.splice(gi, 1);
-      notify.success("Supprimé", filename(path));
-    } catch (e: unknown) {
-      notify.error("Erreur suppression", String(e));
-    }
+  } catch (e: unknown) {
+    notify.error("Envoi à la corbeille impossible", `${filename(path)} : ${String(e)}`);
   } finally {
     deleting.value.delete(path);
   }
@@ -103,8 +103,7 @@ async function deleteAllDupes() {
     const g = groups.value[gi];
     for (let fi = g.files.length - 1; fi >= 1; fi--) {
       try {
-        try { await invoke("trash_file", { path: g.files[fi] }); }
-        catch { await invoke("delete_file", { path: g.files[fi] }); }
+        await invoke("trash_file", { path: g.files[fi] });
         freed += g.size_bytes; count++;
         g.files.splice(fi, 1);
       } catch (e: unknown) {
@@ -132,7 +131,8 @@ function copyPath(path: string) {
 }
 
 async function openFile(path: string) {
-  try { await invoke("open_path", { path: path.substring(0, path.lastIndexOf("\\")) }); } catch {}
+  try { await invoke("open_path", { path: path.substring(0, path.lastIndexOf("\\")) }); }
+  catch (e: unknown) { notify.error("Ouverture impossible", String(e)); }
 }
 </script>
 
@@ -141,7 +141,7 @@ async function openFile(path: string) {
     <div class="page-header">
       <div>
         <h1>Détecteur de Doublons</h1>
-        <p class="page-subtitle">Trouvez et supprimez les fichiers dupliqués — par hash (MD5) ou par nom</p>
+        <p class="page-subtitle">Trouvez et supprimez les fichiers dupliqués — par empreinte (SHA-256) ou par nom</p>
       </div>
       <div v-if="groups.length" style="display:flex;gap:8px">
         <NButton variant="ghost" size="sm" @click="exportCsv"><Download :size="14" /> CSV</NButton>
@@ -204,6 +204,7 @@ async function openFile(path: string) {
     <NCard v-if="loading" style="text-align:center;padding:48px">
       <NSpinner :size="28" />
       <p style="margin-top:12px;color:var(--text-muted)">Recherche des doublons... (peut prendre plusieurs minutes)</p>
+      <NButton variant="ghost" size="sm" style="margin-top:8px" @click="cancelScan">Annuler</NButton>
     </NCard>
 
     <template v-if="!loading && groups.length > 0">

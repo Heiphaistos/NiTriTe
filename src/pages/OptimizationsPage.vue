@@ -173,7 +173,7 @@ const networkBtns = ref<DebloatBtn[]>([
   db("reset_winsock_only", "Reset Winsock seul", Wifi),
   db("reset_tcpip_only", "Reset TCP/IP seul", Wifi),
   db("disable_rdp", "Désactiver Bureau à Distance", Shield),
-  db("disable_wifi_sense", "Désactiver mDNS local", Shield),
+  db("disable_mdns", "Désactiver mDNS local", Shield),
 ]);
 
 const perfBtns = ref<DebloatBtn[]>([
@@ -182,7 +182,7 @@ const perfBtns = ref<DebloatBtn[]>([
   db("trim", "Activer TRIM SSD", HardDrive, "debloat_enable_trim"),
   db("wucache", "Vider Cache Windows Update", Trash2, "debloat_clear_wu_cache"),
   db("evtlogs", "Vider Journaux Événements", FileX, "debloat_clear_event_logs"),
-  db("empty_standby", "Vider RAM Standby", Zap),
+  db("empty_standby", "Compacter RAM des processus", Zap),
   db("disable_search_index", "Désactiver Indexation", HardDrive),
   db("disable_error_reporting", "Désactiver Rapport Erreurs", Shield),
   db("boost_foreground", "Priorité Apps Foreground", Zap),

@@ -74,7 +74,7 @@ pub fn execute_system_command(cmd: &str, args: &[&str], timeout_secs: u64) -> Re
             Err(_) => {
                 #[cfg(target_os = "windows")]
                 let _ = Command::new("taskkill")
-                    .args(["/F", "/PID", &pid.to_string()])
+                    .args(["/F", "/T", "/PID", &pid.to_string()])
                     .creation_flags(0x08000000)
                     .spawn();
                 tracing::warn!("execute_system_command: timeout {}s dépassé (cmd={}, pid={})", timeout_secs, cmd, pid);
@@ -91,6 +91,35 @@ pub fn execute_system_command(cmd: &str, args: &[&str], timeout_secs: u64) -> Re
         stderr: decode_output(&output.stderr),
         exit_code: output.status.code().unwrap_or(-1),
     })
+}
+
+/// `.output()` borné dans le temps, pour les sites qui construisent leur propre
+/// `Command` (`.output()` brut attendait sans fin un PowerShell/WMI bloqué).
+/// Au-delà du délai : processus tué (arbre compris) et erreur `TimedOut`.
+pub trait TimedOutput {
+    fn output_within(&mut self, timeout_secs: u64) -> std::io::Result<std::process::Output>;
+}
+
+impl TimedOutput for Command {
+    fn output_within(&mut self, timeout_secs: u64) -> std::io::Result<std::process::Output> {
+        let child = self.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+        let pid = child.id();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || { let _ = tx.send(child.wait_with_output()); });
+        match rx.recv_timeout(Duration::from_secs(timeout_secs)) {
+            Ok(result) => result,
+            Err(_) => {
+                #[cfg(target_os = "windows")]
+                let _ = Command::new("taskkill")
+                    .args(["/F", "/T", "/PID", &pid.to_string()])
+                    .creation_flags(0x08000000)
+                    .spawn();
+                tracing::warn!("output_within: {}s dépassées (pid={})", timeout_secs, pid);
+                Err(std::io::Error::new(std::io::ErrorKind::TimedOut,
+                    format!("commande interrompue après {}s", timeout_secs)))
+            }
+        }
+    }
 }
 
 /// Lance SFC /scannow
@@ -138,5 +167,21 @@ mod tests {
         // La fonction ne doit pas attendre les 30s complètes du sleep : le timeout
         // + taskkill doivent interrompre l'attente bien avant.
         assert!(elapsed.as_secs() < 10, "execute_system_command a attendu {}s, le taskkill sur timeout ne fonctionne pas", elapsed.as_secs());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn output_within_returns_output_or_times_out() {
+        let ok = Command::new("cmd").args(["/C", "echo nitrite"]).output_within(20).expect("cmd echo");
+        assert!(ok.status.success());
+        assert!(String::from_utf8_lossy(&ok.stdout).contains("nitrite"));
+
+        let start = std::time::Instant::now();
+        let err = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 30"])
+            .output_within(2)
+            .expect_err("doit expirer");
+        assert_eq!(err.kind(), std::io::ErrorKind::TimedOut);
+        assert!(start.elapsed().as_secs() < 10);
     }
 }

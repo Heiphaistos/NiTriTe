@@ -1,6 +1,4 @@
 use serde::Serialize;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 use super::{parse_json_arr, ps, ps_ok, ps_timeout};
 
@@ -137,7 +135,8 @@ try {
                     let t = v["temp"].as_f64().unwrap_or(0.0) as f32;
                     if t > 0.0 && t < 120.0 {
                         temps.push(TemperatureReading {
-                            sensor_name: format!("CPU Package (Zone {})", i + 1),
+                            // Pas « CPU Package » : valeur firmware ACPI, souvent figée.
+                            sensor_name: format!("Zone thermique ACPI {} (approximatif)", i + 1),
                             sensor_type: "CPU".to_string(), temp_celsius: t, source: "ACPI WMI".to_string(),
                         });
                     }
@@ -340,52 +339,98 @@ pub async fn get_nearby_wifi() -> Result<Vec<WifiNetwork>, String> {
 }
 
 fn get_nearby_wifi_blocking() -> Result<Vec<WifiNetwork>, String> {
-    let out = std::process::Command::new("netsh")
-        .args(["wlan", "show", "networks", "mode=bssid"])
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| e.to_string())?;
-    // decode_output (repli OEM) : netsh écrit en codepage OEM → SSID accentués
-    // sinon mojibake.
-    let text = crate::maintenance::commands::decode_output(&out.stdout);
-    // Parsing locale-indépendant : les libellés netsh sont traduits (« Type de
-    // réseau », « Authentification », « Type de radio », « Canal »…). Sans ça,
-    // sur Windows FR l'auth/type restaient vides et la bande était toujours
-    // « 2.4 GHz ». On coupe sur ':', normalise le libellé (accents retirés) et
-    // matche des mots-clés EN + FR.
-    let strip_accents = |s: &str| s.chars().map(|c| match c {
+    // Délai borné : un pilote Wi-Fi figé ne bloque plus le thread indéfiniment.
+    let out = crate::maintenance::commands::execute_system_command(
+        "netsh", &["wlan", "show", "networks", "mode=bssid"], 30,
+    ).map_err(|e| e.to_string())?;
+    // Échec réel (pas d'adaptateur Wi-Fi, service WLAN arrêté, et depuis
+    // Windows 11 24H2 : autorisation « Localisation » refusée) : netsh sort en
+    // code non nul avec l'explication sur stdout. Avant, on renvoyait une liste
+    // vide et l'UI disait juste « Aucun réseau ».
+    if !out.success {
+        let msg = [out.stdout.trim(), out.stderr.trim()].into_iter().find(|s| !s.is_empty()).unwrap_or("netsh wlan a échoué");
+        return Err(msg.lines().map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join(" "));
+    }
+    let mut networks = parse_netsh_networks(&out.stdout);
+    networks.sort_by_key(|a| std::cmp::Reverse(a.signal_percent));
+    Ok(networks)
+}
+
+fn strip_accents(s: &str) -> String {
+    s.chars().map(|c| match c {
         'é'|'è'|'ê'|'ë' => 'e', 'à'|'â'|'ä' => 'a', 'î'|'ï' => 'i',
         'ô'|'ö' => 'o', 'û'|'ü'|'ù' => 'u', 'ç' => 'c', _ => c,
-    }).collect::<String>();
-    let mut networks: Vec<WifiNetwork> = Vec::new();
-    let mut current = WifiNetwork { ssid: String::new(), bssid: String::new(), signal_percent: 0, channel: 0, band: String::new(), authentication: String::new(), network_type: String::new(), radio_type: String::new() };
+    }).collect()
+}
+
+/// « 2,4 GHz » (FR) / « 2.4 GHz » (EN) / « 5 GHz » / « 6 GHz » → libellé normalisé.
+fn normalize_band(raw: &str) -> String {
+    let t = raw.trim();
+    if t.starts_with('2') { "2.4 GHz".into() }
+    else if t.starts_with('5') { "5 GHz".into() }
+    else if t.starts_with('6') { "6 GHz".into() }
+    else { t.to_string() }
+}
+
+/// Repli quand netsh n'affiche pas la bande (Windows 10) : 1-14 = 2,4 GHz,
+/// 32-177 = 5 GHz. Le 6 GHz réutilise les numéros 1-233 : indécidable sans la ligne « Bande ».
+fn band_from_channel(ch: u32) -> String {
+    match ch { 1..=14 => "2.4 GHz".into(), 32..=177 => "5 GHz".into(), _ => String::new() }
+}
+
+/// Analyse `netsh wlan show networks mode=bssid`, en français ou en anglais.
+/// Une entrée PAR BSSID : une box bi-bande publie le même SSID sur 2,4 et 5 GHz
+/// (canaux, signaux différents) ; l'ancien parseur gardait seulement le dernier
+/// BSSID de chaque SSID. Libellés comparés EXACTEMENT : en FR, « Utilisation du
+/// canal : 57 (22 %) » (charge BSS) contient « canal » et écrasait le vrai canal par 0.
+fn parse_netsh_networks(text: &str) -> Vec<WifiNetwork> {
+    #[derive(Default, Clone)]
+    struct Ssid { ssid: String, network_type: String, authentication: String }
+    let mut out: Vec<WifiNetwork> = Vec::new();
+    let mut ssid = Ssid::default();
+    let mut cur: Option<WifiNetwork> = None;
+    let finish = |cur: &mut Option<WifiNetwork>, out: &mut Vec<WifiNetwork>| {
+        if let Some(mut n) = cur.take() {
+            if n.band.is_empty() { n.band = band_from_channel(n.channel); }
+            out.push(n);
+        }
+    };
     for line in text.lines() {
         let Some((label, val)) = line.split_once(':') else { continue };
         let l = strip_accents(&label.trim().to_lowercase());
         let val = val.trim();
-        if l.starts_with("ssid") {
-            // Nouvelle entrée réseau (« SSID 1 »). « bssid » commence par 'b' → exclu.
-            if !current.ssid.is_empty() { networks.push(current); current = WifiNetwork { ssid: String::new(), bssid: String::new(), signal_percent: 0, channel: 0, band: String::new(), authentication: String::new(), network_type: String::new(), radio_type: String::new() }; }
-            current.ssid = val.to_string();
-        } else if l.starts_with("bssid") {
-            current.bssid = val.to_string();
-        } else if l.contains("radio") {
-            let rt = val.to_string();
-            current.band = if rt.contains('5') { "5 GHz".to_string() } else { "2.4 GHz".to_string() };
-            current.radio_type = rt;
-        } else if l.contains("network") || l.contains("reseau") {
-            current.network_type = val.to_string();
-        } else if l.contains("authentic") || l.contains("authentif") {
-            current.authentication = val.to_string();
-        } else if l == "signal" {
-            current.signal_percent = val.trim_end_matches('%').trim().parse().unwrap_or(0);
-        } else if l == "channel" || l.contains("canal") {
-            current.channel = val.parse().unwrap_or(0);
+        let word = l.split_whitespace().next().unwrap_or("");
+        if word == "ssid" {
+            finish(&mut cur, &mut out);
+            // SSID masqué : netsh affiche une valeur vide
+            let name = if val.is_empty() { "(réseau masqué)" } else { val };
+            ssid = Ssid { ssid: name.to_string(), ..Default::default() };
+        } else if word == "bssid" {
+            finish(&mut cur, &mut out);
+            cur = Some(WifiNetwork {
+                ssid: ssid.ssid.clone(), bssid: val.to_string(), signal_percent: 0, channel: 0,
+                band: String::new(), authentication: ssid.authentication.clone(),
+                network_type: ssid.network_type.clone(), radio_type: String::new(),
+            });
+        } else {
+            match l.as_str() {
+                "type de reseau" | "network type" => ssid.network_type = val.to_string(),
+                "authentification" | "authentication" => ssid.authentication = val.to_string(),
+                _ => {}
+            }
+            if let Some(n) = cur.as_mut() {
+                match l.as_str() {
+                    "signal" => n.signal_percent = val.trim_end_matches('%').trim().parse::<u32>().unwrap_or(0).min(100),
+                    "type de radio" | "radio type" => n.radio_type = val.to_string(),
+                    "bande" | "band" => n.band = normalize_band(val),
+                    "canal" | "channel" => n.channel = val.parse().unwrap_or(0),
+                    _ => {}
+                }
+            }
         }
     }
-    if !current.ssid.is_empty() { networks.push(current); }
-    networks.sort_by_key(|a| std::cmp::Reverse(a.signal_percent));
-    Ok(networks)
+    finish(&mut cur, &mut out);
+    out
 }
 
 // ─── Mode Turbo / Profils ─────────────────────────────────────────────────────
@@ -622,4 +667,34 @@ try {
         _ => return Err(format!("Optimisation '{}' inconnue", opt_id)),
     };
     ps_ok(script)
+}
+
+#[cfg(test)]
+mod wifi_tests {
+    use super::*;
+
+    // Sortie réelle relevée sur Windows 11 FR (2026-11-23), abrégée.
+    const FR: &str = "Nom de l\u{2019}interface : Wi-Fi \r\nActuellement 2 réseaux sont visibles. \r\n\r\nSSID 1 : SFR_BCB0\r\n    Type de réseau          : Infrastructure\r\n    Authentification        : WPA2 - Personnel\r\n    Chiffrement             : CCMP \r\n    BSSID 1                 : cc:2d:1b:b5:bc:b6\r\n         Signal             : 43%  \r\n         Type de radio         : 802.11n\r\n         Bande               : 2,4 GHz\r\n         Canal            : 11 \r\n         Charge BSS :\r\n             Stations connectées :         1\r\n             Utilisation du canal :        57 (22 %)\r\n         Taux de base (Mbits/s) : 1 2 5.5 11\r\n    BSSID 2                 : 6a:2d:1b:b5:bc:b7\r\n         Signal             : 31%  \r\n         Type de radio         : 802.11ac\r\n         Bande               : 5 GHz\r\n         Canal            : 100 \r\n             Utilisation du canal :        4 (1 %)\r\n\r\nSSID 2 : \r\n    Type de réseau             : Infrastructure\r\n    Authentification           : Ouvrir\r\n    BSSID 1                 : 3a:07:16:3b:7b:24\r\n         Signal             : 70%  \r\n         Type de radio         : 802.11be\r\n         Bande               : 6 GHz\r\n         Canal            : 37 \r\n";
+
+    const EN: &str = "SSID 1 : Home:Net\n    Network type            : Infrastructure\n    Authentication          : WPA3-Personal\n    Encryption              : CCMP\n    BSSID 1                 : aa:bb:cc:dd:ee:ff\n         Signal             : 88%\n         Radio type         : 802.11ax\n         Channel            : 6\n         Channel Utilization:        10 (4 %)\n";
+
+    #[test]
+    fn parses_french_output_one_entry_per_bssid() {
+        let n = parse_netsh_networks(FR);
+        assert_eq!(n.len(), 3);
+        assert_eq!((n[0].ssid.as_str(), n[0].channel, n[0].band.as_str(), n[0].signal_percent), ("SFR_BCB0", 11, "2.4 GHz", 43));
+        assert_eq!(n[0].authentication, "WPA2 - Personnel");
+        assert_eq!(n[0].network_type, "Infrastructure");
+        assert_eq!((n[1].ssid.as_str(), n[1].channel, n[1].band.as_str(), n[1].radio_type.as_str()), ("SFR_BCB0", 100, "5 GHz", "802.11ac"));
+        assert_eq!((n[2].ssid.as_str(), n[2].band.as_str(), n[2].authentication.as_str()), ("(réseau masqué)", "6 GHz", "Ouvrir"));
+    }
+
+    #[test]
+    fn parses_english_output_and_infers_band() {
+        let n = parse_netsh_networks(EN);
+        assert_eq!(n.len(), 1);
+        // Pas de ligne Band (Windows 10) : déduite du canal ; « Channel Utilization » ignoré
+        assert_eq!((n[0].ssid.as_str(), n[0].channel, n[0].band.as_str()), ("Home:Net", 6, "2.4 GHz"));
+        assert_eq!(n[0].authentication, "WPA3-Personal");
+    }
 }

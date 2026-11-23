@@ -41,7 +41,6 @@ const TOOLS: ToolDef[] = [
   { label: "GPU-Z",                            emoji: "🎮",  type: "exe",      path: "Standalone Tools/GPU-Z.0.7.0.exe" },
   { label: "Wise Care 365",                    emoji: "✨",  type: "portable", match: "wisecare" },
   { label: "UserDiag (Diagnostic Complet)",    emoji: "🔍",  type: "portable", match: "userdiag" },
-  { label: "BenchMaster.AI",                   emoji: "🤖",  type: "url",      url: "https://benchmaster.ai/" },
   { label: "Activation Windows/Office",        emoji: "🔑",  type: "cmd",      cmd: "ms-settings:activation" },
   { label: "MSCONFIG",                         emoji: "⚙️",  type: "cmd",      cmd: "msconfig" },
   { label: "Gestionnaire des Tâches",          emoji: "📋",  type: "cmd",      cmd: "taskmgr" },

@@ -12,7 +12,7 @@ import { themeGallery, totalThemeCount, isLightColor } from "@/utils/themeCatalo
 import { PERF_MODE_LABELS, PERF_MODE_DESCRIPTIONS, type PerfMode } from "@/utils/perfProfile";
 import { useNotificationStore } from "@/stores/notifications";
 import { useAiStore } from "@/stores/ai";
-import { checkForUpdate } from "@/composables/useAutoUpdate";
+import { checkForUpdate, majAutoActive, setMajAuto } from "@/composables/useAutoUpdate";
 import {
   Settings, Palette, Bot, Download, Info,
   Save, RotateCcw, Wifi, CheckCircle, XCircle, FolderOpen,
@@ -32,6 +32,7 @@ const appVersion = __APP_VERSION__;
 
 // ── Mise à jour manuelle (le démarrage la vérifie déjà en silence) ──
 const majEnCours = ref(false);
+const majAuto = ref(majAutoActive());
 async function verifierMaj() {
   majEnCours.value = true;
   try { await checkForUpdate(false); } finally { majEnCours.value = false; }
@@ -146,7 +147,8 @@ async function importConfig() {
     const raw = await readTextFile(path as string);
     const cfg = JSON.parse(raw);
     delete cfg.__nitrite_version; delete cfg.__exported_at;
-    await invoke("save_config", { config: cfg });
+    const current = await invoke<AppConfig>("get_config");
+    await invoke("save_config", { config: { ...current, ...cfg } });
     // Appliquer dans les stores
     if (cfg.theme)          appStore.setTheme(cfg.theme);
     if (cfg.font_size)      appStore.setFontSize(cfg.font_size);
@@ -174,8 +176,12 @@ async function openExportFolder() {
 async function saveSettings() {
   saving.value = true;
   try {
+    // Partir de la config actuelle : sans cela, chaque sauvegarde remettait a
+    // vide le modele et le serveur llama.cpp memorises (champs absents ici).
+    const current = await invoke<AppConfig>("get_config");
     await invoke("save_config", {
       config: {
+        ...current,
         theme:                   appStore.theme,
         language:                appStore.language,
         sidebar_collapsed:       sidebarDefault.value,
@@ -601,6 +607,7 @@ const tabs: { id: Tab; label: string; icon: Component }[] = [
                 {{ majEnCours ? "Vérification…" : "Vérifier les mises à jour" }}
               </button>
             </div>
+            <NToggle v-model="majAuto" label="Rechercher les mises à jour automatiquement (au démarrage puis toutes les 6 h)" @update:model-value="setMajAuto" />
           </div>
 
           <div class="about-rows">

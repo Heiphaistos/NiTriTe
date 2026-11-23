@@ -32,13 +32,14 @@ fn verify_installed(app_name: &str) -> bool {
 /// `winget list --id X --exact` sort en code 0 uniquement si le paquet est
 /// installe (quirk connu : code non nul + message localise sinon).
 pub fn winget_is_installed(id: &str) -> bool {
-    let mut cmd = Command::new("winget");
-    cmd.args(["list", "--id", id, "--exact", "--accept-source-agreements", "--disable-interactivity"])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .creation_flags(0x08000000);
-    match cmd.output() {
-        Ok(o) => o.status.success() && String::from_utf8_lossy(&o.stdout).to_lowercase().contains(&id.to_lowercase()),
+    // Timeout : appele apres chaque installation/desinstallation, un winget
+    // bloque (rafraichissement de source) figeait toute la file.
+    match crate::maintenance::commands::execute_system_command(
+        "winget",
+        &["list", "--id", id, "--exact", "--accept-source-agreements", "--disable-interactivity"],
+        90,
+    ) {
+        Ok(o) => o.success && o.stdout.to_lowercase().contains(&id.to_lowercase()),
         Err(_) => false,
     }
 }
@@ -158,6 +159,12 @@ pub fn install_app_smart(app: &AppEntry, window: &tauri::Window) -> Result<Insta
         log(window, &app.name, &format!("Tentative via winget ({wid})..."), "info");
         match winget::install_package(wid, window) {
             Ok(r) if r.success && (winget_is_installed(wid) || verify_installed(&app.name)) => return Ok(r),
+            // Code non nul mais app bien presente (« une autre version est deja
+            // installee », redemarrage requis…) : c'est un succes, pas une raison
+            // d'installer Chocolatey puis Scoop sur le poste.
+            Ok(r) if winget_is_installed(wid) => {
+                return Ok(InstallResult { success: true, app_id: r.app_id, message: format!("Application presente ({})", r.message) });
+            }
             Ok(r) => attempts.push(format!("winget: {}", r.message)),
             Err(e) => attempts.push(format!("winget: {e}")),
         }

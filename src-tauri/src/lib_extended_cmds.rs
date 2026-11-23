@@ -218,32 +218,25 @@ pub struct WinUpdate {
 #[tauri::command]
 async fn check_windows_updates() -> Result<Vec<WinUpdate>, NiTriTeError> {
     tokio::task::spawn_blocking(|| {
-        let output = std::process::Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 30 HotFixID,Description,InstalledOn | ConvertTo-Json -Compress",
-            ])
-            .creation_flags(0x08000000)
-            .output()
-            .map_err(|e| NiTriTeError::System(e.to_string()))?;
-
-        let text = crate::maintenance::commands::decode_output(&output.stdout);
-        let json: Vec<serde_json::Value> = serde_json::from_str(&text).unwrap_or_default();
+        // InstalledOn est un DateTime : ConvertTo-Json (PS 5.1) le sort en objet
+        // {"value":"/Date(..)/","DateTime":"jeudi 15 octobre 2026…"} (constate
+        // 2026-11-23), jamais en chaine -> la date etait toujours vide. On la
+        // formate cote PS. @() + -InputObject : un seul correctif donnait un
+        // objet JSON, pas un tableau -> liste vide. Timeout : WMI peut bloquer.
+        let out = crate::maintenance::commands::execute_system_command(
+            "powershell",
+            &["-NoProfile", "-NonInteractive", "-Command",
+              "$h = @(Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 30 HotFixID,Description,@{n='InstalledOn';e={ if ($_.InstalledOn) { $_.InstalledOn.ToString('yyyy-MM-dd') } else { '' } }}); ConvertTo-Json -InputObject $h -Compress"],
+            60,
+        )?;
+        let json: Vec<serde_json::Value> = serde_json::from_str(out.stdout.trim()).unwrap_or_default();
 
         Ok(json
             .iter()
             .map(|v| WinUpdate {
                 hotfix_id: v["HotFixID"].as_str().unwrap_or("").to_string(),
                 description: v["Description"].as_str().unwrap_or("").to_string(),
-                installed_on: v["InstalledOn"]
-                    .as_str()
-                    .unwrap_or("")
-                    .split('T')
-                    .next()
-                    .unwrap_or("")
-                    .to_string(),
+                installed_on: v["InstalledOn"].as_str().unwrap_or("").to_string(),
             })
             .collect())
     })

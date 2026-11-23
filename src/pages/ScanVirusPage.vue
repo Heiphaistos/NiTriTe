@@ -63,18 +63,13 @@ const showQuarantinePanel = ref(false);
 
 // Timer / compteur fictif pendant scan
 const scanElapsed = ref(0);
-const scanFileCount = ref(0);
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 let progressInterval: ReturnType<typeof setInterval> | null = null;
 
-function startScanTimer(fast: boolean) {
+function startScanTimer() {
   stopScanTimer();
   scanElapsed.value = 0;
-  scanFileCount.value = 0;
-  timerInterval = setInterval(() => {
-    scanElapsed.value++;
-    scanFileCount.value += fast ? 450 : 80;
-  }, 1000);
+  timerInterval = setInterval(() => { scanElapsed.value++; }, 1000);
 }
 
 function stopScanTimer() {
@@ -143,6 +138,7 @@ async function updateDefinitions() {
     const r = await invoke<{ success: boolean; stderr: string }>("run_system_command", {
       cmd: "powershell",
       args: ["-Command", "Update-MpSignature -ErrorAction Stop"],
+      timeoutSecs: 600, // téléchargement des définitions : souvent > 60 s
     });
     if (!r.success) throw new Error(r.stderr?.trim() || "Échec de la mise à jour des définitions");
     notifications.success("Definitions mises a jour");
@@ -257,8 +253,7 @@ async function startScan(type: "quick" | "full" | "offline" | "custom") {
   };
   scanStatus.value = labels[type] ?? "Scan en cours...";
 
-  const isQuick = type === "quick" || type === "custom";
-  startScanTimer(isQuick);
+  startScanTimer();
 
   let psCommand: string;
   if (type === "offline") {
@@ -293,10 +288,18 @@ async function startScan(type: "quick" | "full" | "offline" | "custom") {
       }
     }, 1000);
 
-    await invoke("run_system_command", {
+    // Timeout adapté : run_system_command coupait à 60 s, or un scan rapide
+    // dure souvent plusieurs minutes et un scan complet des heures → « Erreur
+    // pendant le scan » systématique. -ErrorAction Stop + vérification de
+    // .success : un Defender désactivé (antivirus tiers) affichait sinon
+    // « Scan terminé — aucune menace détectée » sans qu'aucun scan n'ait eu lieu.
+    const timeoutSecs = type === "full" ? 12 * 3600 : type === "offline" ? 120 : 3600;
+    const r = await invoke<CommandResult>("run_system_command", {
       cmd: "powershell",
-      args: ["-Command", psCommand],
+      args: ["-NoProfile", "-Command", `${psCommand} -ErrorAction Stop`],
+      timeoutSecs,
     });
+    if (!r.success) throw new Error(r.stderr?.trim() || "Windows Defender a refusé de lancer le scan");
 
     clearInterval(progressInterval); progressInterval = null;
     scanProgress.value = 100;
@@ -425,12 +428,11 @@ checkDefenderStatus();
           <RefreshCw v-if="scanning" :size="16" class="spin-icon" />
           <CheckCircle v-else :size="16" style="color: var(--success)" />
           <span>Progression du scan</span>
-          <!-- Compteur fichiers + timer -->
+          <!-- Durée écoulée (le compteur « N fichiers » était inventé :
+               +450/s sans aucun lien avec Defender, retiré) -->
           <div v-if="scanning" class="scan-counter">
             <Clock :size="13" />
             <span>{{ formatElapsed(scanElapsed) }}</span>
-            <FileSearch :size="13" style="margin-left:8px" />
-            <span>{{ scanFileCount.toLocaleString('fr-FR') }} fichiers</span>
           </div>
         </div>
       </template>

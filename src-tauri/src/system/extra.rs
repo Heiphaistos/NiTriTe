@@ -329,6 +329,8 @@ pub struct FolderSizeInfo {
     pub size_mb: f64,
     pub size_gb: f64,
     pub file_count: u64,
+    /// Mesure incomplète (plafond de 6 s atteint ou sous-dossier illisible) : taille minimale.
+    pub partial: bool,
 }
 
 pub fn collect_folder_sizes() -> Vec<FolderSizeInfo> {
@@ -356,19 +358,26 @@ $results = [System.Collections.Generic.List[object]]::new()
 foreach ($item in $items) {
     $p = $item.P; $l = $item.L
     if (-not $p -or -not (Test-Path $p -ErrorAction SilentlyContinue)) {
-        $results.Add([PSCustomObject]@{label=$l;path=$p;bytes=0.0;count=0})
+        $results.Add([PSCustomObject]@{label=$l;path=$p;bytes=0.0;count=0;partial=$false})
         continue
     }
     $fsw = [System.Diagnostics.Stopwatch]::StartNew()
-    $bytes = 0.0; $count = [long]0
-    try {
-        $di = [IO.DirectoryInfo]::new($p)
-        foreach ($f in $di.EnumerateFiles('*', [IO.SearchOption]::AllDirectories)) {
-            if ($fsw.Elapsed.TotalSeconds -gt 6) { break }
-            try { $bytes += $f.Length; $count++ } catch {}
-        }
-    } catch {}
-    $results.Add([PSCustomObject]@{label=$l;path=$p;bytes=$bytes;count=$count})
+    $bytes = 0.0; $count = [long]0; $partial = $false
+    # Parcours manuel : EnumerateFiles(AllDirectories) s'arrête net au premier
+    # sous-dossier refusé (WindowsApps, jonctions de profil) et sous-estimait en silence.
+    $stack = [System.Collections.Generic.Stack[string]]::new(); $stack.Push($p)
+    while ($stack.Count -gt 0) {
+        if ($fsw.Elapsed.TotalSeconds -gt 6) { $partial = $true; break }
+        $d = $stack.Pop()
+        try {
+            $di = [IO.DirectoryInfo]::new($d)
+            foreach ($f in $di.GetFiles()) { $bytes += $f.Length; $count++ }
+            foreach ($s in $di.GetDirectories()) {
+                if (-not ($s.Attributes -band [IO.FileAttributes]::ReparsePoint)) { $stack.Push($s.FullName) }
+            }
+        } catch { $partial = $true }
+    }
+    $results.Add([PSCustomObject]@{label=$l;path=$p;bytes=$bytes;count=$count;partial=$partial})
     if ($global_sw.Elapsed.TotalSeconds -gt 40) { break }
 }
 if ($results.Count -gt 0) { $results | ConvertTo-Json -Compress } else { '[]' }
@@ -405,7 +414,8 @@ if ($results.Count -gt 0) { $results | ConvertTo-Json -Compress } else { '[]' }
                         let bytes = v["bytes"].as_f64().unwrap_or(0.0);
                         let count = v["count"].as_u64().unwrap_or(0);
                         let size_mb = (bytes / 1_048_576.0 * 100.0).round() / 100.0;
-                        Some(FolderSizeInfo { label, path, size_mb, size_gb: (size_mb / 1024.0 * 100.0).round() / 100.0, file_count: count })
+                        let partial = v["partial"].as_bool().unwrap_or(false);
+                        Some(FolderSizeInfo { label, path, size_mb, size_gb: (size_mb / 1024.0 * 100.0).round() / 100.0, file_count: count, partial })
                     }).collect();
                 }
                 Ok(None) => {

@@ -70,7 +70,12 @@ function knownService(port: number): string {
   return map[port] || "";
 }
 
+let scanning = false;
 async function scan(silent = false) {
+  // Rafraîchissement auto toutes les 5 s : ne pas empiler les scans si un
+  // PowerShell lent (machine chargée) dépasse l'intervalle.
+  if (scanning) return;
+  scanning = true;
   if (!silent) loading.value = true;
   try {
     const fresh = await invoke<OpenPort[]>("get_local_ports");
@@ -87,6 +92,7 @@ async function scan(silent = false) {
     if (!silent) notify.error("Erreur scan", String(e));
   } finally {
     hasScanned.value = true;
+    scanning = false;
     if (!silent) loading.value = false;
   }
 }

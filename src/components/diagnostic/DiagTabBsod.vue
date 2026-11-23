@@ -132,8 +132,10 @@ const { exportTXT } = useExportData()
 
 function openMsdn(bugCheckHex: string) {
   if (!bugCheckHex) return
-  const code = bugCheckHex.replace(/^0x/i, '').toLowerCase().padStart(8, '0')
-  invoke('open_url', { url: `https://learn.microsoft.com/fr-fr/windows-hardware/drivers/debugger/bug-check-0x${code}` })
+  // Les pages Microsoft ont un slug nommé (bug-check-0x3b--system-service-exception) :
+  // l'ancien `bug-check-0x0000003b` tombait en 404. Recherche Learn ciblée à la place.
+  const code = bugCheckHex.replace(/^0x/i, '').replace(/^0+(?=.)/, '').toUpperCase()
+  invoke('open_url', { url: `https://learn.microsoft.com/fr-fr/search/?terms=${encodeURIComponent(`Bug Check 0x${code}`)}` })
     .catch(() => {
       invoke('open_url', { url: `https://www.google.com/search?q=BSOD+${bugCheckHex}+windows` })
     })

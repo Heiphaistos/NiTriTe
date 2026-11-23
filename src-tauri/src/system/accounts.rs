@@ -1,7 +1,4 @@
 use serde::Serialize;
-use std::process::Command;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct UserAccount {
@@ -118,13 +115,12 @@ $out | ConvertTo-Json -Depth 4 -Compress
 
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", ps])
-            .creation_flags(0x08000000)
-            .output();
+        // Timeout : un WMI/CIM bloqué gelait la commande indéfiniment.
+        let output = crate::maintenance::commands::execute_system_command(
+            "powershell", &["-NoProfile", "-NonInteractive", "-Command", ps], 60);
 
         if let Ok(o) = output {
-            let text = String::from_utf8_lossy(&o.stdout);
+            let text = o.stdout;
             let v: serde_json::Value = match serde_json::from_str(text.trim()) {
                 Ok(val) => val, Err(_) => return AccountsInfo::default(),
             };

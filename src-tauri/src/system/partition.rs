@@ -1,8 +1,4 @@
 use serde::Serialize;
-use std::process::Command;
-
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 // ── Structs ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +14,12 @@ pub struct DiskSmartInfo {
     pub media_type: String,      // "SSD" | "HDD" | "SCM" | "Unspecified"
     pub wear_level: Option<u32>,
     pub reallocated_sectors: Option<u32>,
+    /// "USB", "NVMe", "SATA", "RAID"… (Get-PhysicalDisk BusType)
+    pub bus_type: String,
+    /// Clé USB / carte mémoire (Win32_DiskDrive « Removable Media ») — un
+    /// disque dur externe USB de 1-2 To est « External hard disk media », donc
+    /// `false` : c'est ce qui distingue les deux, BusType valant USB pour tous.
+    pub is_removable: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -34,6 +36,10 @@ pub struct PartitionDetail {
     pub is_system: bool,
     pub is_boot: bool,
     pub health: String,
+    /// Identifiant stable du disque (Get-Disk UniqueId) : renvoyé par l'UI avec
+    /// chaque action pour revérifier que le numéro de disque désigne toujours
+    /// le même disque (les numéros changent au branchement d'un disque USB).
+    pub disk_unique_id: String,
 }
 
 // ── SMART via Get-PhysicalDisk + Get-StorageReliabilityCounter ─────────────────
@@ -42,12 +48,16 @@ pub fn get_disks_smart() -> Vec<DiskSmartInfo> {
     let ps = r#"
 try {
     $result = @()
+    $removable = @{}
+    Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue | ForEach-Object {
+        $removable[[int]$_.Index] = ([string]$_.MediaType -like 'Removable*')
+    }
     Get-PhysicalDisk -ErrorAction SilentlyContinue | ForEach-Object {
         $d = $_
         $smart = $null
         try { $smart = Get-StorageReliabilityCounter -PhysicalDisk $d -ErrorAction SilentlyContinue } catch {}
         $result += @{
-            disk_index          = try { [int]$d.DeviceId } catch { 0 }
+            disk_index          = [int]$d.DeviceId
             label               = [string]$d.FriendlyName
             health              = [string]$d.HealthStatus
             temperature         = if ($smart -and $smart.Temperature   -ne $null) { [int]$smart.Temperature   } else { $null }
@@ -57,6 +67,8 @@ try {
             media_type          = [string]$d.MediaType
             wear_level          = if ($smart -and $smart.Wear          -ne $null) { [int]$smart.Wear          } else { $null }
             reallocated_sectors = if ($smart -and $smart.ReadErrorsTotal -ne $null) { [int]$smart.ReadErrorsTotal } else { $null }
+            bus_type            = [string]$d.BusType
+            is_removable        = [bool]$removable[[int]$d.DeviceId]
         }
     }
     if ($result.Count -eq 0) { Write-Output '[]' }
@@ -84,6 +96,8 @@ try {
                 media_type:          v["media_type"].as_str().unwrap_or("HDD").to_string(),
                 wear_level:          v["wear_level"].as_u64().map(|x| x as u32),
                 reallocated_sectors: v["reallocated_sectors"].as_u64().map(|x| x as u32),
+                bus_type:            v["bus_type"].as_str().unwrap_or("").to_string(),
+                is_removable:        v["is_removable"].as_bool().unwrap_or(false),
             }
         }).collect())
         .unwrap_or_default()
@@ -98,6 +112,7 @@ try {
     $disks = Get-Disk -ErrorAction SilentlyContinue
     foreach ($disk in $disks) {
         $diskLabel = [string]$disk.FriendlyName
+        $diskId = [string]$disk.UniqueId
         $parts = Get-Partition -DiskNumber $disk.Number -ErrorAction SilentlyContinue
         $totalUsed = [long]0
         foreach ($part in $parts) {
@@ -117,6 +132,7 @@ try {
                 is_system   = [bool]$part.IsSystem
                 is_boot     = [bool]$part.IsBoot
                 health      = if ($vol -and $vol.HealthStatus) { [string]$vol.HealthStatus } else { 'Unknown' }
+                disk_unique_id = $diskId
             }
         }
         $unalloc = [double]$disk.Size - [double]$totalUsed
@@ -134,6 +150,7 @@ try {
                 is_system   = $false
                 is_boot     = $false
                 health      = 'Unknown'
+                disk_unique_id = $diskId
             }
         }
     }
@@ -164,6 +181,7 @@ try {
                 is_system:   v["is_system"].as_bool().unwrap_or(false),
                 is_boot:     v["is_boot"].as_bool().unwrap_or(false),
                 health:      v["health"].as_str().unwrap_or("Unknown").to_string(),
+                disk_unique_id: v["disk_unique_id"].as_str().unwrap_or("").to_string(),
             }
         }).collect())
         .unwrap_or_default()
@@ -171,7 +189,28 @@ try {
 
 // ── Opérations sur partitions (Admin requis) ───────────────────────────────────
 
-pub fn format_partition(letter: String, fs: String, label: String) -> Result<String, String> {
+/// Délais des opérations : un Get-Disk sur un disque mourant ou un
+/// Resize-Partition (déplacement de données NTFS) ne doivent ni geler le
+/// thread indéfiniment ni être coupés en plein travail.
+const TIMEOUT_QUERY: u64 = 90;
+const TIMEOUT_OP: u64 = 600;
+const TIMEOUT_RESIZE: u64 = 3600;
+
+/// Préambule PowerShell : revérifie l'identité du disque juste avant l'action.
+/// Les numéros de disque changent quand on branche/débranche un disque USB :
+/// sans ce contrôle, une action choisie sur « Disque 2 » pouvait frapper un
+/// autre disque devenu « Disque 2 » entre l'affichage et le clic.
+/// `expected` = `PartitionDetail::disk_unique_id` vu par l'UI (ignoré si vide).
+/// Définit `$__d` (le disque) pour la suite du script.
+fn disk_identity_guard(disk_index: u32, expected: &Option<String>) -> String {
+    let id = expected.as_deref().unwrap_or("").replace('\'', "''");
+    format!(
+        "$__d = Get-Disk -Number {disk_index} -ErrorAction Stop\n\
+         if ('{id}' -ne '' -and [string]$__d.UniqueId -ne '{id}') {{ throw \"Le disque {disk_index} n'est plus celui affiché (disque débranché ou renuméroté). Actualisez la liste.\" }}\n"
+    )
+}
+
+pub fn format_partition(letter: String, fs: String, label: String, expected_disk_id: Option<String>) -> Result<String, String> {
     let clean = letter.trim().trim_end_matches(':').to_uppercase();
     // Bloquer C: et toute lettre de plus d'un caractère (invalide)
     if clean == "C" || clean.len() != 1 || !clean.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false) {
@@ -187,15 +226,18 @@ pub fn format_partition(letter: String, fs: String, label: String) -> Result<Str
     };
     // Limiter le label à 32 caractères (limite NTFS) — chars() évite le panic sur UTF-8 multi-octets
     let label: String = label.chars().take(32).collect();
+    let id = expected_disk_id.as_deref().unwrap_or("").replace('\'', "''");
 
-    // Vérification WMI : refuser les partitions système, boot, EFI ou Recovery
-    // avant tout formatage destructif. FAIL-CLOSED : si la garde ne peut pas
-    // vérifier (Get-Partition en erreur, WMI KO, pas d'admin), on REFUSE —
-    // l'ancien `catch {{ 'OK' }}` + `unwrap_or("OK")` autorisait le formatage
-    // précisément quand la vérification échouait.
+    // Vérification : refuser les partitions système, boot, EFI ou Recovery
+    // avant tout formatage destructif, et revérifier que la lettre est
+    // toujours sur le disque affiché. FAIL-CLOSED : si la garde ne peut pas
+    // vérifier (Get-Partition en erreur, WMI KO, pas d'admin), on REFUSE.
     let check_ps = format!(
         r#"try {{
   $p = Get-Partition -DriveLetter '{letter}' -ErrorAction Stop
+  if ('{id}' -ne '' -and [string](Get-Disk -Number $p.DiskNumber -ErrorAction Stop).UniqueId -ne '{id}') {{
+    Write-Output "ERR:le lecteur {letter}: n'est plus sur le disque affiché (disque débranché ou lettre réattribuée), actualisez la liste"; exit
+  }}
   if ($p.IsSystem -or $p.IsBoot) {{ Write-Output 'SYSTEM'; exit }}
   $vol = $p | Get-Volume -ErrorAction SilentlyContinue
   if ($vol) {{
@@ -208,7 +250,7 @@ pub fn format_partition(letter: String, fs: String, label: String) -> Result<Str
 }} catch {{ Write-Output "ERR:$($_.Exception.Message)" }}"#,
         letter = clean
     );
-    let guard = run_ps_cmd(&check_ps).unwrap_or_else(|e| format!("ERR:{}", e));
+    let guard = run_ps_cmd(&check_ps, TIMEOUT_QUERY).unwrap_or_else(|e| format!("ERR:{}", e));
     let guard = guard.trim();
     if guard == "SYSTEM" {
         return Err(format!(
@@ -231,48 +273,62 @@ pub fn format_partition(letter: String, fs: String, label: String) -> Result<Str
         fs_canonical,
         label.replace('\'', "''")
     );
-    run_ps_cmd(&ps)
+    run_ps_cmd(&ps, TIMEOUT_OP)
 }
 
-pub fn assign_drive_letter(disk_index: u32, part_index: u32, letter: String) -> Result<String, String> {
+pub fn assign_drive_letter(disk_index: u32, part_index: u32, letter: String, expected_disk_id: Option<String>) -> Result<String, String> {
     let clean = letter.trim_end_matches(':').to_uppercase();
     if clean.len() != 1 || !clean.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false) {
         return Err("Lettre invalide (A-Z uniquement).".into());
     }
     let ps = format!(
-        r#"Set-Partition -DiskNumber {} -PartitionNumber {} -NewDriveLetter '{}' -ErrorAction Stop; 'OK'"#,
-        disk_index, part_index, clean
+        r#"{}Set-Partition -DiskNumber {} -PartitionNumber {} -NewDriveLetter '{}' -ErrorAction Stop; 'OK'"#,
+        disk_identity_guard(disk_index, &expected_disk_id), disk_index, part_index, clean
     );
-    run_ps_cmd(&ps)
+    run_ps_cmd(&ps, TIMEOUT_QUERY)
 }
 
-pub fn create_partition(disk_index: u32, size_mb: Option<u32>) -> Result<String, String> {
+pub fn create_partition(disk_index: u32, size_mb: Option<u32>, expected_disk_id: Option<String>) -> Result<String, String> {
     let size_arg = match size_mb {
         Some(mb) if mb > 0 => format!("-Size {}MB", mb),
         _ => "-UseMaximumSize".to_string(),
     };
     let ps = format!(
-        r#"New-Partition -DiskNumber {} {} -ErrorAction Stop | Format-Volume -FileSystem NTFS -NewFileSystemLabel 'Nouveau volume' -Confirm:$false -Force -ErrorAction Stop | Out-Null; 'OK'"#,
-        disk_index, size_arg
+        r#"{}New-Partition -DiskNumber {} {} -AssignDriveLetter -ErrorAction Stop | Format-Volume -FileSystem NTFS -NewFileSystemLabel 'Nouveau volume' -Confirm:$false -Force -ErrorAction Stop | Out-Null; 'OK'"#,
+        disk_identity_guard(disk_index, &expected_disk_id), disk_index, size_arg
     );
-    run_ps_cmd(&ps)
+    run_ps_cmd(&ps, TIMEOUT_OP)
 }
 
-pub fn delete_partition(disk_index: u32, part_index: u32) -> Result<String, String> {
-    let ps = format!(
-        r#"$p = Get-Partition -DiskNumber {} -PartitionNumber {} -ErrorAction Stop; if ($p.IsSystem -or $p.IsBoot) {{ throw 'Partition systeme/boot' }}; Remove-Partition -DiskNumber {} -PartitionNumber {} -Confirm:$false -ErrorAction Stop; 'OK'"#,
-        disk_index, part_index, disk_index, part_index
-    );
-    run_ps_cmd(&ps)
+/// Types de partition jamais supprimables depuis l'app : EFI (« System »),
+/// MSR (« Reserved ») et environnement de récupération (« Recovery », aussi
+/// reconnu par son GUID GPT) — ni IsSystem ni IsBoot ne couvrent Recovery/MSR.
+fn delete_partition_script(disk_index: u32, part_index: u32, expected_disk_id: &Option<String>) -> String {
+    format!(
+        r#"{guard}$p = Get-Partition -DiskNumber {di} -PartitionNumber {pi} -ErrorAction Stop
+if ($p.IsSystem -or $p.IsBoot) {{ throw 'Suppression interdite : partition système ou de démarrage.' }}
+if ([string]$p.Type -in @('System','Reserved','Recovery') -or [string]$p.GptType -eq '{{de94bba4-06d1-4d40-a16a-bfd50179d6ac}}') {{ throw "Suppression interdite : partition $($p.Type) (EFI, MSR ou récupération Windows)." }}
+Remove-Partition -DiskNumber {di} -PartitionNumber {pi} -Confirm:$false -ErrorAction Stop; 'OK'"#,
+        guard = disk_identity_guard(disk_index, expected_disk_id), di = disk_index, pi = part_index
+    )
 }
 
-pub fn initialize_disk(disk_index: u32, style: String) -> Result<String, String> {
+pub fn delete_partition(disk_index: u32, part_index: u32, expected_disk_id: Option<String>) -> Result<String, String> {
+    run_ps_cmd(&delete_partition_script(disk_index, part_index, &expected_disk_id), TIMEOUT_OP)
+}
+
+pub fn initialize_disk(disk_index: u32, style: String, expected_disk_id: Option<String>) -> Result<String, String> {
     let ps_style = if style.eq_ignore_ascii_case("MBR") { "MBR" } else { "GPT" };
+    // Initialize-Disk n'agit que sur un disque RAW : on le dit clairement et on
+    // refuse explicitement le disque système (message clair plutôt que l'erreur
+    // CIM brute).
     let ps = format!(
-        r#"Initialize-Disk -Number {} -PartitionStyle {} -Confirm:$false -ErrorAction Stop; 'OK'"#,
-        disk_index, ps_style
+        r#"{}if ($__d.IsBoot -or $__d.IsSystem) {{ throw 'Initialisation interdite : disque système.' }}
+if ([string]$__d.PartitionStyle -ne 'RAW') {{ throw "Le disque {} est déjà initialisé ($($__d.PartitionStyle)) : supprimez d'abord ses partitions ou utilisez diskpart clean en connaissance de cause." }}
+Initialize-Disk -Number {} -PartitionStyle {} -Confirm:$false -ErrorAction Stop; 'OK'"#,
+        disk_identity_guard(disk_index, &expected_disk_id), disk_index, disk_index, ps_style
     );
-    run_ps_cmd(&ps)
+    run_ps_cmd(&ps, TIMEOUT_OP)
 }
 
 // ── Resize Partition ────────────────────────────────────────────────────────────
@@ -286,14 +342,12 @@ pub struct PartitionSizeLimits {
 
 pub fn get_partition_resize_limits(disk_index: u32, part_index: u32) -> Result<PartitionSizeLimits, String> {
     let ps = format!(
-        r#"try {{
-  $s = Get-PartitionSupportedSize -DiskNumber {di} -PartitionNumber {pi} -ErrorAction Stop
-  $p = Get-Partition -DiskNumber {di} -PartitionNumber {pi} -ErrorAction Stop
-  @{{ min_bytes = [string]$s.SizeMin; max_bytes = [string]$s.SizeMax; current_bytes = [string]$p.Size }} | ConvertTo-Json -Compress
-}} catch {{ Write-Error $_.Exception.Message }}"#,
+        r#"$s = Get-PartitionSupportedSize -DiskNumber {di} -PartitionNumber {pi} -ErrorAction Stop
+$p = Get-Partition -DiskNumber {di} -PartitionNumber {pi} -ErrorAction Stop
+@{{ min_bytes = [string]$s.SizeMin; max_bytes = [string]$s.SizeMax; current_bytes = [string]$p.Size }} | ConvertTo-Json -Compress"#,
         di = disk_index, pi = part_index
     );
-    let out = run_ps_cmd(&ps)?;
+    let out = run_ps_cmd(&ps, TIMEOUT_QUERY)?;
     let v: serde_json::Value = serde_json::from_str(out.trim()).map_err(|e| e.to_string())?;
     Ok(PartitionSizeLimits {
         min_bytes:     v["min_bytes"].as_str().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0),
@@ -302,15 +356,15 @@ pub fn get_partition_resize_limits(disk_index: u32, part_index: u32) -> Result<P
     })
 }
 
-pub fn resize_partition_ps(disk_index: u32, part_index: u32, new_size_mb: u64) -> Result<String, String> {
+pub fn resize_partition_ps(disk_index: u32, part_index: u32, new_size_mb: u64, expected_disk_id: Option<String>) -> Result<String, String> {
     if new_size_mb == 0 {
         return Err("Taille invalide (0 MB).".into());
     }
     let ps = format!(
-        r#"Resize-Partition -DiskNumber {} -PartitionNumber {} -Size {}MB -Confirm:$false -ErrorAction Stop; 'OK'"#,
-        disk_index, part_index, new_size_mb
+        r#"{}Resize-Partition -DiskNumber {} -PartitionNumber {} -Size {}MB -Confirm:$false -ErrorAction Stop; 'OK'"#,
+        disk_identity_guard(disk_index, &expected_disk_id), disk_index, part_index, new_size_mb
     );
-    run_ps_cmd(&ps)
+    run_ps_cmd(&ps, TIMEOUT_RESIZE)
 }
 
 // ── Backup / Restore MBR (512 premiers octets du disque physique) ──────────────
@@ -346,7 +400,19 @@ pub fn backup_mbr(disk_index: u32, output_path: String) -> Result<String, String
     }
 }
 
-pub fn restore_mbr(disk_index: u32, mbr_path: String) -> Result<String, String> {
+/// Règles de restauration MBR (testables sans disque). `style` = Get-Disk
+/// PartitionStyle, `is_system` = disque de démarrage/système.
+fn mbr_restore_allowed(style: &str, is_system: bool, mbr: &[u8]) -> Result<(), String> {
+    if is_system {
+        return Err("Restauration refusée : c'est le disque système en cours d'utilisation. Faites-la depuis un environnement de secours (WinPE).".into());
+    }
+    if style.eq_ignore_ascii_case("GPT") && mbr.get(450) != Some(&0xEE) {
+        return Err("Restauration refusée : le disque est GPT et ce fichier n'est pas un MBR protecteur GPT (type 0xEE).".into());
+    }
+    Ok(())
+}
+
+pub fn restore_mbr(disk_index: u32, mbr_path: String, expected_disk_id: Option<String>) -> Result<String, String> {
     #[cfg(not(target_os = "windows"))]
     return Err("Windows uniquement.".into());
 
@@ -377,6 +443,26 @@ pub fn restore_mbr(disk_index: u32, mbr_path: String) -> Result<String, String> 
                 sig
             ));
         }
+
+        // Garde-fous avant d'écrire le secteur 0 (fail-closed) : identité du
+        // disque revérifiée, disque système refusé (Windows en cours d'exécution
+        // dessus), et sur un disque GPT seul un MBR protecteur (type 0xEE) est
+        // accepté — un MBR classique écrasé sur un disque GPT le ferait passer
+        // pour un disque MBR et masquerait toutes ses partitions.
+        let facts = run_ps_cmd(
+            &format!(
+                "{}@{{ style = [string]$__d.PartitionStyle; sys = [bool]($__d.IsBoot -or $__d.IsSystem) }} | ConvertTo-Json -Compress",
+                disk_identity_guard(disk_index, &expected_disk_id)
+            ),
+            TIMEOUT_QUERY,
+        )?;
+        let facts: serde_json::Value = serde_json::from_str(facts.trim())
+            .map_err(|_| "Restauration refusée : impossible de vérifier le disque cible.".to_string())?;
+        mbr_restore_allowed(
+            facts["style"].as_str().unwrap_or(""),
+            facts["sys"].as_bool().unwrap_or(true),
+            &mbr_data,
+        )?;
 
         let disk_path = format!(r"\\.\PhysicalDrive{}", disk_index);
         let mut f = OpenOptions::new()
@@ -471,29 +557,76 @@ try {{
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-fn run_ps_cmd(script: &str) -> Result<String, String> {
-    let mut cmd = Command::new("powershell");
-    cmd.args(["-NoProfile", "-NonInteractive", "-Command", script]);
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(0x08000000);
-    let out = cmd.output().map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+/// Exécute une action PowerShell avec délai maximal et code de sortie réel.
+/// Le script est enveloppé dans try/catch : toute erreur (y compris un `throw`
+/// des garde-fous) sort en code 1 avec le seul message, décodé OEM/UTF-8
+/// (`from_utf8_lossy` rendait les erreurs PowerShell FR illisibles).
+fn run_ps_cmd(script: &str, timeout_secs: u64) -> Result<String, String> {
+    let wrapped = format!(
+        "$ErrorActionPreference = 'Stop'
+try {{
+{}
+}} catch {{ [Console]::Error.WriteLine($_.Exception.Message); exit 1 }}",
+        script
+    );
+    let out = crate::maintenance::commands::execute_system_command(
+        "powershell", &["-NoProfile", "-NonInteractive", "-Command", &wrapped], timeout_secs,
+    ).map_err(|e| e.to_string())?;
+    if out.success {
+        Ok(out.stdout.trim().to_string())
     } else {
-        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        let err = out.stderr.trim().to_string();
         Err(if err.is_empty() { "Échec (droits admin requis?)".into() } else { err })
     }
 }
 
+/// Lecture seule (listes de disques/partitions) : délai maximal, sortie décodée.
 fn run_ps(script: &str) -> Option<String> {
-    #[cfg(target_os = "windows")]
-    {
-        let o = Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", script])
-            .creation_flags(0x08000000)
-            .output().ok()?;
-        Some(String::from_utf8_lossy(&o.stdout).to_string())
+    crate::maintenance::commands::execute_system_command(
+        "powershell", &["-NoProfile", "-NonInteractive", "-Command", script], TIMEOUT_QUERY,
+    ).ok().map(|o| o.stdout)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn identity_guard_escapes_quotes_and_skips_when_empty() {
+        let g = disk_identity_guard(2, &Some(r"USBSTOR\DISK'X".into()));
+        assert!(g.contains("Get-Disk -Number 2"));
+        assert!(g.contains(r"'USBSTOR\DISK''X'"), "apostrophe doublée : {g}");
+        // Sans identifiant attendu, le test PS `'' -ne ''` est faux : pas de refus.
+        assert!(disk_identity_guard(0, &None).contains("if ('' -ne ''"));
     }
-    #[cfg(not(target_os = "windows"))]
-    None
+
+    #[test]
+    fn delete_refuses_recovery_msr_and_efi() {
+        let s = delete_partition_script(1, 4, &None);
+        assert!(s.contains("'System','Reserved','Recovery'"));
+        assert!(s.contains("de94bba4-06d1-4d40-a16a-bfd50179d6ac"));
+        assert!(s.find("throw").unwrap() < s.find("Remove-Partition").unwrap());
+    }
+
+    #[test]
+    fn mbr_restore_rules() {
+        let mut mbr = vec![0u8; 512];
+        mbr[510] = 0x55; mbr[511] = 0xAA;
+        assert!(mbr_restore_allowed("MBR", true, &mbr).is_err(), "disque système refusé");
+        assert!(mbr_restore_allowed("MBR", false, &mbr).is_ok());
+        assert!(mbr_restore_allowed("GPT", false, &mbr).is_err(), "MBR classique sur GPT refusé");
+        mbr[450] = 0xEE;
+        assert!(mbr_restore_allowed("GPT", false, &mbr).is_ok(), "MBR protecteur accepté");
+    }
+
+    /// Lecture seule : la requête SMART renvoie bien bus et amovibilité.
+    #[test]
+    #[ignore]
+    fn smart_list_reports_bus_type() {
+        let d = get_disks_smart();
+        println!("{d:#?}");
+        assert!(!d.is_empty() && d.iter().all(|x| !x.bus_type.is_empty()));
+        let p = get_partition_list();
+        assert!(p.iter().all(|x| !x.disk_unique_id.is_empty()));
+    }
 }

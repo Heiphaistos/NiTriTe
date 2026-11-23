@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { invoke, isTauriContext } from "@/utils/invoke";
+/** Le Rust coupe un script a 300 s (executor.rs) : les 30 s par defaut d'invoke
+ *  declaraient en echec un script encore en cours. */
+const SCRIPT_UI_TIMEOUT_MS = 310_000;
 import NCard from "@/components/ui/NCard.vue";
 import NButton from "@/components/ui/NButton.vue";
 import NTabs from "@/components/ui/NTabs.vue";
@@ -215,7 +218,7 @@ async function executeBuiltinScript(script: BuiltinScript) {
   try {
     const result = await invoke<{ success: boolean; output: string; exit_code: number }>("execute_builtin_script", {
       name: script.name,
-    });
+    }, SCRIPT_UI_TIMEOUT_MS);
     outputLines.value.push(result.output);
     outputLines.value.push("", `--- Terminé en ${elapsed.value}s (code: ${result.exit_code}) ---`);
     detectedPaths.value = [...new Set(extractPaths(result.output))].slice(0, 8);
@@ -311,7 +314,7 @@ async function executeCustomScript() {
   try {
     const result = await invoke<{ success: boolean; output: string; exit_code: number }>("execute_script", {
       content: customScript.value, scriptType: customType.value,
-    });
+    }, SCRIPT_UI_TIMEOUT_MS);
     outputLines.value.push(result.output);
     outputLines.value.push("", `--- Terminé en ${elapsed.value}s (code: ${result.exit_code}) ---`);
     const name = customName.value.trim() || "Script personnalisé";
@@ -389,7 +392,7 @@ async function runScriptFile() {
   try {
     const result = await invoke<{ success: boolean; output: string; exit_code: number }>("execute_script", {
       content: fileContent.value, scriptType: st,
-    });
+    }, SCRIPT_UI_TIMEOUT_MS);
     outputLines.value.push(result.output, "", `--- Terminé (code: ${result.exit_code}) ---`);
     pushHistory({ name: selectedFile.value.name, type: st, ran_at: new Date().toLocaleString("fr-FR"), elapsed_s: elapsed.value, exit_code: result.exit_code, success: result.success });
     if (result.success) notify.success("Script terminé");

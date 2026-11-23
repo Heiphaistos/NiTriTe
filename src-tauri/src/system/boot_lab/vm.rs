@@ -199,6 +199,19 @@ pub fn prepare(req: &VmRequest, tools: &Tools) -> R<Machine> {
         }
     })();
     let _ = std::fs::remove_dir_all(&stage);
+    if result.is_err() {
+        // Comme prepare_install_iso : retirer la VM d'essai à moitié importée et son dossier
+        // (copie de disque possiblement volumineuse), jamais une VM sans le préfixe NiTriTe-Test-.
+        let tool = tools.virtualbox.as_ref().filter(|_| req.platform == "virtualbox");
+        let registered = tool.is_some_and(|t| call(t, &["showvminfo", &native], 20).is_ok());
+        let unregistered = match tool {
+            Some(t) if registered && ensure_test_vm(&native).is_ok() => call(t, &["unregistervm", &native, "--delete"], 45).is_ok(),
+            _ => !registered,
+        };
+        if unregistered {
+            let _ = std::fs::remove_dir_all(&folder);
+        }
+    }
     let machine = result.map_err(|e| format!("Préparation de la VM interrompue. {e}"))?;
     let data = Machine {
         id,

@@ -21,10 +21,10 @@ const loading     = ref(false);
 const autoRefresh = ref(false);
 const countdown   = ref(30);
 const SORT_OPTS = ['signal','channel','ssid'] as const
-const BAND_OPTS = [{v:'all' as const,l:'Tous'},{v:'2.4' as const,l:'2.4G'},{v:'5' as const,l:'5G'}]
+const BAND_OPTS = [{v:'all' as const,l:'Tous'},{v:'2.4' as const,l:'2.4G'},{v:'5' as const,l:'5G'},{v:'6' as const,l:'6G'}]
 const SEC_OPTS  = [{v:'all' as const,l:'Tous'},{v:'secured' as const,l:'Sécurisé'},{v:'open' as const,l:'Ouvert'}]
 const sortBy      = ref<"signal"|"channel"|"ssid">("signal");
-const filterBand  = ref<"all"|"2.4"|"5">("all");
+const filterBand  = ref<"all"|"2.4"|"5"|"6">("all");
 const filterSec   = ref<"all"|"open"|"secured">("all");
 let   timer: ReturnType<typeof setInterval> | null = null;
 let   cdTimer: ReturnType<typeof setInterval> | null = null;
@@ -33,13 +33,22 @@ let   cdTimer: ReturnType<typeof setInterval> | null = null;
 const heatCanvas24 = ref<HTMLCanvasElement | null>(null);
 const heatCanvas5  = ref<HTMLCanvasElement | null>(null);
 
+// Bande normalisée côté Rust : « 2.4 GHz » / « 5 GHz » / « 6 GHz ». L'ancien
+// test `includes("5")` rangeait le 6 GHz (Wi-Fi 6E/7) dans le 2,4 GHz.
+const is24 = (n: WifiNetwork) => n.band.startsWith("2");
+const is5  = (n: WifiNetwork) => n.band.startsWith("5");
+const is6  = (n: WifiNetwork) => n.band.startsWith("6");
+// netsh FR affiche « Ouvrir » (EN « Open ») pour un réseau sans authentification
+const isOpen = (n: WifiNetwork) => /^(open|ouvrir|ouvert)/i.test(n.authentication.trim());
+
 // --- Computed ---
 const sorted = computed(() => {
   let list = [...networks.value];
-  if (filterBand.value === "2.4") list = list.filter(n => !n.band.includes("5"));
-  if (filterBand.value === "5")   list = list.filter(n => n.band.includes("5"));
-  if (filterSec.value === "open")    list = list.filter(n => n.authentication === "Open");
-  if (filterSec.value === "secured") list = list.filter(n => n.authentication !== "Open");
+  if (filterBand.value === "2.4") list = list.filter(is24);
+  if (filterBand.value === "5")   list = list.filter(is5);
+  if (filterBand.value === "6")   list = list.filter(is6);
+  if (filterSec.value === "open")    list = list.filter(isOpen);
+  if (filterSec.value === "secured") list = list.filter(n => !isOpen(n));
   return list.sort((a, b) => {
     if (sortBy.value === "signal")  return b.signal_percent - a.signal_percent;
     if (sortBy.value === "channel") return a.channel - b.channel;
@@ -49,7 +58,7 @@ const sorted = computed(() => {
 
 const channels24 = computed(() => {
   const ch: Record<number, WifiNetwork[]> = {};
-  networks.value.filter(n => !n.band.includes("5")).forEach(n => {
+  networks.value.filter(is24).forEach(n => {
     if (!ch[n.channel]) ch[n.channel] = [];
     ch[n.channel].push(n);
   });
@@ -58,7 +67,7 @@ const channels24 = computed(() => {
 
 const channels5 = computed(() => {
   const ch: Record<number, WifiNetwork[]> = {};
-  networks.value.filter(n => n.band.includes("5")).forEach(n => {
+  networks.value.filter(is5).forEach(n => {
     if (!ch[n.channel]) ch[n.channel] = [];
     ch[n.channel].push(n);
   });
@@ -82,14 +91,14 @@ const bestChannel5 = computed(() => {
 
 // Congestion globale 2.4 GHz (score 0–100)
 const congestion24 = computed(() => {
-  const total = networks.value.filter(n => !n.band.includes("5")).length;
+  const total = networks.value.filter(is24).length;
   return Math.min(100, Math.round((total / 12) * 100));
 });
 
 // Recommandations contextuelles
 const recommendations = computed(() => {
   const recs: { icon: string; title: string; desc: string; level: "ok"|"warn"|"danger" }[] = [];
-  const open = networks.value.filter(n => n.authentication === "Open");
+  const open = networks.value.filter(isOpen);
   if (open.length > 0)
     recs.push({ icon: "🔓", title: `${open.length} réseau(x) ouvert(s)`, desc: "Des réseaux sans chiffrement sont détectés. Évitez de vous y connecter.", level: "warn" });
   if (congestion24.value >= 70)
@@ -183,7 +192,7 @@ async function redrawHeatmaps() {
     drawHeatmap(heatCanvas24.value, channels24.value, [1,2,3,4,5,6,7,8,9,10,11,12,13], bestChannel24.value);
   }
   if (heatCanvas5.value && Object.keys(channels5.value).length) {
-    const ch5list = [...new Set(networks.value.filter(n => n.band.includes("5")).map(n => n.channel))].sort((a,b)=>a-b);
+    const ch5list = [...new Set(networks.value.filter(is5).map(n => n.channel))].sort((a,b)=>a-b);
     drawHeatmap(heatCanvas5.value, channels5.value, ch5list, bestChannel5.value);
   }
 }
@@ -285,11 +294,11 @@ onUnmounted(() => {
           <div class="stat-label">Réseaux détectés</div>
         </div>
         <div class="stat-card">
-          <div class="stat-val" style="color:var(--accent-primary)">{{ networks.filter(n => n.band.includes('5')).length }}</div>
+          <div class="stat-val" style="color:var(--accent-primary)">{{ networks.filter(is5).length }}</div>
           <div class="stat-label">Réseaux 5 GHz</div>
         </div>
         <div class="stat-card">
-          <div class="stat-val" style="color:var(--warning)">{{ networks.filter(n => !n.band.includes('5')).length }}</div>
+          <div class="stat-val" style="color:var(--warning)">{{ networks.filter(is24).length }}</div>
           <div class="stat-label">Réseaux 2.4 GHz</div>
         </div>
         <div class="stat-card">
@@ -347,10 +356,10 @@ onUnmounted(() => {
               <span class="net-bssid">{{ n.bssid }}</span>
             </div>
             <div class="net-badges">
-              <NBadge :variant="n.band.includes('5') ? 'accent' : 'warning'" size="sm">{{ n.band }}</NBadge>
+              <NBadge :variant="is24(n) ? 'warning' : 'accent'" size="sm">{{ n.band }}</NBadge>
               <NBadge variant="neutral" size="sm">Ch {{ n.channel || "?" }}</NBadge>
-              <NBadge :variant="n.authentication === 'Open' ? 'danger' : 'neutral'" size="sm">
-                <component :is="n.authentication === 'Open' ? Unlock : Lock" :size="10" style="margin-right:3px" />
+              <NBadge :variant="isOpen(n) ? 'danger' : 'neutral'" size="sm">
+                <component :is="isOpen(n) ? Unlock : Lock" :size="10" style="margin-right:3px" />
                 {{ n.authentication }}
               </NBadge>
               <NBadge v-if="n.radio_type" variant="neutral" size="sm">{{ n.radio_type }}</NBadge>

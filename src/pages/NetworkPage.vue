@@ -228,7 +228,11 @@ const diagDone = ref(false);
 const diagChecks = ref<DiagCheck[]>([]);
 const diagScore = ref(0);
 
-const KNOWN_GOOD_DNS = ["8.8.8.8","8.8.4.4","1.1.1.1","1.0.0.1","9.9.9.9","149.112.112.112","208.67.222.222","208.67.220.220"];
+const KNOWN_GOOD_DNS = [
+  "8.8.8.8","8.8.4.4","1.1.1.1","1.0.0.1","1.1.1.3","1.0.0.3","9.9.9.9","149.112.112.112","208.67.222.222","208.67.220.220","94.140.14.14","94.140.15.15",
+  "2001:4860:4860::8888","2001:4860:4860::8844","2606:4700:4700::1111","2606:4700:4700::1001","2606:4700:4700::1113","2606:4700:4700::1003",
+  "2620:fe::fe","2620:fe::9","2620:119:35::35","2620:119:53::53","2a10:50c0::ad1:ff","2a10:50c0::ad2:ff",
+];
 
 async function runDiagnostic() {
   if (!overview.value) await loadOverview();
@@ -289,7 +293,8 @@ async function runDiagnostic() {
   } else {
     const allGood = dnsServers.every(d => KNOWN_GOOD_DNS.includes(d));
     const anyGood = dnsServers.some(d => KNOWN_GOOD_DNS.includes(d));
-    const autoConfig = dnsServers.some(d => d.startsWith("192.168.") || d.startsWith("10.") || d.startsWith("172."));
+    // IPv6 de la box : lien local (fe80::) ou ULA (fdxx:) annoncés par le routeur
+    const autoConfig = dnsServers.some(d => d.startsWith("192.168.") || d.startsWith("10.") || d.startsWith("172.") || /^(fe80|fd[0-9a-f]{2}):/i.test(d));
     const detail = `DNS actifs : ${dnsServers.join(", ")}`;
     if (autoConfig) checks.push({ id: "dns_q", label: "Serveurs DNS", status: "info", detail: `${detail} — DNS local (DHCP/routeur)`, tip: "Les DNS locaux dépendent de votre routeur. Vous pouvez les remplacer par 8.8.8.8/1.1.1.1 pour plus de fiabilité." });
     else if (allGood) checks.push({ id: "dns_q", label: "Serveurs DNS", status: "ok", detail: `${detail} — DNS reconnus et fiables` });
@@ -354,19 +359,24 @@ function fixFlushDns() {
 
 function fixSetDns() {
   // Applique 8.8.8.8 + 1.1.1.1 sur tous les adaptateurs actifs via PowerShell
-  const script = `Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses '8.8.8.8','1.1.1.1' }`;
+  // -ErrorAction Stop : sinon un refus (droits) sortait en code 0 → faux succès.
+  // IPv6 inclus : sinon les DNS IPv6 de la box restent interrogés sur un réseau IPv6.
+  const script = `Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses '1.1.1.1','8.8.8.8','2606:4700:4700::1111','2001:4860:4860::8888' -ErrorAction Stop }`;
   runFix("dns_set", "powershell", ["-NoProfile", "-NonInteractive", "-Command", script]);
 }
 
 function fixDisableProxy() {
-  const script = `Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0`;
+  const script = `Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0 -ErrorAction Stop`;
   runFix("proxy", "powershell", ["-NoProfile", "-NonInteractive", "-Command", script]);
 }
 
 function fixEnableDhcp() {
-  // Active DHCP sur tous les adaptateurs qui ont une IP statique
-  const script = `Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { netsh interface ip set address $_.Name dhcp; netsh interface ip set dns $_.Name dhcp }`;
-  runFix("dhcp", "cmd", ["/c", script]);
+  // Active DHCP sur les adaptateurs actifs en IP statique. Avant : ce script
+  // PowerShell était passé à `cmd /c`, qui ne connaît pas Get-NetAdapter →
+  // échec systématique. netsh par index (noms avec espaces), seulement sur les
+  // interfaces statiques (« DHCP déjà activé » sortirait en erreur).
+  const script = `$ErrorActionPreference='Stop'; Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | ForEach-Object { $i = $_.ifIndex; if ((Get-NetIPInterface -InterfaceIndex $i -AddressFamily IPv4).Dhcp -ne 'Enabled') { netsh interface ipv4 set address name=$i source=dhcp | Out-Null; if ($LASTEXITCODE -ne 0) { throw "netsh a échoué sur $($_.Name)" } }; Set-DnsClientServerAddress -InterfaceIndex $i -ResetServerAddresses -ErrorAction Stop }`;
+  runFix("dhcp", "powershell", ["-NoProfile", "-NonInteractive", "-Command", script]);
 }
 
 function fixOpenNetworkSettings() {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, type Component } from "vue";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@/utils/invoke";
+import { invoke, invokeRaw } from "@/utils/invoke";
 import NButton from "@/components/ui/NButton.vue";
 import { useNotificationStore } from "@/stores/notifications";
 import {
@@ -368,6 +368,11 @@ async function launchLocalTool(tool: RecoveryTool) {
   }
 }
 
+// Commandes du catalogue qui agissent (reset reseau/ACL, suppression, pare-feu,
+// Defender, BCD, services...) : elles partaient en un clic, y compris hors WinPE
+// sur le Windows en cours. Les lectures pures restent sans confirmation.
+const MUTATION = /\b(reset|resetbase|resetrepository|delete|deletevalue|del|rd|set|setactive|config|stop|start|startscan|startdownload|startinstall|enable|disable|active|fixmbr|fixboot|rebuildbcd|bcdboot|icacls|takeown|restorehealth|startcomponentcleanup|gpupdate|wsreset|cleanmgr|cl|Set-MpPreference|Start-MpScan|chkdsk)\b/i;
+
 async function runQuickCmd(cmd: QuickCmd) {
   // "Supprimer points restauration" (vssadmin delete shadows /all /quiet) est le
   // seul item irréversible/destructif de ce catalogue (efface tous les points de
@@ -380,12 +385,18 @@ async function runQuickCmd(cmd: QuickCmd) {
       { title: "Nitrite", kind: "warning" }
     );
     if (!ok) return;
+  } else if (MUTATION.test(cmd.cmd)
+    && !(await confirm(`Exécuter « ${cmd.label} » ? Cette commande modifie le système.\n\n${cmd.cmd}`, { title: "Nitrite", kind: "warning" }))) {
+    return;
   }
   try {
-    await invoke("winpe_run_command", { command: cmd.cmd });
-    notify.info("Commande exécutée", cmd.cmd);
-  } catch {
-    notify.info("Copier dans le terminal WinPE", cmd.cmd);
+    // Le resultat etait jete : « Commande exécutée » s'affichait meme en echec.
+    const r = await invokeRaw<{ success: boolean; output: string }>("winpe_run_command", { command: cmd.cmd });
+    const extrait = (r.output || "Aucune sortie").slice(0, 400);
+    if (r.success) notify.success(cmd.label, extrait);
+    else notify.warning(`${cmd.label} : échec`, extrait);
+  } catch (e) {
+    notify.error(cmd.label, String(e).slice(0, 200));
   }
 }
 </script>

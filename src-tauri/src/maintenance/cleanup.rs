@@ -4,7 +4,6 @@ use std::process::Command;
 use std::os::windows::process::CommandExt;
 
 use crate::error::NiTriTeError;
-use crate::maintenance::commands::decode_output;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CleanupResult {
@@ -15,16 +14,21 @@ pub struct CleanupResult {
 }
 
 pub fn empty_recycle_bin() -> Result<CleanupResult, NiTriTeError> {
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-Command", "Clear-RecycleBin -Force -ErrorAction SilentlyContinue"])
-        .creation_flags(0x08000000).output()?;
-
-    Ok(CleanupResult {
-        action: "Vider la corbeille".into(),
-        success: output.status.success(),
-        freed_mb: 0.0,
-        message: if output.status.success() { "Corbeille videe".into() } else { "Erreur".into() },
-    })
+    // `Clear-RecycleBin -EA SilentlyContinue` sortait toujours en code 0 : succès
+    // affiché même si rien n'était vidé. On compte les éléments avant/après.
+    let ps = "$rb = { @((New-Object -ComObject Shell.Application).Namespace(10).Items()).Count };               $before = & $rb; Clear-RecycleBin -Force -ErrorAction SilentlyContinue; $after = & $rb;               Write-Output \"$before|$after\"";
+    let out = crate::maintenance::commands::execute_system_command(
+        "powershell", &["-NoProfile", "-NonInteractive", "-Command", ps], 120)?;
+    let mut parts = out.stdout.trim().rsplit('|');
+    let after: Option<u64> = parts.next().and_then(|v| v.trim().parse().ok());
+    let before: Option<u64> = parts.next().and_then(|v| v.trim().parse().ok());
+    let (success, message) = match (before, after) {
+        (Some(0), Some(0)) => (true, "Corbeille deja vide".to_string()),
+        (Some(b), Some(0)) => (true, format!("Corbeille videe ({} element(s))", b)),
+        (Some(b), Some(a)) => (false, format!("Corbeille partiellement videe : {} element(s) restant(s) sur {}", a, b)),
+        _ => (false, format!("Echec du vidage de la corbeille : {}", out.stderr.trim())),
+    };
+    Ok(CleanupResult { action: "Vider la corbeille".into(), success, freed_mb: 0.0, message })
 }
 
 pub fn clean_temp_files() -> Result<CleanupResult, NiTriTeError> {
@@ -97,15 +101,11 @@ pub fn run_disk_cleanup() -> Result<CleanupResult, NiTriTeError> {
 }
 
 pub fn get_startup_programs() -> Result<Vec<StartupEntry>, NiTriTeError> {
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-Command",
-            "Get-CimInstance Win32_StartupCommand | Select-Object Name, Command, Location, User | ConvertTo-Json"])
-        .creation_flags(0x08000000).output()?;
-
-    // decode_output : le champ User (ex. « AUTORITE NT\Système », « SERVICE
-    // RÉSEAU ») est corrompu par from_utf8_lossy — confirmé en direct sur
-    // cette machine (comptes système intégrés eux-mêmes accentués).
-    let text = decode_output(&output.stdout);
+    // execute_system_command décode via decode_output (champ User accentué :
+    // « AUTORITE NT\Système ») et borne la requête WMI dans le temps.
+    let output = crate::maintenance::commands::execute_system_command("powershell", &["-NoProfile", "-NonInteractive", "-Command",
+            "Get-CimInstance Win32_StartupCommand | Select-Object Name, Command, Location, User | ConvertTo-Json"], 60)?;
+    let text = output.stdout;
     let trimmed = text.trim();
     // PowerShell retourne un objet JSON unique si un seul programme est trouvé
     let entries: Vec<serde_json::Value> = serde_json::from_str(trimmed)
@@ -133,28 +133,44 @@ pub struct StartupEntry {
     pub enabled: bool,
 }
 
-/// Desactive un programme au demarrage via le registre
-pub fn disable_startup_program(name: &str, location: &str) -> Result<CleanupResult, NiTriTeError> {
-    // Determiner la ruche (HKCU ou HKLM) et le chemin
-    let reg_path = if location.starts_with("HKLM") || location.starts_with("HKU") {
-        return Err(NiTriTeError::ElevationRequired(
-            "La desactivation de programmes systeme necessite les droits administrateur".into(),
-        ));
-    } else {
-        location
-    };
-
-    // Valider reg_path : uniquement HKCU Run/RunOnce autorisé
-    let allowed_reg_prefixes = [
-        "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
-        "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
-        "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+/// Traduit la `Location` de Win32_StartupCommand en chemin PowerShell.
+/// WMI ne renvoie jamais `HKCU` : les entrées de l'utilisateur arrivent en
+/// `HKU\<SID>\...`, celles de la machine en `HKLM\...`. L'ancienne validation
+/// (HKCU seul, HKLM/HKU refusés « droits administrateur ») rejetait donc TOUTES
+/// les entrées, alors que l'application tourne déjà en administrateur.
+fn startup_reg_path(location: &str) -> Result<String, NiTriTeError> {
+    const RUN_KEYS: [&str; 4] = [
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce",
+        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run",
+        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\RunOnce",
     ];
-    if !allowed_reg_prefixes.iter().any(|prefix| reg_path.starts_with(prefix)) {
-        return Err(NiTriTeError::CommandDenied(
-            format!("Chemin registre non autorisé pour désactivation démarrage: {}", reg_path),
-        ));
+    let denied = || NiTriTeError::CommandDenied(format!(
+        "Emplacement non pris en charge pour la désactivation : {} (entrées du dossier Démarrage : retirer le raccourci via shell:startup)",
+        location
+    ));
+    let (root, rest) = location.split_once('\\').ok_or_else(denied)?;
+    let (ps_root, key) = match root.to_ascii_uppercase().as_str() {
+        "HKLM" => ("HKLM:\\".to_string(), rest),
+        "HKCU" => ("HKCU:\\".to_string(), rest),
+        "HKU" => {
+            let (sid, key) = rest.split_once('\\').ok_or_else(denied)?;
+            let sid_ok = !sid.is_empty()
+                && sid.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.');
+            if !sid_ok { return Err(denied()); }
+            (format!("Registry::HKEY_USERS\\{}\\", sid), key)
+        }
+        _ => return Err(denied()),
+    };
+    if !RUN_KEYS.iter().any(|k| k.eq_ignore_ascii_case(key)) {
+        return Err(denied());
     }
+    Ok(format!("{}{}", ps_root, key))
+}
+
+/// Desactive un programme au demarrage via le registre (suppression de la valeur)
+pub fn disable_startup_program(name: &str, location: &str) -> Result<CleanupResult, NiTriTeError> {
+    let reg_path = startup_reg_path(location)?;
 
     // Valider name : pas de métacaractères PS/shell
     if name.contains('\'') || name.contains('"') || name.contains('`') || name.contains('$') || name.is_empty() {
@@ -163,20 +179,18 @@ pub fn disable_startup_program(name: &str, location: &str) -> Result<CleanupResu
         ));
     }
 
-    // Passer reg_path et name comme arguments séparés (pas par concaténation)
     let ps_script = format!(
         r#"$regPath = '{}'
 $entryName = '{}'
-Remove-ItemProperty -Path $regPath -Name $entryName -ErrorAction Stop"#,
+Remove-ItemProperty -LiteralPath $regPath -Name $entryName -ErrorAction Stop"#,
         reg_path.replace('\'', "''"),
         name.replace('\'', "''")
     );
 
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &ps_script])
-        .creation_flags(0x08000000).output()?;
+    let output = crate::maintenance::commands::execute_system_command(
+        "powershell", &["-NoProfile", "-NonInteractive", "-Command", &ps_script], 30)?;
 
-    if output.status.success() {
+    if output.success {
         Ok(CleanupResult {
             action: format!("Desactiver {}", name),
             success: true,
@@ -184,11 +198,7 @@ Remove-ItemProperty -Path $regPath -Name $entryName -ErrorAction Stop"#,
             message: format!("{} retire du demarrage", name),
         })
     } else {
-        // decode_output : message d'erreur PowerShell (ex. « La propriété ...
-        // n'existe pas dans le chemin d'accès ») corrompu par from_utf8_lossy —
-        // confirmé en direct sur cette machine.
-        let err = decode_output(&output.stderr);
-        Err(NiTriTeError::System(format!("Impossible de desactiver {}: {}", name, err.trim())))
+        Err(NiTriTeError::System(format!("Impossible de desactiver {}: {}", name, output.stderr.trim())))
     }
 }
 
@@ -197,35 +207,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn disable_startup_hklm_requires_elevation() {
-        let r = disable_startup_program("app", "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run");
-        assert!(r.is_err());
-        let msg = format!("{:?}", r.unwrap_err());
-        assert!(msg.contains("droits") || msg.contains("ElevationRequired") || msg.contains("elevation"));
+    fn startup_reg_path_maps_wmi_locations() {
+        // Formats réels renvoyés par Win32_StartupCommand (relevés sur Windows 11 FR).
+        assert_eq!(
+            startup_reg_path(r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run").unwrap(),
+            r"HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+        );
+        assert_eq!(
+            startup_reg_path(r"HKU\S-1-5-21-114108366-2118826573-2109801171-1001\SOFTWARE\Microsoft\Windows\CurrentVersion\Run").unwrap(),
+            r"Registry::HKEY_USERS\S-1-5-21-114108366-2118826573-2109801171-1001\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+        );
+        assert!(startup_reg_path(r"HKU\.DEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce").is_ok());
+        assert!(startup_reg_path(r"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run").is_ok());
+    }
+
+    #[test]
+    fn startup_reg_path_rejects_other_keys() {
+        assert!(startup_reg_path(r"HKCU\..\SYSTEM").is_err());
+        assert!(startup_reg_path(r"HKLM\SYSTEM\CurrentControlSet\Services").is_err());
+        assert!(startup_reg_path(r"HKU\S-1-5-18'; x\SOFTWARE\Microsoft\Windows\CurrentVersion\Run").is_err());
+        assert!(startup_reg_path("Startup").is_err());
+        assert!(startup_reg_path("Common Startup").is_err());
     }
 
     #[test]
     fn disable_startup_unknown_path_rejected() {
-        let r = disable_startup_program("app", "HKCU\\..\\SYSTEM");
+        let r = disable_startup_program("app", r"HKCU\..\SYSTEM");
         assert!(r.is_err());
-    }
-
-    #[test]
-    fn disable_startup_allowed_hkcu_path_passes_validation() {
-        // HKCU Run path is allowed — command may fail since we're in test,
-        // but it must not fail at the validation stage (CommandDenied).
-        // "safe_app" n'existe pas dans le registre → exerce en pratique le
-        // vrai chemin d'erreur PowerShell (Remove-ItemProperty échoue), ce qui
-        // teste au passage que decode_output() ne corrompt pas le message
-        // d'erreur français (« La propriété ... n'existe pas dans le chemin
-        // d'accès » — mojibake confirmé avant fix via repro Rust direct).
-        let r = disable_startup_program("safe_app", "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run");
-        // Either Ok (unlikely in test env) or System error — not CommandDenied
-        if let Err(e) = r {
-            let msg = format!("{:?}", e);
-            assert!(!msg.contains("CommandDenied"), "Expected validation to pass, got: {}", msg);
-            assert!(!msg.contains('\u{FFFD}'), "mojibake détecté dans le message d'erreur: {}", msg);
-        }
     }
 
     #[test]

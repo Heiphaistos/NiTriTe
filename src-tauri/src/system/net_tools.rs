@@ -96,9 +96,10 @@ fn run_ping_blocking(host: String, count: u32) -> PingDiagResult {
     );
     #[cfg(target_os = "windows")]
     {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",&ps]).creation_flags(0x08000000).output();
+        // Délai borné : Test-Connection / Resolve-DnsName sans réponse ne gèlent plus
+        let o = crate::maintenance::commands::execute_system_command("powershell", &["-NoProfile","-NonInteractive","-Command",&ps], 60);
         if let Ok(o) = o {
-            let t = String::from_utf8_lossy(&o.stdout); let t = t.trim().trim_matches('\'');
+            let t = o.stdout.trim().trim_matches('\'');
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(t) {
                 return PingDiagResult { host: h, success: v["s"].as_bool().unwrap_or(false), avg_ms: v["avg"].as_f64().unwrap_or(0.0), min_ms: v["min"].as_f64().unwrap_or(0.0), max_ms: v["max"].as_f64().unwrap_or(0.0), packets_sent: v["sent"].as_u64().unwrap_or(count as u64) as u32, packets_received: v["recv"].as_u64().unwrap_or(0) as u32, loss_percent: v["loss"].as_f64().unwrap_or(100.0) };
             }
@@ -121,35 +122,35 @@ fn run_traceroute_blocking(host: String) -> Vec<TracertHop> {
         Ok(h) => h,
         Err(e) => { tracing::warn!("run_traceroute: {}", e); return vec![]; }
     };
-    // Use tracert directly (avoids cmd.exe shell, better defense-in-depth)
+    // tracert direct (sans cmd.exe). -d : pas de résolution inverse de chaque
+    // saut (plusieurs secondes par saut) ; délai global borné à 120 s.
     #[cfg(target_os = "windows")]
     {
-        let o = Command::new("tracert").args(["-h", "20", "-w", "1000", &h]).creation_flags(0x08000000).output();
-        if let Ok(o) = o {
-            let text = decode_output(&o.stdout);
-            let mut hops = Vec::new();
-            for line in text.lines() {
-                let line = line.trim();
-                // Tracert output: "  1    <1 ms    <1 ms    <1 ms  192.168.1.1"
-                if line.is_empty() || line.starts_with("Tra") || line.starts_with("Rout") || line.starts_with("Over") { continue; }
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    if let Ok(hop_num) = parts[0].parse::<u32>() {
-                        // Reject tokens ending with '.' (e.g. "out." from "Request timed out.")
-                        let addr = parts.iter().rev().find(|s| {
-                            **s == "*" ||
-                            (s.contains(':') && !s.contains(' ')) ||
-                            (s.contains('.') && !s.ends_with('.') && !s.contains(' '))
-                        }).copied().unwrap_or("*");
-                        let ms_val = parts.iter().find_map(|s| s.trim_end_matches("ms").parse::<f64>().ok()).unwrap_or(0.0);
-                        hops.push(TracertHop { hop: hop_num, address: addr.to_string(), ms: ms_val });
-                    }
-                }
-            }
-            if !hops.is_empty() { return hops; }
+        if let Ok(o) = crate::maintenance::commands::execute_system_command("tracert", &["-d", "-h", "20", "-w", "1000", &h], 120) {
+            return parse_tracert(&o.stdout);
         }
     }
     vec![]
+}
+
+/// Lignes « N  t1 ms  t2 ms  t3 ms  adresse » (FR et EN). Le temps retenu est
+/// le premier aller-retour mesuré (« <1 » = 1 ms) ; l'ancien code prenait le
+/// premier nombre de la ligne, c'est-à-dire le NUMÉRO DU SAUT.
+fn parse_tracert(text: &str) -> Vec<TracertHop> {
+    let mut hops = Vec::new();
+    for line in text.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        let Some(hop_num) = parts.first().and_then(|p| p.parse::<u32>().ok()) else { continue };
+        if parts.len() < 2 { continue; }
+        let addr = parts.last().map(|a| a.trim_matches(|c| c == '[' || c == ']'))
+            .filter(|a| a.parse::<std::net::IpAddr>().is_ok())
+            .unwrap_or("*");
+        let ms = parts[1..].iter()
+            .find_map(|s| s.trim_end_matches("ms").trim_start_matches('<').parse::<f64>().ok())
+            .unwrap_or(0.0);
+        hops.push(TracertHop { hop: hop_num, address: addr.to_string(), ms });
+    }
+    hops
 }
 
 // ─── DNS Lookup ────────────────────────────────────────────────────────────────
@@ -182,9 +183,10 @@ fn run_nslookup_blocking(host: String, record_type: String, dns_server: Option<S
     let ps = format!(r#"try {{ $r = Resolve-DnsName '{host}' -Type {rtype}{server_arg} -ErrorAction SilentlyContinue; if ($r) {{ $recs = @($r | ForEach-Object {{ if($_.IPAddress){{[string]$_.IPAddress}}elseif($_.NameHost){{[string]$_.NameHost}}elseif($_.Exchange){{[string]$_.Exchange}}elseif($_.Strings){{$_.Strings -join ' '}}else{{[string]$_.Name}} }}); @{{ok=$true;recs=$recs;qt='{rtype}'}} | ConvertTo-Json -Compress }} else {{ '{{"ok":false,"recs":[],"qt":"{rtype}"}}' }} }} catch {{ '{{"ok":false,"recs":[],"qt":"{rtype}"}}' }}"#, host=h, rtype=rtype, server_arg=server_arg);
     #[cfg(target_os = "windows")]
     {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",&ps]).creation_flags(0x08000000).output();
+        // Délai borné : Test-Connection / Resolve-DnsName sans réponse ne gèlent plus
+        let o = crate::maintenance::commands::execute_system_command("powershell", &["-NoProfile","-NonInteractive","-Command",&ps], 60);
         if let Ok(o) = o {
-            let t = String::from_utf8_lossy(&o.stdout); let t = t.trim().trim_matches('\'');
+            let t = o.stdout.trim().trim_matches('\'');
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(t) {
                 let records = v["recs"].as_array().map(|a| a.iter().filter_map(|r| r.as_str().map(|s| s.to_string())).collect()).unwrap_or_default();
                 return DnsResult { host: h, records, query_type: rtype, success: v["ok"].as_bool().unwrap_or(false) };
@@ -211,7 +213,7 @@ $result = @(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Sta
     $ip4 = Get-NetIPAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -EA SilentlyContinue | Select-Object -First 1
     $ip6 = Get-NetIPAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv6 -EA SilentlyContinue | Where-Object { $_.PrefixOrigin -ne 'WellKnown' } | Select-Object -First 1
     $gw  = (Get-NetRoute -InterfaceIndex $a.ifIndex -DestinationPrefix '0.0.0.0/0' -EA SilentlyContinue | Sort-Object RouteMetric | Select-Object -First 1).NextHop
-    $dns = @(Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -EA SilentlyContinue | Select-Object -ExpandProperty ServerAddresses)
+    $dns = @(Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -EA SilentlyContinue | Select-Object -ExpandProperty ServerAddresses | Where-Object { $_ -notlike 'fec0:0:0:ffff::*' })
     $dhcp = (Get-NetIPInterface -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -EA SilentlyContinue).Dhcp
     @{ name=$a.InterfaceDescription; ipv4=if($ip4){[string]$ip4.IPAddress}else{''}; ipv6=if($ip6){[string]$ip6.IPAddress}else{''}; plen=if($ip4){[int]$ip4.PrefixLength}else{0}; gw=if($gw){[string]$gw}else{''}; dns=$dns; mac=[string]$a.MacAddress; dhcp=($dhcp -eq 'Enabled') }
 })
@@ -219,9 +221,9 @@ $result | ConvertTo-Json -Depth 4 -Compress
 "#;
     #[cfg(target_os = "windows")]
     {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",ps]).creation_flags(0x08000000).output();
+        let o = crate::maintenance::commands::execute_system_command("powershell", &["-NoProfile","-NonInteractive","-Command",ps], 60);
         if let Ok(o) = o {
-            let t = String::from_utf8_lossy(&o.stdout); let t = t.trim();
+            let t = o.stdout.trim();
             let arr_t = if t.starts_with('{') { format!("[{}]",t) } else { t.to_string() };
             if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&arr_t) {
                 return arr.iter().map(|a| IpConfigAdapter {
@@ -688,39 +690,26 @@ mod tests {
         assert!(r.contains("''test"), "Expected '' escaping, got: {}", r);
     }
 
-    // ── traceroute address parser ──────────────────────────────────────────────
+    // ── traceroute : tests sur le vrai parseur (parse_tracert) ─────────────────
+    // Sortie réelle relevée le 2026-11-23 (tracert -d, Windows 11 FR).
+    const TRACERT_FR: &str = "Détermination de l'itinéraire vers 8.8.8.8 avec un maximum de 3 sauts.\r\n\r\n  1    <1 ms    <1 ms    <1 ms  192.168.1.254 \r\n  2     3 ms     3 ms     3 ms  194.149.162.202 \r\n  3     *        *        *     Délai d'attente de la demande dépassé.\r\n\r\nItinéraire déterminé.\r\n";
 
-    fn parse_tracert_addr(line: &str) -> String {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        parts.iter().rev().find(|s| {
-            **s == "*" ||
-            (s.contains(':') && !s.contains(' ')) ||
-            (s.contains('.') && !s.ends_with('.') && !s.contains(' '))
-        }).copied().unwrap_or("*").to_string()
+    #[test]
+    fn tracert_french_output() {
+        let h = parse_tracert(TRACERT_FR);
+        assert_eq!(h.len(), 3);
+        assert_eq!((h[0].hop, h[0].address.as_str(), h[0].ms), (1, "192.168.1.254", 1.0));
+        // L'ancien parseur renvoyait ms = 2 (le numéro du saut)
+        assert_eq!((h[1].hop, h[1].address.as_str(), h[1].ms), (2, "194.149.162.202", 3.0));
+        assert_eq!((h[2].address.as_str(), h[2].ms), ("*", 0.0));
     }
 
     #[test]
-    fn tracert_normal_hop_extracts_ip() {
-        let line = "  1     1 ms     1 ms     1 ms  192.168.1.1";
-        assert_eq!(parse_tracert_addr(line), "192.168.1.1");
-    }
-
-    #[test]
-    fn tracert_timeout_hop_returns_star_not_out() {
-        let line = "  2     *        *        *     Request timed out.";
-        assert_eq!(parse_tracert_addr(line), "*");
-    }
-
-    #[test]
-    fn tracert_hop_with_hostname_and_ip() {
-        let line = "  3    15 ms    14 ms    15 ms  router.example.net [1.2.3.4]";
-        // Should pick the IP in brackets (last token with dots not ending in .)
-        assert_eq!(parse_tracert_addr(line), "[1.2.3.4]");
-    }
-
-    #[test]
-    fn tracert_unreachable_hop_returns_star() {
-        let line = "  4     *        *        *     Destination host unreachable.";
-        assert_eq!(parse_tracert_addr(line), "*");
+    fn tracert_english_named_and_unreachable_hops() {
+        let h = parse_tracert("Tracing route to x [1.2.3.4]\n  3    15 ms    14 ms    15 ms  router.example.net [1.2.3.4]\n  4     *        *        *     Request timed out.\n  5    20 ms    21 ms    19 ms  2001:db8::1\n  6     *        *        *     Destination host unreachable.\n");
+        assert_eq!((h[0].hop, h[0].address.as_str(), h[0].ms), (3, "1.2.3.4", 15.0));
+        assert_eq!(h[1].address, "*");
+        assert_eq!(h[2].address, "2001:db8::1");
+        assert_eq!(h[3].address, "*");
     }
 }

@@ -152,6 +152,11 @@ pub fn backup_user_folders(
                     "/COPY:DAT",
                     "/R:1", "/W:2",
                     "/MT:4",
+                    // /XJ : ne pas suivre les jonctions héritées (« Documents\My
+                    // Music », « My Pictures »…) que /B traverse malgré leur ACL
+                    // de refus : Musique/Images/Vidéos étaient recopiées en double
+                    // dans la sauvegarde de Documents.
+                    "/XJ",
                     "/NFL", "/NDL", "/NP",
                 ])
                 .creation_flags(0x08000000)

@@ -129,8 +129,10 @@ const fixResults = ref<Record<string, boolean>>({});
 async function applyFix(repairKey: string) {
   applyingFix.value = repairKey;
   try {
-    await invoke('run_repair_command', { repairType: repairKey });
-    fixResults.value[repairKey] = true;
+    // run_repair_command ne rejette jamais : l'échec est dans `success`.
+    const r = await invoke<{ success: boolean; output: string }>('run_repair_command', { repairType: repairKey });
+    fixResults.value[repairKey] = r.success;
+    if (!r.success) useNotificationStore().error("Réparation échouée", `${repairKey}: ${r.output.slice(0, 300)}`);
   } catch (err) {
     fixResults.value[repairKey] = false;
     useNotificationStore().error("Réparation échouée", `${repairKey}: ${String(err)}`);

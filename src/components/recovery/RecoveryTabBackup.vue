@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { invoke } from "@/utils/invoke";
+import { invoke, invokeRaw } from "@/utils/invoke";
 import { RefreshCw, CheckSquare, Square, Folder, FolderOpen, Save, CheckCircle, XCircle, Plus } from "lucide-vue-next";
 import NButton from "@/components/ui/NButton.vue";
 import NProgress from "@/components/ui/NProgress.vue";
@@ -80,7 +80,7 @@ async function startProfileBackup() {
     }
   );
   try {
-    backupResult.value = await invoke<BackupResult>("backup_user_folders", {
+    backupResult.value = await invokeRaw<BackupResult>("backup_user_folders", {
       folders: Array.from(selectedFolders.value),
       target: backupTarget.value,
     });

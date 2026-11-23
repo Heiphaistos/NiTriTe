@@ -1,13 +1,13 @@
 //! Fonctions de collecte d'informations système
 use crate::error::NiTriTeError;
 use super::formatters::*;
-use super::run_ps_temp;
+use super::{run_ps_temp, OutputTimeout};
 use std::process::Command;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
 pub fn collect_installed_apps() -> Result<String, NiTriTeError> {
-    let output = Command::new("winget").args(["list", "--accept-source-agreements"]).creation_flags(0x08000000).output()?;
+    let output = Command::new("winget").args(["list", "--accept-source-agreements"]).creation_flags(0x08000000).output_timeout()?;
     Ok(crate::maintenance::commands::decode_output(&output.stdout))
 }
 
@@ -67,7 +67,7 @@ foreach ($group in $all) {
 
 
 pub fn collect_network_config() -> Result<String, NiTriTeError> {
-    let output = Command::new("ipconfig").arg("/all").creation_flags(0x08000000).output()?;
+    let output = Command::new("ipconfig").arg("/all").creation_flags(0x08000000).output_timeout()?;
     // ipconfig écrit en codepage OEM (CP850 sur Windows FR) : from_utf8_lossy
     // transformerait « Carte réseau », « Passerelle par défaut »… en mojibake
     // dans le fichier de sauvegarde. decode_output gère déjà les deux plateformes.
@@ -98,14 +98,14 @@ foreach ($item in $items) {
 pub fn collect_env_vars() -> Result<String, NiTriTeError> {
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command", "[Environment]::GetEnvironmentVariables('Machine') | ConvertTo-Json"])
-        .creation_flags(0x08000000).output()?;
+        .creation_flags(0x08000000).output_timeout()?;
     Ok(crate::maintenance::commands::decode_output(&output.stdout))
 }
 
 pub fn collect_firewall_rules() -> Result<String, NiTriTeError> {
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command", "Get-NetFirewallRule | Select-Object -First 50 DisplayName, Direction, Action, Enabled | ConvertTo-Json"])
-        .creation_flags(0x08000000).output()?;
+        .creation_flags(0x08000000).output_timeout()?;
     Ok(crate::maintenance::commands::decode_output(&output.stdout))
 }
 
@@ -127,7 +127,7 @@ pub fn collect_windows_license() -> Result<String, NiTriTeError> {
     let oem_out = Command::new("powershell")
         .args(["-NoProfile", "-Command",
             "$k=(Get-WmiObject SoftwareLicensingService -EA SilentlyContinue).OA3xOriginalProductKey; if($k -and $k.Trim().Length -gt 0){$k.Trim()} else {''}"])
-        .creation_flags(0x08000000).output()?;
+        .creation_flags(0x08000000).output_timeout()?;
     let oem_key = crate::maintenance::commands::decode_output(&oem_out.stdout).trim().to_string();
 
     // Méthode 2 : décode DigitalProductId depuis le registre (fonctionne retail, volume, KMS/Massgrave)
@@ -147,13 +147,13 @@ pub fn collect_windows_license() -> Result<String, NiTriTeError> {
     );
     let reg_out = Command::new("powershell")
         .args(["-NoProfile", "-Command", decode_script])
-        .creation_flags(0x08000000).output()?;
+        .creation_flags(0x08000000).output_timeout()?;
     let reg_key = crate::maintenance::commands::decode_output(&reg_out.stdout).trim().to_string();
 
     // Méthode 3 : slmgr /dli — statut lisible (fonctionne avec Massgrave HWID/KMS38)
     let slmgr_out = Command::new("cscript")
         .args(["//nologo", "C:\\Windows\\System32\\slmgr.vbs", "/dli"])
-        .creation_flags(0x08000000).output();
+        .creation_flags(0x08000000).output_timeout();
     let slmgr = if let Ok(o) = slmgr_out {
         crate::maintenance::commands::decode_output(&o.stdout).trim().to_string()
     } else { String::new() };
@@ -162,7 +162,7 @@ pub fn collect_windows_license() -> Result<String, NiTriTeError> {
     let wmi_out = Command::new("powershell")
         .args(["-NoProfile", "-Command",
             "Get-WmiObject SoftwareLicensingProduct -EA SilentlyContinue | Where-Object {$_.PartialProductKey -and $_.Name -like '*Windows*'} | Select-Object -First 1 | ForEach-Object { \"Edition         : \" + $_.Name; \"Cle partielle   : ...\" + $_.PartialProductKey; \"Canal           : \" + $_.LicenseFamily; \"Statut          : \" + $(switch($_.LicenseStatus){0{'Non licence'} 1{'ACTIVE'} 2{'Grace period'} 3{'Modifie (tampered)'} 4{'Notification'} 5{'Grace etendue'} default{'Inconnu'}}) }"])
-        .creation_flags(0x08000000).output()?;
+        .creation_flags(0x08000000).output_timeout()?;
     let wmi = crate::maintenance::commands::decode_output(&wmi_out.stdout).trim().to_string();
 
     let mut r = String::new();
@@ -194,7 +194,7 @@ pub fn collect_windows_license() -> Result<String, NiTriTeError> {
 pub fn collect_bitlocker_keys() -> Result<String, NiTriTeError> {
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command", "Get-BitLockerVolume -ErrorAction SilentlyContinue | Select-Object MountPoint, VolumeStatus, EncryptionPercentage, KeyProtector | ConvertTo-Json"])
-        .creation_flags(0x08000000).output()?;
+        .creation_flags(0x08000000).output_timeout()?;
     Ok(crate::maintenance::commands::decode_output(&output.stdout))
 }
 
@@ -225,7 +225,7 @@ pub fn collect_office_license() -> Result<String, NiTriTeError> {
     );
     let reg_out = Command::new("powershell")
         .args(["-NoProfile", "-Command", decode_script])
-        .creation_flags(0x08000000).output()?;
+        .creation_flags(0x08000000).output_timeout()?;
     let reg_keys = crate::maintenance::commands::decode_output(&reg_out.stdout).trim().to_string();
 
     // Méthode 2 : Click-to-Run / Office 365 / Massgrave
@@ -240,7 +240,7 @@ pub fn collect_office_license() -> Result<String, NiTriTeError> {
               "if($lic.LastAcknowledgedLicenseToken){'Licence token  : presente (abonnement/KMS actif)'}",
             "}else{'(Office Click-to-Run non detecte)'}"
         )])
-        .creation_flags(0x08000000).output()?;
+        .creation_flags(0x08000000).output_timeout()?;
     let c2r = crate::maintenance::commands::decode_output(&c2r_out.stdout).trim().to_string();
 
     // Méthode 3 : OSPP.VBS statut d'activation
@@ -255,7 +255,7 @@ pub fn collect_office_license() -> Result<String, NiTriTeError> {
         if std::path::Path::new(&vbs).exists() {
             if let Ok(o) = Command::new("cscript")
                 .args(["//nologo", &vbs, "/dstatus"])
-                .creation_flags(0x08000000).output()
+                .creation_flags(0x08000000).output_timeout()
             {
                 let s = crate::maintenance::commands::decode_output(&o.stdout).trim().to_string();
                 if !s.is_empty() { ospp_status = s; break; }
@@ -282,7 +282,7 @@ pub fn collect_installed_fonts() -> Result<String, NiTriTeError> {
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command",
             "(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts' | Get-Member -MemberType NoteProperty | Select-Object Name).Name | Sort-Object | ConvertTo-Json"])
-        .creation_flags(0x08000000).output()?;
+        .creation_flags(0x08000000).output_timeout()?;
     Ok(crate::maintenance::commands::decode_output(&output.stdout))
 }
 
@@ -330,7 +330,7 @@ pub fn collect_windows_features() -> Result<String, NiTriTeError> {
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command",
             "Get-WindowsOptionalFeature -Online -ErrorAction SilentlyContinue | Where-Object {$_.State -eq 'Enabled'} | Select-Object FeatureName | ConvertTo-Json"])
-        .creation_flags(0x08000000).output()?;
+        .creation_flags(0x08000000).output_timeout()?;
     Ok(crate::maintenance::commands::decode_output(&output.stdout))
 }
 
@@ -353,7 +353,7 @@ pub fn collect_folder_sizes() -> Result<String, NiTriTeError> {
     );
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command", script])
-        .creation_flags(0x08000000).output()?;
+        .creation_flags(0x08000000).output_timeout()?;
     Ok(crate::maintenance::commands::decode_output(&output.stdout))
 }
 
@@ -562,7 +562,7 @@ pub fn collect_registry_export() -> Result<String, NiTriTeError> {
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command",
             "Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -ErrorAction SilentlyContinue | ConvertTo-Json; Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders' -ErrorAction SilentlyContinue | ConvertTo-Json"])
-        .creation_flags(0x08000000).output()?;
+        .creation_flags(0x08000000).output_timeout()?;
     Ok(crate::maintenance::commands::decode_output(&output.stdout))
 }
 
@@ -584,7 +584,7 @@ pub fn collect_suspicious_processes() -> Result<String, NiTriTeError> {
     );
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command", script])
-        .creation_flags(0x08000000).output()?;
+        .creation_flags(0x08000000).output_timeout()?;
     Ok(crate::maintenance::commands::decode_output(&output.stdout))
 }
 
@@ -594,7 +594,7 @@ pub fn collect_winget_export() -> Result<String, NiTriTeError> {
     let _ = Command::new("winget")
         .args(["export", "-o", tmp.to_str().unwrap_or(""), "--accept-source-agreements"])
         .creation_flags(0x08000000)
-        .output();
+        .output_timeout();
     if tmp.exists() {
         let content = std::fs::read_to_string(&tmp)?;
         let _ = std::fs::remove_file(&tmp);
@@ -609,7 +609,7 @@ pub fn collect_network_shares() -> Result<String, NiTriTeError> {
         .args(["-NoProfile", "-Command",
             "Get-SmbShare | Select-Object Name, Path, Description | Format-Table -AutoSize | Out-String"])
         .creation_flags(0x08000000)
-        .output()?;
+        .output_timeout()?;
     Ok(crate::maintenance::commands::decode_output(&output.stdout))
 }
 
@@ -642,8 +642,8 @@ pub fn collect_pip_packages() -> Result<String, NiTriTeError> {
     let output = Command::new("pip")
         .args(["freeze"])
         .creation_flags(0x08000000)
-        .output()
-        .or_else(|_| Command::new("pip3").args(["freeze"]).creation_flags(0x08000000).output())?;
+        .output_timeout()
+        .or_else(|_| Command::new("pip3").args(["freeze"]).creation_flags(0x08000000).output_timeout())?;
     let s = crate::maintenance::commands::decode_output(&output.stdout);
     if s.trim().is_empty() {
         Err(NiTriTeError::System("pip non disponible ou aucun package installé".into()))
@@ -656,7 +656,7 @@ pub fn collect_vscode_extensions() -> Result<String, NiTriTeError> {
     let output = Command::new("code")
         .args(["--list-extensions"])
         .creation_flags(0x08000000)
-        .output()?;
+        .output_timeout()?;
     let s = crate::maintenance::commands::decode_output(&output.stdout);
     if s.trim().is_empty() {
         Err(NiTriTeError::System("VSCode non disponible ou aucune extension".into()))
@@ -669,7 +669,7 @@ pub fn collect_wsl_config() -> Result<String, NiTriTeError> {
     let output = Command::new("wsl")
         .args(["--list", "--verbose"])
         .creation_flags(0x08000000)
-        .output()?;
+        .output_timeout()?;
     let mut content = crate::maintenance::commands::decode_output(&output.stdout);
     let home = std::env::var("USERPROFILE").unwrap_or_default();
     let wslconfig = std::path::PathBuf::from(&home).join(".wslconfig");
@@ -687,7 +687,7 @@ pub fn collect_powershell_profile() -> Result<String, NiTriTeError> {
         .args(["-NoProfile", "-Command",
             "if (Test-Path $PROFILE) { \"=== \" + $PROFILE + \" ===\"; Get-Content $PROFILE } else { 'Profil inexistant : ' + $PROFILE }"])
         .creation_flags(0x08000000)
-        .output()?;
+        .output_timeout()?;
     Ok(crate::maintenance::commands::decode_output(&output.stdout))
 }
 
@@ -695,7 +695,7 @@ pub fn collect_power_plans() -> Result<String, NiTriTeError> {
     let output = Command::new("powercfg")
         .args(["/list"])
         .creation_flags(0x08000000)
-        .output()?;
+        .output_timeout()?;
     Ok(crate::maintenance::commands::decode_output(&output.stdout))
 }
 
@@ -704,7 +704,7 @@ pub fn collect_printer_config() -> Result<String, NiTriTeError> {
         .args(["-NoProfile", "-Command",
             "Get-Printer | Select-Object Name, PortName, DriverName, PrinterStatus | Format-Table -AutoSize | Out-String"])
         .creation_flags(0x08000000)
-        .output()?;
+        .output_timeout()?;
     Ok(crate::maintenance::commands::decode_output(&output.stdout))
 }
 

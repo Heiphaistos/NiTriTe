@@ -19,7 +19,7 @@ export interface CpuCacheInfo {
   l1_instruction_kb: number; l1_data_kb: number;
   l2_kb: number; l3_kb: number; l4_kb: number;
 }
-export interface FolderEntry { label: string; path: string; size_mb: number; size_gb?: number; file_count: number; }
+export interface FolderEntry { label: string; path: string; size_mb: number; size_gb?: number; file_count: number; partial?: boolean; }
 export interface RamInfo { total_gb: number; used_gb: number; usage_percent: number; modules?: { memory_type?: string }[] }
 
 export interface SysGpu { name?: string; adapter_ram_mb?: number; driver_version?: string }
@@ -267,7 +267,7 @@ export interface SystemMonitorPayload {
   disk_temps?: { name: string; temp_c: number }[]
   network_down_kbs?: number; network_up_kbs?: number
   net_download_kbs?: number; net_upload_kbs?: number
-  cpu_name?: string; cpu_temp_c?: number; cpu_freq_mhz?: number
+  cpu_name?: string; cpu_temp_c?: number; cpu_temp_source?: string | null; cpu_freq_mhz?: number
   cpu_per_core?: (number | { id?: number; usage: number })[]
   cpu_cores?: (number | { id?: number; usage: number })[]
   gpu_data?: { name: string; usage_percent: number; vram_used_mb: number; vram_total_mb: number; temperature_c: number }[]

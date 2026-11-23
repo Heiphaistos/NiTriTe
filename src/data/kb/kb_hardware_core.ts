@@ -19,7 +19,7 @@ export const kbHardwareCore: KBCategory[] = [
           "Améliorer le flux d'air : câbles bien rangés, filtres à poussière propres",
           "Undervoltage CPU : réduire la tension avec Intel XTU ou AMD Ryzen Master (-50mV à -100mV stable)",
         ],
-        command: "wmic cpu get name,CurrentClockSpeed,MaxClockSpeed,LoadPercentage",
+        command: "powershell -c \"Get-CimInstance Win32_Processor | Select Name, CurrentClockSpeed, MaxClockSpeed, LoadPercentage\"",
       },
       {
         title: "GPU - Diagnostic et optimisation",
@@ -49,7 +49,7 @@ export const kbHardwareCore: KBCategory[] = [
           "DDR5 vs DDR4 : DDR5 obligatoire sur Intel LGA1700 12th-14th gen et AMD AM5",
           "Ordre installation : A2 puis B2 pour dual-channel chez la plupart des fabricants",
         ],
-        command: "wmic memorychip get BankLabel,Capacity,Speed,MemoryType",
+        command: "powershell -c \"Get-CimInstance Win32_PhysicalMemory | Select BankLabel, Capacity, Speed, SMBIOSMemoryType\"",
       },
       {
         title: "Alimentation (PSU) - problèmes et diagnostic",

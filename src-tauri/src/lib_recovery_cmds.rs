@@ -218,40 +218,40 @@ async fn get_partition_list() -> Result<Vec<system::partition::PartitionDetail>,
 }
 
 #[tauri::command]
-async fn format_partition_cmd(letter: String, fs: String, label: String) -> Result<String, NiTriTeError> {
-    tokio::task::spawn_blocking(move || system::partition::format_partition(letter, fs, label))
+async fn format_partition_cmd(letter: String, fs: String, label: String, expected_disk_id: Option<String>) -> Result<String, NiTriTeError> {
+    tokio::task::spawn_blocking(move || system::partition::format_partition(letter, fs, label, expected_disk_id))
         .await
         .map_err(|e| NiTriTeError::System(e.to_string()))?
         .map_err(NiTriTeError::System)
 }
 
 #[tauri::command]
-async fn assign_drive_letter_cmd(disk_index: u32, part_index: u32, letter: String) -> Result<String, NiTriTeError> {
-    tokio::task::spawn_blocking(move || system::partition::assign_drive_letter(disk_index, part_index, letter))
+async fn assign_drive_letter_cmd(disk_index: u32, part_index: u32, letter: String, expected_disk_id: Option<String>) -> Result<String, NiTriTeError> {
+    tokio::task::spawn_blocking(move || system::partition::assign_drive_letter(disk_index, part_index, letter, expected_disk_id))
         .await
         .map_err(|e| NiTriTeError::System(e.to_string()))?
         .map_err(NiTriTeError::System)
 }
 
 #[tauri::command]
-async fn create_partition_cmd(disk_index: u32, size_mb: Option<u32>) -> Result<String, NiTriTeError> {
-    tokio::task::spawn_blocking(move || system::partition::create_partition(disk_index, size_mb))
+async fn create_partition_cmd(disk_index: u32, size_mb: Option<u32>, expected_disk_id: Option<String>) -> Result<String, NiTriTeError> {
+    tokio::task::spawn_blocking(move || system::partition::create_partition(disk_index, size_mb, expected_disk_id))
         .await
         .map_err(|e| NiTriTeError::System(e.to_string()))?
         .map_err(NiTriTeError::System)
 }
 
 #[tauri::command]
-async fn delete_partition_cmd(disk_index: u32, part_index: u32) -> Result<String, NiTriTeError> {
-    tokio::task::spawn_blocking(move || system::partition::delete_partition(disk_index, part_index))
+async fn delete_partition_cmd(disk_index: u32, part_index: u32, expected_disk_id: Option<String>) -> Result<String, NiTriTeError> {
+    tokio::task::spawn_blocking(move || system::partition::delete_partition(disk_index, part_index, expected_disk_id))
         .await
         .map_err(|e| NiTriTeError::System(e.to_string()))?
         .map_err(NiTriTeError::System)
 }
 
 #[tauri::command]
-async fn initialize_disk_cmd(disk_index: u32, style: String) -> Result<String, NiTriTeError> {
-    tokio::task::spawn_blocking(move || system::partition::initialize_disk(disk_index, style))
+async fn initialize_disk_cmd(disk_index: u32, style: String, expected_disk_id: Option<String>) -> Result<String, NiTriTeError> {
+    tokio::task::spawn_blocking(move || system::partition::initialize_disk(disk_index, style, expected_disk_id))
         .await
         .map_err(|e| NiTriTeError::System(e.to_string()))?
         .map_err(NiTriTeError::System)
@@ -358,9 +358,10 @@ async fn resize_partition_cmd(
     disk_index: u32,
     part_index: u32,
     new_size_mb: u64,
+    expected_disk_id: Option<String>,
 ) -> Result<String, NiTriTeError> {
     tokio::task::spawn_blocking(move || {
-        system::partition::resize_partition_ps(disk_index, part_index, new_size_mb)
+        system::partition::resize_partition_ps(disk_index, part_index, new_size_mb, expected_disk_id)
     })
     .await
     .map_err(|e| NiTriTeError::System(e.to_string()))?
@@ -376,8 +377,8 @@ async fn backup_mbr_cmd(disk_index: u32, output_path: String) -> Result<String, 
 }
 
 #[tauri::command]
-async fn restore_mbr_cmd(disk_index: u32, mbr_path: String) -> Result<String, NiTriTeError> {
-    tokio::task::spawn_blocking(move || system::partition::restore_mbr(disk_index, mbr_path))
+async fn restore_mbr_cmd(disk_index: u32, mbr_path: String, expected_disk_id: Option<String>) -> Result<String, NiTriTeError> {
+    tokio::task::spawn_blocking(move || system::partition::restore_mbr(disk_index, mbr_path, expected_disk_id))
         .await
         .map_err(|e| NiTriTeError::System(e.to_string()))?
         .map_err(NiTriTeError::System)
