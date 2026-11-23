@@ -550,7 +550,25 @@ const SEARCH_INDEX: SearchEntry[] = [
     route: "/os-downloads",
     section: "Logiciels",
     type: "page",
-    keywords: ["os", "windows", "iso", "download", "telechargement", "usb", "ventoy", "bootable", "reinstall", "linux"],
+    keywords: ["os", "windows", "iso", "download", "telechargement", "usb", "ventoy", "bootable", "reinstall", "linux", "catalogue", "sha256", "miroir"],
+  },
+  {
+    id: "usb-workshop",
+    label: "Atelier USB",
+    description: "Clé Ventoy multi-ISO, persistance, thèmes du menu, santé de la clé",
+    route: "/usb-workshop",
+    section: "Logiciels",
+    type: "page",
+    keywords: ["usb", "ventoy", "cle", "bootable", "persistance", "theme", "smart", "sante"],
+  },
+  {
+    id: "boot-lab",
+    label: "Labo PXE & VM",
+    description: "Serveur iPXE local et test d'une ISO dans une machine virtuelle",
+    route: "/boot-lab",
+    section: "Logiciels",
+    type: "page",
+    keywords: ["pxe", "ipxe", "reseau", "boot", "vm", "vmware", "virtualbox", "hyper-v", "test iso"],
   },
 
   // ─── AVANCÉ ──────────────────────────────────────────────────────────────────

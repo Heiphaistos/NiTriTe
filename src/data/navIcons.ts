@@ -27,6 +27,7 @@ export const iconMap: Record<string, Component> = {
   "file-search": FileSearch, hash: Hash, container: Container,
   radio: Radio, network: Network, "code-2": Code2,
   rocket: Rocket, "clipboard-list": ClipboardList, "list-checks": ListChecks,
+  usb: Usb,
 };
 
 export function getNavIcon(name: string): Component {

@@ -34,6 +34,8 @@ export const navigationSections: NavSection[] = [
       { id: "updates",        label: "Mises à jour",    icon: "refresh-cw", route: "/updates" },
       { id: "dependencies",   label: "Dépendances",     icon: "layout-grid", route: "/dependencies" },
       { id: "os-downloads",   label: "OS & USB Tools",  icon: "hard-drive", route: "/os-downloads" },
+      { id: "usb-workshop",   label: "Atelier USB",     icon: "usb",        route: "/usb-workshop" },
+      { id: "boot-lab",       label: "Labo PXE & VM",   icon: "network",    route: "/boot-lab" },
     ],
   },
   {

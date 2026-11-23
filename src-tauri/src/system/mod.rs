@@ -44,3 +44,6 @@ pub mod extras;
 pub mod winpe;
 pub mod sensors;
 pub mod dll_scanner;
+pub mod iso_catalog;
+pub mod usb_workshop;
+pub mod boot_lab;

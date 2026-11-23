@@ -545,6 +545,12 @@ pub fn run() {
             // ═══ Scanner DLL (dll_scanner.rs) ═══
             system::dll_scanner::scan_dlls,
             system::dll_scanner::delete_dll,
+            // ═══ TokaISO : catalogue + telechargeur (system/iso_catalog) ═══
+            // ═══ fin iso_catalog ═══
+            // ═══ TokaISO : atelier USB Ventoy (system/usb_workshop) ═══
+            // ═══ fin usb_workshop ═══
+            // ═══ TokaISO : labo PXE + VM (system/boot_lab) ═══
+            // ═══ fin boot_lab ═══
             // ═══ Logging structuré v26.57 ═══
             logging::log_entry,
             logging::get_recent_logs,

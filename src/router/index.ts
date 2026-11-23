@@ -56,6 +56,18 @@ const router = createRouter({
       meta: { title: "OS & USB Tools" },
     },
     {
+      path: "/usb-workshop",
+      name: "usb-workshop",
+      component: () => import("@/pages/UsbWorkshopPage.vue"),
+      meta: { title: "Atelier USB" },
+    },
+    {
+      path: "/boot-lab",
+      name: "boot-lab",
+      component: () => import("@/pages/BootLabPage.vue"),
+      meta: { title: "Labo PXE & VM" },
+    },
+    {
       path: "/updates",
       name: "updates",
       component: () => import("@/pages/UpdatesPage.vue"),
