@@ -62,18 +62,22 @@ interface BackupItem {
 }
 
 const backupItems = ref<BackupItem[]>([
+  // Scan complet du Diagnostic (gros element : materiel, securite, processus, services)
+  { id: "diagnostic_scan",     label: "Scan PC complet",       description: "Rapport Diagnostic complet (materiel, securite, processus, services) en JSON + HTML lisible", checked: true,  category: "Scan complet (Diagnostic)" },
   // Logiciels & systeme
   { id: "installed_apps",      label: "Apps installees",       description: "Liste complete de toutes les applications installees",                     checked: true,  category: "Logiciels & Système" },
   { id: "winget_export",       label: "WinGet JSON",           description: "Export winget packages.json reinstallable avec winget import",              checked: true,  category: "Logiciels & Système" },
   { id: "drivers",             label: "Drivers",               description: "Sauvegarde des pilotes du systeme via driverquery",                        checked: true,  category: "Logiciels & Système" },
   { id: "windows_features",    label: "Features Windows",      description: "Fonctionnalites Windows activees/desactivees",                              checked: false, category: "Logiciels & Système" },
   { id: "installed_fonts",     label: "Polices installees",    description: "Liste de toutes les polices du systeme",                                   checked: false, category: "Logiciels & Système" },
+  { id: "hotfixes",            label: "Correctifs KB",         description: "Liste des mises a jour et correctifs installes (Get-HotFix)",               checked: false, category: "Logiciels & Système" },
   // Reseau & securite
   { id: "network_config",      label: "Config reseau",         description: "Configuration IP, DNS, Wi-Fi, passerelle",                                  checked: true,  category: "Réseau & Sécurité" },
   { id: "wifi_passwords",      label: "Mots de passe WiFi",    description: "Profils WiFi avec mots de passe en clair",                                  checked: true,  category: "Réseau & Sécurité" },
   { id: "firewall_rules",      label: "Regles firewall",       description: "Export des regles du pare-feu Windows",                                    checked: false, category: "Réseau & Sécurité" },
   { id: "network_shares",      label: "Partages reseau",       description: "Lecteurs reseau mappes et partages SMB",                                   checked: false, category: "Réseau & Sécurité" },
   { id: "hosts_file",          label: "Fichier hosts",         description: "Copie du fichier C:\\Windows\\System32\\drivers\\etc\\hosts",              checked: false, category: "Réseau & Sécurité" },
+  { id: "vpn_profiles",        label: "Profils VPN",           description: "Connexions VPN configurees (nom, serveur, type de tunnel)",                 checked: false, category: "Réseau & Sécurité" },
   // Licences
   { id: "windows_license",     label: "Cle Windows",           description: "Cle de produit Windows extraite en clair via WMI/registry",               checked: true,  category: "Licences" },
   { id: "bitlocker_keys",      label: "Cles BitLocker",        description: "Cle(s) de recuperation BitLocker en clair via PowerShell",                 checked: true,  category: "Licences" },
@@ -85,6 +89,8 @@ const backupItems = ref<BackupItem[]>([
   // Demarrage & taches
   { id: "startup_programs",    label: "Programmes demarrage",  description: "Liste des programmes au demarrage (HKCU + HKLM Run)",                      checked: true,  category: "Démarrage & Tâches" },
   { id: "scheduled_tasks",     label: "Taches planifiees",     description: "Taches planifiees Windows actives (Get-ScheduledTask)",                     checked: false, category: "Démarrage & Tâches" },
+  { id: "scheduled_tasks_xml", label: "Taches planifiees XML", description: "Export XML complet reimportable (schtasks /query /xml)",                    checked: false, category: "Démarrage & Tâches" },
+  { id: "services",            label: "Services Windows",      description: "Tous les services : nom, etat, type de demarrage",                          checked: false, category: "Démarrage & Tâches" },
   { id: "registry_export",     label: "Export registre Run",   description: "Export partiel registre utilisateur (Run, Shell, Winlogon)",                checked: false, category: "Démarrage & Tâches" },
   // Dev
   { id: "env_variables",       label: "Variables env.",        description: "Variables d'environnement systeme et utilisateur",                          checked: true,  category: "Développeur" },
@@ -97,10 +103,13 @@ const backupItems = ref<BackupItem[]>([
   { id: "system_components",   label: "Composants PC",         description: "CPU, GPU, RAM, SSD/HDD, Carte mère, BIOS — rapport complet",              checked: true,  category: "Matériel" },
   { id: "power_plans",         label: "Plans d'alimentation",  description: "Export de tous les plans d'alimentation (powercfg /export)",               checked: false, category: "Matériel" },
   { id: "printer_config",      label: "Imprimantes",           description: "Liste des imprimantes installes et leurs pilotes",                         checked: false, category: "Matériel" },
+  { id: "battery",             label: "Batterie",              description: "Sante, cycles et capacite de la batterie (portables)",                      checked: false, category: "Matériel" },
   // Divers
   { id: "folder_sizes",        label: "Tailles dossiers",      description: "Top 30 dossiers les plus volumineux sur C:",                               checked: false, category: "Divers" },
   { id: "desktop_files",       label: "Fichiers Bureau",       description: "Liste des fichiers presents sur le Bureau",                                checked: false, category: "Divers" },
   { id: "suspicious_processes",label: "Processus suspects",    description: "Processus hors dossiers systeme standards (hors System32/PF)",             checked: false, category: "Divers" },
+  { id: "restore_points",      label: "Points de restauration",description: "Liste des points de restauration systeme",                                 checked: false, category: "Divers" },
+  { id: "event_logs",          label: "Journaux d'evenements", description: "Erreurs/avertissements System + Application (7 derniers jours)",            checked: false, category: "Divers" },
 ]);
 
 // Groupement par catégorie
@@ -151,7 +160,9 @@ const ESTIMATES: Record<string, number> = {
   pip_packages: 15,     vscode_extensions: 10, wsl_config: 10,
   powershell_profile: 5, system_components: 50, power_plans: 40,
   printer_config: 15,   folder_sizes: 20,     desktop_files: 10,
-  suspicious_processes: 25,
+  suspicious_processes: 25, diagnostic_scan: 150, hotfixes: 30,
+  vpn_profiles: 5,      scheduled_tasks_xml: 120, services: 60,
+  battery: 5,           restore_points: 10,   event_logs: 80,
 };
 
 const estimatedSizeKb = computed(() => {
@@ -167,10 +178,31 @@ const estimatedSizeLabel = computed(() => {
 });
 
 // --- Backup creation ---
+type BackupItemStatus = "ok" | "vide" | "echec";
+interface BackupManifestItem {
+  id: string; name: string; category: string; size_bytes: number;
+  status: BackupItemStatus; detail: string; file: string;
+}
+interface BackupManifestResult {
+  path: string; total_items: number;
+  ok_count: number; empty_count: number; failed_count: number;
+  items: BackupManifestItem[];
+}
+
 const backupInProgress = ref(false);
 const backupProgress = ref(0);
 const backupStatus = ref("");
-const backupResult = ref<{ path: string; totalItems: number } | null>(null);
+const backupResult = ref<BackupManifestResult | null>(null);
+
+// Récapitulatif des échecs/vides pour affichage détaillé
+const failedItems = computed(() => backupResult.value?.items.filter(i => i.status === "echec") ?? []);
+const emptyItems = computed(() => backupResult.value?.items.filter(i => i.status === "vide") ?? []);
+
+// « Tout sauvegarder » : coche tout puis lance la collecte complète.
+async function backupEverything() {
+  selectAll();
+  await createBackup();
+}
 
 async function createBackup() {
   const selected = backupItems.value.filter((i) => i.checked).map((i) => i.id);
@@ -213,24 +245,22 @@ async function createBackup() {
     backupStatus.value = "Création du fichier backup...";
     backupProgress.value = 85;
 
-    const result = await invokeRaw<{ path: string; total_items: number }>("create_backup", {
+    const result = await invokeRaw<BackupManifestResult>("create_backup", {
       items: selected,
       format: exportFormat.value,
       customPath: useCustomPath.value ? customBackupPath.value : undefined,
     });
 
     backupProgress.value = 100;
-    // total_items (comptage réel côté backend) et non selected.length : chaque
-    // collecteur est appelé via `if let Ok(data) = collect_X() { ... }` côté
-    // Rust — un élément dont la collecte échoue (droits admin manquants,
-    // requête WMI en échec...) est silencieusement omis du backup, mais le
-    // toast/panneau affichait quand même le nombre DEMANDÉ, jamais le nombre
-    // RÉELLEMENT sauvegardé.
-    backupResult.value = { path: result.path, totalItems: result.total_items };
-    notify.success(
-      `Backup créé — ${result.total_items} élément(s) sauvegardé(s)`,
-      result.path
-    );
+    // Chaque élément porte désormais un statut (ok/vide/échec) : plus de saut
+    // silencieux. On affiche le comptage réellement collecté + le détail des échecs.
+    backupResult.value = result;
+    const summary = `${result.ok_count} collecté(s), ${result.empty_count} vide(s), ${result.failed_count} échec(s)`;
+    if (result.failed_count > 0) {
+      notify.warning(`Sauvegarde terminée avec des échecs — ${summary}`, result.path);
+    } else {
+      notify.success(`Sauvegarde créée — ${summary}`, result.path);
+    }
   } catch (e: unknown) {
     notify.error("Sauvegarde échouée", String(e));
     backupProgress.value = 0;
@@ -265,9 +295,8 @@ async function loadBackups() {
 
 async function openEntryFolder(filename: string) {
   try {
-    const folder = backupResult.value?.path
-      ? backupResult.value.path.substring(0, backupResult.value.path.lastIndexOf("\\"))
-      : null;
+    // path pointe désormais sur le dossier du lot lui-même.
+    const folder = backupResult.value?.path ?? null;
     if (folder) {
       await invoke("open_path", { path: folder });
       return;
@@ -282,10 +311,8 @@ async function openEntryFolder(filename: string) {
 
 async function openBackupFolder() {
   try {
-    // Essaye d'abord le chemin retourné par le dernier backup
-    const folder = backupResult.value?.path
-      ? backupResult.value.path.substring(0, backupResult.value.path.lastIndexOf("\\"))
-      : null;
+    // Dossier du dernier lot (path = dossier horodaté)
+    const folder = backupResult.value?.path ?? null;
     if (folder) {
       await invoke("open_path", { path: folder });
       return;
@@ -387,15 +414,27 @@ onMounted(loadBackups);
 
         <div class="backup-actions">
           <span class="selected-count">{{ selectedCount }} / {{ backupItems.length }} selectionne(s) <span style="color:var(--text-muted);font-size:11px">· {{ estimatedSizeLabel }}</span></span>
-          <NButton
-            variant="primary"
-            :loading="backupInProgress"
-            :disabled="backupInProgress || selectedCount === 0"
-            @click="createBackup"
-          >
-            <Save :size="14" />
-            Creer la sauvegarde
-          </NButton>
+          <div style="display:flex;gap:8px">
+            <NButton
+              variant="secondary"
+              :loading="backupInProgress"
+              :disabled="backupInProgress"
+              title="Coche tout et lance la collecte complète"
+              @click="backupEverything"
+            >
+              <CheckSquare :size="14" />
+              Tout sauvegarder
+            </NButton>
+            <NButton
+              variant="primary"
+              :loading="backupInProgress"
+              :disabled="backupInProgress || selectedCount === 0"
+              @click="createBackup"
+            >
+              <Save :size="14" />
+              Creer la sauvegarde
+            </NButton>
+          </div>
         </div>
 
         <!-- Progress -->
@@ -405,12 +444,31 @@ onMounted(loadBackups);
         </div>
 
         <!-- Result -->
-        <div v-if="backupResult" class="backup-result">
-          <CheckCircle :size="18" style="color: var(--success)" />
-          <div class="result-info">
-            <p class="result-title">Sauvegarde creee avec succes</p>
+        <div v-if="backupResult" class="backup-result" :class="{ 'has-failures': backupResult.failed_count > 0 }">
+          <CheckCircle :size="18" :style="{ color: backupResult.failed_count > 0 ? 'var(--warning, #f59e0b)' : 'var(--success)' }" />
+          <div class="result-info" style="width:100%">
+            <p class="result-title">
+              {{ backupResult.failed_count > 0 ? 'Sauvegarde terminee (avec des echecs)' : 'Sauvegarde creee avec succes' }}
+            </p>
             <p class="result-path font-mono">{{ backupResult.path }}</p>
-            <p class="result-items">{{ backupResult.totalItems }} element(s) sauvegardes</p>
+            <!-- Recapitulatif reel : plus de saut silencieux -->
+            <div class="recap-pills">
+              <span class="recap-pill ok">{{ backupResult.ok_count }} collecte(s)</span>
+              <span class="recap-pill vide">{{ backupResult.empty_count }} vide(s)</span>
+              <span class="recap-pill echec" :class="{ none: backupResult.failed_count === 0 }">{{ backupResult.failed_count }} echec(s)</span>
+            </div>
+            <!-- Detail des echecs -->
+            <div v-if="failedItems.length > 0" class="recap-detail">
+              <p class="recap-detail-title">Elements en echec :</p>
+              <ul>
+                <li v-for="it in failedItems" :key="it.id"><strong>{{ it.name }}</strong> — {{ it.detail }}</li>
+              </ul>
+            </div>
+            <!-- Detail des vides (legitime) -->
+            <div v-if="emptyItems.length > 0" class="recap-detail muted">
+              <p class="recap-detail-title">Vides (rien a sauvegarder, normal) :</p>
+              <p class="recap-empty-list">{{ emptyItems.map(i => i.name).join(', ') }}</p>
+            </div>
           </div>
         </div>
       </NCard>
@@ -631,6 +689,55 @@ onMounted(loadBackups);
   font-size: 12px;
   color: var(--text-muted);
 }
+
+.backup-result.has-failures {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.recap-pills {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.recap-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 99px;
+  border: 1px solid transparent;
+}
+
+.recap-pill.ok { color: var(--success); border-color: rgba(34,197,94,0.4); background: rgba(34,197,94,0.1); }
+.recap-pill.vide { color: var(--text-muted); border-color: var(--border); }
+.recap-pill.echec { color: #ef4444; border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.1); }
+.recap-pill.echec.none { color: var(--text-muted); border-color: var(--border); background: transparent; }
+
+.recap-detail {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.recap-detail.muted { color: var(--text-muted); }
+
+.recap-detail-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.recap-detail ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recap-detail li { font-size: 11px; }
+
+.recap-empty-list { font-size: 11px; }
 
 .loading-state {
   display: flex;

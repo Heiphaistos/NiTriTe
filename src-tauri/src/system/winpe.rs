@@ -46,7 +46,7 @@ pub struct OfflineUser {
 
 // ── Détection WinPE ─────────────────────────────────────────────────────────
 
-fn detect_winpe() -> bool {
+pub(crate) fn detect_winpe() -> bool {
     // Méthode 1 : clé registre MiniNT présente uniquement en WinPE
     #[cfg(target_os = "windows")]
     {
@@ -328,8 +328,8 @@ pub async fn run_sfc_offline(windows_dir: String) -> Result<RepairResult, NiTriT
 
 /// Guard RAII pour décharger automatiquement une ruche de registre, même en cas d'erreur.
 #[cfg(target_os = "windows")]
-struct RegHiveGuard {
-    hive_key: String,
+pub(crate) struct RegHiveGuard {
+    pub(crate) hive_key: String,
 }
 
 #[cfg(target_os = "windows")]

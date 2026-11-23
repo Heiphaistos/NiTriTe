@@ -54,7 +54,7 @@
     "requires_admin": true
   },
   {
-    "name": "Reset WinSock",
+    "name": "Réinitialiser WinSock",
     "description": "Réinitialiser le catalogue WinSock",
     "command": "netsh winsock reset",
     "is_url": false,
@@ -63,7 +63,7 @@
     "requires_admin": true
   },
   {
-    "name": "Reset TCP/IP",
+    "name": "Réinitialiser TCP/IP",
     "description": "Réinitialiser la pile TCP/IP",
     "command": "netsh int ip reset",
     "is_url": false,
@@ -72,7 +72,7 @@
     "requires_admin": true
   },
   {
-    "name": "Reset Firewall",
+    "name": "Réinitialiser le pare-feu",
     "description": "Réinitialiser le pare-feu Windows",
     "command": "netsh advfirewall reset",
     "is_url": false,
@@ -81,7 +81,7 @@
     "requires_admin": true
   },
   {
-    "name": "Reset Proxy",
+    "name": "Réinitialiser le proxy",
     "description": "Réinitialiser les paramètres proxy",
     "command": "netsh winhttp reset proxy",
     "is_url": false,
@@ -90,7 +90,7 @@
     "requires_admin": true
   },
   {
-    "name": "Reset DNS",
+    "name": "Réinitialiser le DNS",
     "description": "Vider le cache DNS",
     "command": "ipconfig /flushdns",
     "is_url": false,
@@ -99,7 +99,7 @@
     "requires_admin": false
   },
   {
-    "name": "Reset Network",
+    "name": "Réinitialiser le réseau",
     "description": "Réinitialisation complète du réseau",
     "command": "netsh int ip reset && netsh winsock reset",
     "is_url": false,
@@ -108,7 +108,7 @@
     "requires_admin": true
   },
   {
-    "name": "Repair BCD",
+    "name": "Réparer le BCD",
     "description": "Réparer le BCD de démarrage",
     "command": "bcdedit /export \"%SystemDrive%\\BCD_Backup\" && bootrec /rebuildbcd",
     "is_url": false,
@@ -117,7 +117,7 @@
     "requires_admin": true
   },
   {
-    "name": "Repair Boot",
+    "name": "Réparer le démarrage",
     "description": "Réparer le secteur de démarrage",
     "command": "bootrec /fixmbr && bootrec /fixboot && bootrec /rebuildbcd",
     "is_url": false,
@@ -126,7 +126,7 @@
     "requires_admin": true
   },
   {
-    "name": "System Reset",
+    "name": "Réinitialiser le système",
     "description": "Réinitialiser Windows",
     "command": "systemreset",
     "is_url": false,
@@ -135,7 +135,7 @@
     "requires_admin": true
   },
   {
-    "name": "Windows Update Reset",
+    "name": "Réinitialiser Windows Update",
     "description": "Réinitialiser Windows Update complètement",
     "command": "net stop wuauserv & net stop cryptSvc & net stop bits & net stop msiserver & ren \"%SystemRoot%\\SoftwareDistribution\" SoftwareDistribution.old & ren \"%SystemRoot%\\System32\\catroot2\" catroot2.old & net start wuauserv & net start cryptSvc & net start bits & net start msiserver",
     "is_url": false,
@@ -144,7 +144,7 @@
     "requires_admin": true
   },
   {
-    "name": "Repair Store",
+    "name": "Réparer le Microsoft Store",
     "description": "Réinitialiser le Microsoft Store",
     "command": "wsreset",
     "is_url": false,
@@ -153,7 +153,7 @@
     "requires_admin": false
   },
   {
-    "name": "Windows Defender Repair",
+    "name": "Réparer Windows Defender",
     "description": "Réparer Windows Defender",
     "command": "\"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -removedefinitions -dynamicsignatures && \"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -SignatureUpdate",
     "is_url": false,
@@ -162,7 +162,7 @@
     "requires_admin": true
   },
   {
-    "name": "DISM Mount Cleanup",
+    "name": "Nettoyer les montages DISM",
     "description": "Nettoyer les points de montage DISM",
     "command": "DISM /Cleanup-Mountpoints",
     "is_url": false,
@@ -171,7 +171,7 @@
     "requires_admin": true
   },
   {
-    "name": "Check Disk Bad Sectors",
+    "name": "Vérifier les secteurs défectueux",
     "description": "Rechercher les secteurs défectueux",
     "command": "chkdsk /r /f",
     "is_url": false,
@@ -180,7 +180,7 @@
     "requires_admin": true
   },
   {
-    "name": "Verify System Files",
+    "name": "Vérifier les fichiers système",
     "description": "Vérifier les fichiers système sans réparer",
     "command": "sfc /verifyonly",
     "is_url": false,
@@ -189,7 +189,7 @@
     "requires_admin": true
   },
   {
-    "name": "Export DISM Log",
+    "name": "Exporter le journal DISM",
     "description": "Exporter le log DISM de restauration",
     "command": "DISM /Online /Cleanup-Image /RestoreHealth /LogPath:\"%TEMP%\\DISM_RestoreHealth.log\" && start \"\" notepad \"%TEMP%\\DISM_RestoreHealth.log\"",
     "is_url": false,
@@ -198,7 +198,7 @@
     "requires_admin": true
   },
   {
-    "name": "Repair Windows Image",
+    "name": "Réparer l'image Windows",
     "description": "Réparer l'image Windows depuis un WIM",
     "command": "DISM /Online /Cleanup-Image /RestoreHealth /Source:WIM:X:\\sources\\install.wim:1 /LimitAccess",
     "is_url": false,
@@ -207,7 +207,7 @@
     "requires_admin": true
   },
   {
-    "name": "SFC Extended",
+    "name": "SFC étendu",
     "description": "SFC étendu sur partition hors-ligne",
     "command": "sfc /scannow /offbootdir=C:\\ /offwindir=C:\\Windows",
     "is_url": false,
@@ -225,7 +225,7 @@
     "requires_admin": true
   },
   {
-    "name": "Reset Network Adapter",
+    "name": "Réinitialiser l'adaptateur réseau",
     "description": "Réinitialiser l'adaptateur Ethernet",
     "command": "Get-NetAdapter -Physical | Where-Object { $_.Status -ne 'Disabled' -and $_.InterfaceDescription -notmatch 'Wi-?Fi|Wireless|WLAN|802\\.11' } | Restart-NetAdapter -Confirm:$false; Get-NetAdapter -Physical | Format-Table Name,Status,LinkSpeed -AutoSize",
     "is_url": false,
@@ -235,7 +235,7 @@
     "shell": "powershell"
   },
   {
-    "name": "Reset Wi-Fi",
+    "name": "Réinitialiser le Wi-Fi",
     "description": "Réinitialiser l'adaptateur Wi-Fi",
     "command": "Get-NetAdapter -Physical | Where-Object { $_.InterfaceDescription -match 'Wi-?Fi|Wireless|WLAN|802\\.11' } | Restart-NetAdapter -Confirm:$false; Get-NetAdapter -Physical | Format-Table Name,Status,LinkSpeed -AutoSize",
     "is_url": false,
@@ -245,7 +245,7 @@
     "shell": "powershell"
   },
   {
-    "name": "Rebuild Icon Cache",
+    "name": "Reconstruire le cache des icônes",
     "description": "Reconstruire le cache des icônes",
     "command": "ie4uinit.exe -show && ie4uinit.exe -ClearIconCache",
     "is_url": false,
@@ -254,7 +254,7 @@
     "requires_admin": false
   },
   {
-    "name": "Rebuild Search Index",
+    "name": "Reconstruire l'index de recherche",
     "description": "Reconstruire l'index de recherche Windows",
     "command": "net stop WSearch & del /f /q \"%ProgramData%\\Microsoft\\Search\\Data\\Applications\\Windows\\Windows.edb\" & net start WSearch",
     "is_url": false,
@@ -263,7 +263,7 @@
     "requires_admin": true
   },
   {
-    "name": "Repair Start Menu",
+    "name": "Réparer le menu Démarrer",
     "description": "Réparer le menu Démarrer",
     "command": "Get-AppxPackage -AllUsers | ForEach-Object { Add-AppxPackage -DisableDevelopmentMode -Register \"$($_.InstallLocation)\\AppXManifest.xml\" -ErrorAction SilentlyContinue }",
     "is_url": false,
@@ -273,7 +273,7 @@
     "shell": "powershell"
   },
   {
-    "name": "Reset Windows Store",
+    "name": "Réinitialiser le Windows Store",
     "description": "Réinitialiser complètement le Windows Store",
     "command": "wsreset.exe; Get-AppxPackage -AllUsers Microsoft.WindowsStore | ForEach-Object { Add-AppxPackage -DisableDevelopmentMode -Register \"$($_.InstallLocation)\\AppXManifest.xml\" }",
     "is_url": false,
@@ -321,6 +321,26 @@
     "is_url": true,
     "section": "Activation & Téléchargements",
     "icon": "🔑"
+  },
+  {
+    "name": "Activation Windows MAS (en ligne)",
+    "description": "Lance le menu MAS officiel (HWID : licence numérique permanente, ou KMS38 jusqu en 2038) via la commande en ligne get.activated.win. Nécessite Internet.",
+    "command": "irm https://get.activated.win | iex",
+    "is_url": false,
+    "section": "Activation & Téléchargements",
+    "icon": "🔑",
+    "requires_admin": true,
+    "shell": "powershell"
+  },
+  {
+    "name": "Activation Windows MAS (hors ligne)",
+    "description": "Lance le menu MAS embarqué dans Nitrite (HWID, KMS38) sans Internet, depuis le dossier logiciel.",
+    "command": "\"{LOGICIEL}\\MAS\\MAS_AIO.cmd\"",
+    "is_url": false,
+    "section": "Activation & Téléchargements",
+    "icon": "🔑",
+    "requires_admin": true,
+    "shell": ""
   },
   {
     "name": "Windows ISO",
@@ -491,7 +511,7 @@
     "icon": "🔑"
   },
   {
-    "name": "Disk Cleanup",
+    "name": "Nettoyage de disque",
     "description": "Nettoyage de disque Windows",
     "command": "cleanmgr",
     "is_url": false,
@@ -500,7 +520,7 @@
     "requires_admin": false
   },
   {
-    "name": "Cleanup Full",
+    "name": "Nettoyage complet",
     "description": "Nettoyage complet avec options avancées",
     "command": "cleanmgr /sageset:1 & cleanmgr /sagerun:1",
     "is_url": false,
@@ -509,7 +529,7 @@
     "requires_admin": true
   },
   {
-    "name": "Clean WinSxS",
+    "name": "Nettoyer WinSxS",
     "description": "Nettoyer le dossier WinSxS",
     "command": "DISM /Online /Cleanup-Image /StartComponentCleanup",
     "is_url": false,
@@ -518,7 +538,7 @@
     "requires_admin": true
   },
   {
-    "name": "WinSxS Analyze",
+    "name": "Analyser WinSxS",
     "description": "Analyser la taille du WinSxS",
     "command": "DISM /Online /Cleanup-Image /AnalyzeComponentStore",
     "is_url": false,
@@ -527,7 +547,7 @@
     "requires_admin": true
   },
   {
-    "name": "WinSxS Deep Clean",
+    "name": "Nettoyage profond WinSxS",
     "description": "Nettoyage profond du WinSxS",
     "command": "DISM /Online /Cleanup-Image /StartComponentCleanup /ResetBase",
     "is_url": false,
@@ -536,7 +556,7 @@
     "requires_admin": true
   },
   {
-    "name": "Temp Cleanup",
+    "name": "Nettoyer les fichiers temporaires",
     "description": "Supprimer les fichiers temporaires",
     "command": "del /q /f /s \"%TEMP%\\*\"",
     "is_url": false,
@@ -545,7 +565,7 @@
     "requires_admin": false
   },
   {
-    "name": "Delete Prefetch",
+    "name": "Supprimer le Prefetch",
     "description": "Supprimer le cache Prefetch",
     "command": "del /q /f /s \"%SystemRoot%\\Prefetch\\*\"",
     "is_url": false,
@@ -554,7 +574,7 @@
     "requires_admin": true
   },
   {
-    "name": "Empty Recycle Bin",
+    "name": "Vider la corbeille",
     "description": "Vider la corbeille",
     "command": "rd /s /q %SystemDrive%\\$Recycle.bin",
     "is_url": false,
@@ -563,7 +583,7 @@
     "requires_admin": true
   },
   {
-    "name": "Clean Update Cache",
+    "name": "Nettoyer le cache des mises à jour",
     "description": "Nettoyer le cache des mises à jour",
     "command": "dism /online /Cleanup-Image /StartComponentCleanup /ResetBase",
     "is_url": false,
@@ -630,7 +650,7 @@
     "requires_admin": false
   },
   {
-    "name": "Event Viewer",
+    "name": "Observateur d'événements",
     "description": "Observateur d'événements Windows",
     "command": "eventvwr.msc",
     "is_url": false,
@@ -639,7 +659,7 @@
     "requires_admin": false
   },
   {
-    "name": "Device Manager",
+    "name": "Gestionnaire de périphériques",
     "description": "Gestionnaire de périphériques",
     "command": "devmgmt.msc",
     "is_url": false,
@@ -648,7 +668,7 @@
     "requires_admin": false
   },
   {
-    "name": "Task Manager",
+    "name": "Gestionnaire des tâches",
     "description": "Gestionnaire des tâches",
     "command": "taskmgr",
     "is_url": false,
@@ -657,7 +677,7 @@
     "requires_admin": false
   },
   {
-    "name": "Resource Monitor",
+    "name": "Moniteur de ressources",
     "description": "Moniteur de ressources",
     "command": "resmon",
     "is_url": false,
@@ -666,7 +686,7 @@
     "requires_admin": false
   },
   {
-    "name": "Disk Management",
+    "name": "Gestion des disques",
     "description": "Gestion des disques",
     "command": "diskmgmt.msc",
     "is_url": false,
@@ -675,7 +695,7 @@
     "requires_admin": false
   },
   {
-    "name": "Computer Management",
+    "name": "Gestion de l'ordinateur",
     "description": "Gestion de l'ordinateur",
     "command": "compmgmt.msc",
     "is_url": false,
@@ -693,7 +713,7 @@
     "requires_admin": false
   },
   {
-    "name": "Performance Monitor",
+    "name": "Moniteur de performances",
     "description": "Moniteur de performances",
     "command": "perfmon",
     "is_url": false,
@@ -702,7 +722,7 @@
     "requires_admin": false
   },
   {
-    "name": "Reliability Monitor",
+    "name": "Moniteur de fiabilité",
     "description": "Moniteur de fiabilité",
     "command": "perfmon /rel",
     "is_url": false,
@@ -711,7 +731,7 @@
     "requires_admin": false
   },
   {
-    "name": "Defragment",
+    "name": "Défragmenter",
     "description": "Défragmenter et optimiser les disques",
     "command": "dfrgui",
     "is_url": false,
@@ -720,7 +740,7 @@
     "requires_admin": false
   },
   {
-    "name": "Registry Editor",
+    "name": "Éditeur du registre",
     "description": "Éditeur du registre Windows",
     "command": "regedit",
     "is_url": false,
@@ -729,7 +749,7 @@
     "requires_admin": false
   },
   {
-    "name": "Group Policy",
+    "name": "Stratégie de groupe",
     "description": "Éditeur de stratégie de groupe",
     "command": "gpedit.msc",
     "is_url": false,
@@ -738,7 +758,7 @@
     "requires_admin": false
   },
   {
-    "name": "Security Policy",
+    "name": "Stratégie de sécurité locale",
     "description": "Stratégie de sécurité locale",
     "command": "secpol.msc",
     "is_url": false,
@@ -747,7 +767,7 @@
     "requires_admin": false
   },
   {
-    "name": "User Accounts",
+    "name": "Comptes utilisateurs",
     "description": "Comptes utilisateurs avancés",
     "command": "netplwiz",
     "is_url": false,
@@ -756,7 +776,7 @@
     "requires_admin": false
   },
   {
-    "name": "Print Management",
+    "name": "Gestion de l'impression",
     "description": "Gestion des imprimantes",
     "command": "printmanagement.msc",
     "is_url": false,
@@ -765,7 +785,7 @@
     "requires_admin": false
   },
   {
-    "name": "Component Services",
+    "name": "Services de composants",
     "description": "Services de composants",
     "command": "dcomcnfg",
     "is_url": false,
@@ -774,7 +794,7 @@
     "requires_admin": false
   },
   {
-    "name": "Programs and Features",
+    "name": "Programmes et fonctionnalités",
     "description": "Programmes et fonctionnalités",
     "command": "appwiz.cpl",
     "is_url": false,
@@ -783,7 +803,7 @@
     "requires_admin": false
   },
   {
-    "name": "System Properties",
+    "name": "Propriétés système",
     "description": "Propriétés système avancées",
     "command": "systempropertiesadvanced",
     "is_url": false,
@@ -792,7 +812,7 @@
     "requires_admin": false
   },
   {
-    "name": "Display Settings",
+    "name": "Paramètres d'affichage",
     "description": "Paramètres d'affichage",
     "command": "desk.cpl",
     "is_url": false,
@@ -801,7 +821,7 @@
     "requires_admin": false
   },
   {
-    "name": "Sound Settings",
+    "name": "Paramètres audio",
     "description": "Paramètres audio",
     "command": "mmsys.cpl",
     "is_url": false,
@@ -810,7 +830,7 @@
     "requires_admin": false
   },
   {
-    "name": "Game Controllers",
+    "name": "Contrôleurs de jeu",
     "description": "Contrôleurs de jeu",
     "command": "joy.cpl",
     "is_url": false,
@@ -819,7 +839,7 @@
     "requires_admin": false
   },
   {
-    "name": "Mouse Settings",
+    "name": "Paramètres de la souris",
     "description": "Paramètres de la souris",
     "command": "main.cpl",
     "is_url": false,
@@ -828,7 +848,7 @@
     "requires_admin": false
   },
   {
-    "name": "Keyboard Settings",
+    "name": "Paramètres du clavier",
     "description": "Paramètres du clavier",
     "command": "control keyboard",
     "is_url": false,
@@ -837,7 +857,7 @@
     "requires_admin": false
   },
   {
-    "name": "Regional Settings",
+    "name": "Options régionales",
     "description": "Options régionales",
     "command": "intl.cpl",
     "is_url": false,
@@ -846,7 +866,7 @@
     "requires_admin": false
   },
   {
-    "name": "Date and Time",
+    "name": "Date et heure",
     "description": "Date et heure",
     "command": "timedate.cpl",
     "is_url": false,
@@ -855,7 +875,7 @@
     "requires_admin": false
   },
   {
-    "name": "Power Options",
+    "name": "Options d'alimentation",
     "description": "Options d'alimentation",
     "command": "powercfg.cpl",
     "is_url": false,
@@ -864,7 +884,7 @@
     "requires_admin": false
   },
   {
-    "name": "Windows Security",
+    "name": "Sécurité Windows",
     "description": "Sécurité Windows",
     "command": "windowsdefender:",
     "is_url": true,
@@ -881,7 +901,7 @@
     "requires_admin": false
   },
   {
-    "name": "Connected Devices",
+    "name": "Appareils connectés",
     "description": "Appareils connectés",
     "command": "ms-settings:connecteddevices",
     "is_url": false,
@@ -890,7 +910,7 @@
     "requires_admin": false
   },
   {
-    "name": "Personalization",
+    "name": "Personnalisation",
     "description": "Personnalisation du bureau",
     "command": "ms-settings:personalization",
     "is_url": false,
@@ -899,7 +919,7 @@
     "requires_admin": false
   },
   {
-    "name": "Sound",
+    "name": "Son",
     "description": "Paramètres sonores",
     "command": "ms-settings:sound",
     "is_url": false,
@@ -908,7 +928,7 @@
     "requires_admin": false
   },
   {
-    "name": "Network Status",
+    "name": "État du réseau",
     "description": "État du réseau",
     "command": "ms-settings:network-status",
     "is_url": false,
@@ -953,7 +973,7 @@
     "requires_admin": false
   },
   {
-    "name": "Storage Sense",
+    "name": "Assistant de stockage",
     "description": "Assistant de stockage",
     "command": "ms-settings:storagesense",
     "is_url": false,
@@ -962,7 +982,7 @@
     "requires_admin": false
   },
   {
-    "name": "Battery Saver",
+    "name": "Économiseur de batterie",
     "description": "Économiseur de batterie",
     "command": "ms-settings:batterysaver",
     "is_url": false,
@@ -971,7 +991,7 @@
     "requires_admin": false
   },
   {
-    "name": "Display",
+    "name": "Affichage",
     "description": "Paramètres d'affichage",
     "command": "ms-settings:display",
     "is_url": false,
@@ -980,7 +1000,7 @@
     "requires_admin": false
   },
   {
-    "name": "Night Light",
+    "name": "Éclairage nocturne",
     "description": "Éclairage nocturne",
     "command": "ms-settings:nightlight",
     "is_url": false,
@@ -989,7 +1009,7 @@
     "requires_admin": false
   },
   {
-    "name": "Gaming",
+    "name": "Jeux",
     "description": "Paramètres de jeu",
     "command": "ms-settings:gaming",
     "is_url": false,
@@ -998,7 +1018,7 @@
     "requires_admin": false
   },
   {
-    "name": "Game Mode",
+    "name": "Mode jeu",
     "description": "Mode jeu",
     "command": "ms-settings:gaming-gamemode",
     "is_url": false,
@@ -1007,7 +1027,7 @@
     "requires_admin": false
   },
   {
-    "name": "Game Bar",
+    "name": "Barre de jeu Xbox",
     "description": "Barre de jeu Xbox",
     "command": "ms-settings:gaming-gamebar",
     "is_url": false,
@@ -1016,7 +1036,7 @@
     "requires_admin": false
   },
   {
-    "name": "Volume Mixer",
+    "name": "Mélangeur de volume",
     "description": "Mélangeur de volume",
     "command": "sndvol",
     "is_url": false,
@@ -1025,7 +1045,7 @@
     "requires_admin": false
   },
   {
-    "name": "Background",
+    "name": "Fond d'écran",
     "description": "Fond d'écran du bureau",
     "command": "ms-settings:personalization-background",
     "is_url": false,
@@ -1034,7 +1054,7 @@
     "requires_admin": false
   },
   {
-    "name": "Lock Screen",
+    "name": "Écran de verrouillage",
     "description": "Écran de verrouillage",
     "command": "ms-settings:lockscreen",
     "is_url": false,
@@ -1043,7 +1063,7 @@
     "requires_admin": false
   },
   {
-    "name": "Colors",
+    "name": "Couleurs",
     "description": "Couleurs et thème",
     "command": "ms-settings:colors",
     "is_url": false,
@@ -1052,7 +1072,7 @@
     "requires_admin": false
   },
   {
-    "name": "Mouse & Touchpad",
+    "name": "Souris et pavé tactile",
     "description": "Souris et pavé tactile",
     "command": "ms-settings:mousetouchpad",
     "is_url": false,
@@ -1061,7 +1081,7 @@
     "requires_admin": false
   },
   {
-    "name": "Typing",
+    "name": "Saisie",
     "description": "Paramètres de saisie",
     "command": "ms-settings:typing",
     "is_url": false,
@@ -1280,7 +1300,7 @@
     "requires_admin": false
   },
   {
-    "name": "Release IP",
+    "name": "Libérer l'IP",
     "description": "Libérer l'adresse IP",
     "command": "ipconfig /release",
     "is_url": false,
@@ -1289,7 +1309,7 @@
     "requires_admin": false
   },
   {
-    "name": "Renew IP",
+    "name": "Renouveler l'IP",
     "description": "Renouveler l'adresse IP",
     "command": "ipconfig /renew",
     "is_url": false,
@@ -1298,7 +1318,7 @@
     "requires_admin": false
   },
   {
-    "name": "Flush DNS",
+    "name": "Vider le DNS",
     "description": "Vider le cache DNS",
     "command": "ipconfig /flushdns",
     "is_url": false,
@@ -1307,7 +1327,7 @@
     "requires_admin": false
   },
   {
-    "name": "Display DNS",
+    "name": "Afficher le DNS",
     "description": "Afficher le cache DNS",
     "command": "ipconfig /displaydns",
     "is_url": false,
@@ -1370,7 +1390,7 @@
     "requires_admin": false
   },
   {
-    "name": "ARP Table",
+    "name": "Table ARP",
     "description": "Afficher la table ARP",
     "command": "arp -a",
     "is_url": false,
@@ -1379,7 +1399,7 @@
     "requires_admin": false
   },
   {
-    "name": "Network Connections",
+    "name": "Connexions réseau",
     "description": "Connexions réseau (panneau)",
     "command": "ncpa.cpl",
     "is_url": false,
@@ -1388,7 +1408,7 @@
     "requires_admin": false
   },
   {
-    "name": "Network Reset",
+    "name": "Réinitialisation réseau",
     "description": "Réinitialisation réseau complète",
     "command": "netsh winsock reset && netsh int ip reset",
     "is_url": false,
@@ -1397,7 +1417,7 @@
     "requires_admin": true
   },
   {
-    "name": "Reset TCP/IP Stack",
+    "name": "Réinitialiser la pile TCP/IP",
     "description": "Réinitialiser la pile TCP/IP",
     "command": "netsh int ip reset",
     "is_url": false,
@@ -1406,7 +1426,7 @@
     "requires_admin": true
   },
   {
-    "name": "Test Connection",
+    "name": "Test de connexion",
     "description": "Test de connexion continu",
     "command": "ping 1.1.1.1 -t",
     "is_url": false,
@@ -1447,7 +1467,7 @@
     "icon": "🌐"
   },
   {
-    "name": "Upgrade All",
+    "name": "Tout mettre à jour",
     "description": "Mettre à jour tous les paquets",
     "command": "winget upgrade --all",
     "is_url": false,
@@ -1456,7 +1476,7 @@
     "requires_admin": false
   },
   {
-    "name": "List Upgrades",
+    "name": "Lister les mises à jour",
     "description": "Lister les mises à jour disponibles",
     "command": "winget upgrade",
     "is_url": false,
@@ -1465,7 +1485,7 @@
     "requires_admin": false
   },
   {
-    "name": "Search",
+    "name": "Rechercher un paquet",
     "description": "Rechercher un paquet WinGet",
     "command": "winget search",
     "is_url": false,
@@ -1474,7 +1494,7 @@
     "requires_admin": false
   },
   {
-    "name": "List Installed",
+    "name": "Lister les paquets installés",
     "description": "Lister les paquets installés",
     "command": "winget list",
     "is_url": false,
@@ -1483,7 +1503,7 @@
     "requires_admin": false
   },
   {
-    "name": "Show Info",
+    "name": "Afficher les infos",
     "description": "Afficher les infos d'un paquet",
     "command": "winget show",
     "is_url": false,
@@ -1492,7 +1512,7 @@
     "requires_admin": false
   },
   {
-    "name": "Install App",
+    "name": "Installer une app",
     "description": "Installer un paquet",
     "command": "winget install",
     "is_url": false,
@@ -1501,7 +1521,7 @@
     "requires_admin": false
   },
   {
-    "name": "Uninstall App",
+    "name": "Désinstaller une app",
     "description": "Désinstaller un paquet",
     "command": "winget uninstall",
     "is_url": false,
@@ -1510,7 +1530,7 @@
     "requires_admin": false
   },
   {
-    "name": "Export List",
+    "name": "Exporter la liste",
     "description": "Exporter la liste des paquets",
     "command": "winget export -o \"%USERPROFILE%\\Documents\\winget-export.json\" --accept-source-agreements && echo Liste exportee dans Documents\\winget-export.json",
     "is_url": false,
@@ -1519,7 +1539,7 @@
     "requires_admin": false
   },
   {
-    "name": "Import List",
+    "name": "Importer une liste",
     "description": "Importer une liste de paquets",
     "command": "winget import -i \"%USERPROFILE%\\Documents\\winget-export.json\" --accept-source-agreements --accept-package-agreements",
     "is_url": false,
@@ -1528,7 +1548,7 @@
     "requires_admin": false
   },
   {
-    "name": "Update WinGet",
+    "name": "Mettre à jour WinGet",
     "description": "Mettre à jour WinGet lui-même",
     "command": "winget source update",
     "is_url": false,
@@ -1537,7 +1557,7 @@
     "requires_admin": false
   },
   {
-    "name": "WinGet Help",
+    "name": "Aide WinGet",
     "description": "Afficher l'aide WinGet",
     "command": "winget --help",
     "is_url": false,
@@ -1546,7 +1566,7 @@
     "requires_admin": false
   },
   {
-    "name": "WinGet Settings",
+    "name": "Paramètres WinGet",
     "description": "Ouvrir les paramètres WinGet",
     "command": "winget settings",
     "is_url": false,
@@ -1555,7 +1575,7 @@
     "requires_admin": false
   },
   {
-    "name": "Settings",
+    "name": "Paramètres",
     "description": "Ouvrir les paramètres Windows",
     "command": "ms-settings:",
     "is_url": true,
@@ -1563,7 +1583,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Display",
+    "name": "Affichage",
     "description": "Paramètres d'affichage",
     "command": "ms-settings:display",
     "is_url": true,
@@ -1571,7 +1591,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Sound",
+    "name": "Son",
     "description": "Paramètres sonores",
     "command": "ms-settings:sound",
     "is_url": true,
@@ -1587,7 +1607,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Power & Sleep",
+    "name": "Alimentation et veille",
     "description": "Alimentation et mise en veille",
     "command": "ms-settings:powersleep",
     "is_url": true,
@@ -1595,7 +1615,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Storage",
+    "name": "Stockage",
     "description": "Paramètres de stockage",
     "command": "ms-settings:storagesense",
     "is_url": true,
@@ -1603,7 +1623,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Network & Internet",
+    "name": "Réseau et Internet",
     "description": "Réseau et Internet",
     "command": "ms-settings:network",
     "is_url": true,
@@ -1611,7 +1631,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Personalization",
+    "name": "Personnalisation",
     "description": "Personnalisation",
     "command": "ms-settings:personalization",
     "is_url": true,
@@ -1619,7 +1639,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Phone",
+    "name": "Téléphone",
     "description": "Appareils mobiles liés",
     "command": "ms-settings:mobile-devices",
     "is_url": true,
@@ -1627,7 +1647,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Accounts",
+    "name": "Comptes",
     "description": "Informations du compte",
     "command": "ms-settings:yourinfo",
     "is_url": true,
@@ -1635,7 +1655,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Time & Language",
+    "name": "Heure et langue",
     "description": "Date, heure et langue",
     "command": "ms-settings:dateandtime",
     "is_url": true,
@@ -1643,7 +1663,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Gaming",
+    "name": "Jeux",
     "description": "Paramètres de jeu",
     "command": "ms-settings:gaming",
     "is_url": true,
@@ -1651,7 +1671,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Privacy",
+    "name": "Confidentialité",
     "description": "Paramètres de confidentialité",
     "command": "ms-settings:privacy",
     "is_url": true,
@@ -1659,7 +1679,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Update & Security",
+    "name": "Mise à jour et sécurité",
     "description": "Mises à jour et sécurité",
     "command": "ms-settings:windowsupdate",
     "is_url": true,
@@ -1667,7 +1687,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Ease of Access",
+    "name": "Options d'ergonomie",
     "description": "Options d'ergonomie",
     "command": "ms-settings:easeofaccess",
     "is_url": true,
@@ -1675,7 +1695,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Search",
+    "name": "Recherche",
     "description": "Paramètres de recherche",
     "command": "ms-settings:search",
     "is_url": true,
@@ -1683,7 +1703,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "Apps & Features",
+    "name": "Applications et fonctionnalités",
     "description": "Applications et fonctionnalités",
     "command": "ms-settings:appsfeatures",
     "is_url": true,
@@ -1691,7 +1711,7 @@
     "icon": "⚙️"
   },
   {
-    "name": "For Developers",
+    "name": "Pour les développeurs",
     "description": "Mode développeur",
     "command": "ms-settings:developers",
     "is_url": true,
@@ -3700,7 +3720,7 @@
     "icon": "💾"
   },
   {
-    "name": "Network Speed Test",
+    "name": "Test de vitesse réseau",
     "description": "Test vitesse réseau Microsoft",
     "command": "https://www.microsoft.com/en-us/p/network-speed-test/9wzdncrfhx52",
     "is_url": true,
@@ -3740,7 +3760,7 @@
     "icon": "🌐"
   },
   {
-    "name": "Battery Report",
+    "name": "Rapport de batterie",
     "description": "Rapport état batterie PowerCfg",
     "command": "powercfg /batteryreport /output \"%TEMP%\\battery-report.html\" && start \"\" \"%TEMP%\\battery-report.html\"",
     "is_url": false,
@@ -3749,7 +3769,7 @@
     "requires_admin": false
   },
   {
-    "name": "Sleep Diagnostics",
+    "name": "Diagnostics de veille",
     "description": "Rapport diagnostics veille PowerCfg",
     "command": "powercfg /sleepstudy /output \"%TEMP%\\sleepstudy.html\" && start \"\" \"%TEMP%\\sleepstudy.html\"",
     "is_url": false,
@@ -4380,33 +4400,9 @@
     "icon": "📥"
   },
   {
-    "name": "YggTorrent",
-    "description": "Tracker torrent francophone",
-    "command": "https://www.yggtorrent.org/auth/login",
-    "is_url": true,
-    "section": "Activation & Téléchargements",
-    "icon": "📥"
-  },
-  {
-    "name": "La Cale",
-    "description": "Portail de telechargement communautaire",
-    "command": "https://la-cale.space/login",
-    "is_url": true,
-    "section": "Activation & Téléchargements",
-    "icon": "📥"
-  },
-  {
     "name": "Gemini Tracker",
-    "description": "Tracker torrent prive",
+    "description": "Tracker torrent privé",
     "command": "https://gemini-tracker.org/login",
-    "is_url": true,
-    "section": "Activation & Téléchargements",
-    "icon": "📥"
-  },
-  {
-    "name": "C411 Tracker",
-    "description": "Portail torrent communautaire",
-    "command": "https://staging-68d548c5bd4.c411.org/login",
     "is_url": true,
     "section": "Activation & Téléchargements",
     "icon": "📥"

@@ -43,6 +43,13 @@ pub fn build_script(tool: &ToolEntry) -> (ScriptKind, String) {
         .filter(|c| c.is_alphanumeric() || " -_./()+".contains(*c))
         .take(60)
         .collect();
+    // {LOGICIEL} -> dossier `logiciel\` a cote de l'exe (outils portables embarques,
+    // ex. MAS hors ligne). Resolu au lancement : le chemin depend de l'emplacement
+    // de l'app (portable). Si le dossier n'existe pas, la commande echouera
+    // proprement dans la fenetre (fichier introuvable).
+    let cmd = tool
+        .command
+        .replace("{LOGICIEL}", &crate::utils::paths::portables_dir().to_string_lossy());
     if tool.shell.eq_ignore_ascii_case("powershell") {
         let body = format!(
             "$Host.UI.RawUI.WindowTitle = 'NiTriTe - {title}'\r\n\
@@ -50,7 +57,6 @@ pub fn build_script(tool: &ToolEntry) -> (ScriptKind, String) {
              {cmd}\r\n\
              Write-Host ''\r\n\
              Write-Host '[NiTriTe] Commande terminee.' -ForegroundColor Green\r\n",
-            cmd = tool.command
         );
         (ScriptKind::PowerShell, body)
     } else {
@@ -63,7 +69,6 @@ pub fn build_script(tool: &ToolEntry) -> (ScriptKind, String) {
              {cmd}\r\n\
              echo.\r\n\
              echo [NiTriTe] Commande terminee (code %ERRORLEVEL%).\r\n",
-            cmd = tool.command
         );
         (ScriptKind::Cmd, body)
     }

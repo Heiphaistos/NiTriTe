@@ -542,6 +542,15 @@ pub fn run() {
             system::winpe::clear_offline_password,
             system::winpe::enable_offline_account,
             system::winpe::winpe_run_command,
+            // ═══ SAM editor ═══
+            system::sam_editor::sam_list_users,
+            system::sam_editor::sam_clear_password,
+            system::sam_editor::sam_set_enabled,
+            system::sam_editor::sam_unlock,
+            system::sam_editor::sam_set_admin,
+            system::sam_editor::sam_delete_user,
+            system::sam_editor::sam_create_user,
+            // ═══ fin SAM editor ═══
             // ═══ Capteurs complets (sensors.rs) ═══
             system::sensors::get_all_sensors,
             // ═══ Scanner DLL (dll_scanner.rs) ═══

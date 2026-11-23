@@ -1,7 +1,16 @@
 //! Rendu des sauvegardes en TXT / Markdown / HTML
 #[allow(unused_imports)]
 use super::*;
-use super::BackupManifest;
+use super::{BackupManifest, BackupStatus};
+
+/// Libellé + couleur d'un statut pour l'affichage.
+fn status_badge(status: &BackupStatus) -> (&'static str, &'static str) {
+    match status {
+        BackupStatus::Ok => ("OK", "#22c55e"),
+        BackupStatus::Vide => ("VIDE", "#a1a1aa"),
+        BackupStatus::Echec => ("ÉCHEC", "#ef4444"),
+    }
+}
 
 pub fn render_txt(m: &BackupManifest) -> String {
     let width = 72usize;
@@ -151,16 +160,27 @@ pub fn render_html(m: &BackupManifest) -> String {
                 s     = if count > 1 { "s" } else { "" },
             ));
         }
-        let data_html = html_escape(&json_to_readable(&item.data));
+        let (badge_txt, badge_col) = status_badge(&item.status);
+        let body = match item.status {
+            BackupStatus::Ok => format!("<pre class='card-data'>{}</pre>", html_escape(&json_to_readable(&item.data))),
+            _ => format!("<pre class='card-data' style='color:var(--text2)'>{}</pre>", html_escape(&item.detail)),
+        };
+        let size_lbl = if item.status == BackupStatus::Ok {
+            format!("<span class='card-size'>{}</span>", format_size(item.size_bytes as u64))
+        } else { String::new() };
         sections.push_str(&format!(
             "<details class='card' open>\
 <summary class='card-title'>\
 <span class='card-arrow'>▶</span>{name}\
+<span class='card-badge' style='color:{col};border-color:{col}'>{badge}</span>{size}\
 </summary>\
-<pre class='card-data'>{data}</pre>\
+{body}\
 </details>\n",
             name = html_escape(&item.name),
-            data = data_html,
+            col = badge_col,
+            badge = badge_txt,
+            size = size_lbl,
+            body = body,
         ));
     }
     if !current_cat.is_empty() {
@@ -255,6 +275,9 @@ pub fn render_html(m: &BackupManifest) -> String {
     border-bottom:1px solid transparent}}
   details.card > summary.card-title::-webkit-details-marker{{display:none}}
   details.card > summary:hover{{color:var(--text)}}
+  .card-badge{{font-size:9px;font-weight:700;letter-spacing:.05em;border:1px solid;
+    border-radius:4px;padding:1px 6px;margin-left:8px;flex-shrink:0}}
+  .card-size{{font-size:10px;color:var(--text3);margin-left:auto;flex-shrink:0}}
   details.card[open] > summary{{border-bottom-color:var(--border)}}
   .card-arrow{{font-size:8px;color:var(--text3);display:inline-block;
     transition:transform .2s;flex-shrink:0}}
@@ -307,7 +330,9 @@ pub fn render_html(m: &BackupManifest) -> String {
     <div class="report-meta">
       <div class="meta-pill">📅 Date&nbsp;<strong>{ts}</strong></div>
       <div class="meta-pill">📦 Éléments&nbsp;<strong>{total}</strong></div>
-      <div class="meta-pill">🛡 NiTriTe&nbsp;<strong>v26.36</strong></div>
+      <div class="meta-pill" style="border-color:#22c55e55">✅ Collectés&nbsp;<strong style="color:#22c55e">{ok}</strong></div>
+      <div class="meta-pill">⬜ Vides&nbsp;<strong>{empty}</strong></div>
+      <div class="meta-pill" style="border-color:#ef444455">⚠ Échecs&nbsp;<strong style="color:#ef4444">{failed}</strong></div>
     </div>
   </div>
 
@@ -321,8 +346,92 @@ pub fn render_html(m: &BackupManifest) -> String {
 </body></html>"#,
         ts        = html_escape(&m.timestamp),
         total     = m.total_items,
+        ok        = m.ok_count,
+        empty     = m.empty_count,
+        failed    = m.failed_count,
         nav_links = nav_links,
         sections  = sections,
+    )
+}
+
+/// Rendu HTML lisible du scan PC complet (ScanResult en JSON → page structurée).
+/// Les scalaires deviennent un tableau clé/valeur ; les listes/objets une section
+/// dépliable avec compteur ; le JSON complet reste disponible en bas (rejouable).
+pub fn render_scan_html(v: &serde_json::Value) -> String {
+    let obj = match v.as_object() {
+        Some(o) => o,
+        None => return "<!DOCTYPE html><html lang=\"fr\"><meta charset=\"UTF-8\"><body>Scan vide.</body></html>".to_string(),
+    };
+
+    let mut scalars = String::new();
+    let mut sections = String::new();
+    for (k, val) in obj {
+        let label = html_escape(&prettify_key(k));
+        match val {
+            serde_json::Value::Array(arr) => {
+                if arr.is_empty() { continue; }
+                sections.push_str(&format!(
+                    "<details class='sec' open><summary>{label} <span class='cnt'>{n}</span></summary><pre>{body}</pre></details>\n",
+                    label = label, n = arr.len(),
+                    body = html_escape(&json_to_readable(&val.to_string())),
+                ));
+            }
+            serde_json::Value::Object(_) => {
+                sections.push_str(&format!(
+                    "<details class='sec' open><summary>{label}</summary><pre>{body}</pre></details>\n",
+                    label = label,
+                    body = html_escape(&json_to_readable(&val.to_string())),
+                ));
+            }
+            serde_json::Value::Null => {}
+            serde_json::Value::String(s) if s.is_empty() => {}
+            _ => {
+                let txt = match val {
+                    serde_json::Value::Bool(b) => if *b { "Oui".to_string() } else { "Non".to_string() },
+                    serde_json::Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                };
+                scalars.push_str(&format!(
+                    "<tr><td class='k'>{}</td><td class='v'>{}</td></tr>",
+                    label, html_escape(&txt)
+                ));
+            }
+        }
+    }
+
+    format!(r#"<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NiTriTe — Scan PC complet</title>
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  :root{{--bg:#09090b;--bg2:#18181b;--border:#27272a;--accent:#f97316;--text:#e4e4e7;--text2:#a1a1aa}}
+  body{{font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);
+    font-size:13px;padding:28px 32px;max-width:1100px;margin:0 auto}}
+  h1{{font-size:24px;font-weight:800;margin-bottom:6px;
+    background:linear-gradient(135deg,#fafafa 40%,#f97316);-webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;background-clip:text}}
+  .sub{{color:var(--text2);font-size:12px;margin-bottom:22px}}
+  table{{width:100%;border-collapse:collapse;margin-bottom:22px;
+    border:1px solid var(--border);border-radius:8px;overflow:hidden}}
+  td{{padding:7px 12px;border-bottom:1px solid var(--border);vertical-align:top}}
+  td.k{{color:var(--text2);width:40%;font-weight:500}}
+  td.v{{color:var(--text);word-break:break-word}}
+  details.sec{{margin-bottom:10px;border:1px solid var(--border);border-radius:8px;overflow:hidden}}
+  details.sec > summary{{padding:10px 14px;cursor:pointer;background:var(--bg2);
+    font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-size:12px}}
+  .cnt{{font-size:10px;background:rgba(249,115,22,.12);color:var(--accent);
+    border-radius:99px;padding:1px 8px;margin-left:6px}}
+  pre{{padding:12px 16px;font-family:'JetBrains Mono','Courier New',monospace;font-size:11.5px;
+    white-space:pre-wrap;word-break:break-word;line-height:1.7;color:var(--text)}}
+</style></head><body>
+  <h1>Scan PC complet</h1>
+  <div class="sub">Rapport diagnostic NiTriTe — matériel, sécurité, processus, services, mises à jour</div>
+  <table><tbody>{scalars}</tbody></table>
+  {sections}
+</body></html>"#,
+        scalars = scalars,
+        sections = sections,
     )
 }
 
@@ -337,13 +446,21 @@ mod tests {
 
     fn make_manifest(items: Vec<(&str, &str, &str)>) -> BackupManifest {
         let items: Vec<BackupItem> = items.into_iter().map(|(name, cat, data)| BackupItem {
+            id: name.to_string(),
             name: name.to_string(),
             category: cat.to_string(),
-            data: data.to_string(),
             size_bytes: data.len(),
+            data: data.to_string(),
+            status: BackupStatus::Ok,
+            detail: String::new(),
+            file: String::new(),
         }).collect();
         let total = items.len();
-        BackupManifest { timestamp: "2026-01-01_12-00-00".to_string(), items, total_items: total, path: "/tmp/test".to_string() }
+        BackupManifest {
+            timestamp: "2026-01-01_12-00-00".to_string(),
+            total_items: total, ok_count: total, empty_count: 0, failed_count: 0,
+            items, path: "/tmp/test".to_string(),
+        }
     }
 
     #[test]

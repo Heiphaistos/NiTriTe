@@ -43,6 +43,7 @@ pub mod dependencies;
 pub mod extras;
 pub mod winpe;
 pub mod winpe_disques;
+pub mod sam_editor;
 pub mod sensors;
 pub mod dll_scanner;
 pub mod iso_catalog;

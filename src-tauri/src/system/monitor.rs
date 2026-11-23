@@ -392,11 +392,17 @@ try {
 } catch {}
 $out | ConvertTo-Json -Compress -Depth 3
 "#;
-        let out = crate::maintenance::commands::execute_system_command(
+        // Best-effort comme collect_disk_io : un relevé de température coupé par le
+        // timeout (PC chargé) rend « aucune température » (None/vide), pas une
+        // erreur qui ferait échouer le tick de monitoring.
+        let out = match crate::maintenance::commands::execute_system_command(
             "powershell",
             &["-NoProfile", "-NonInteractive", "-Command", ps],
             10,
-        ).map_err(|e| e.to_string())?;
+        ) {
+            Ok(o) => o,
+            Err(_) => return Ok((None, None, vec![])),
+        };
         let v: serde_json::Value = serde_json::from_str(out.stdout.trim()).unwrap_or_default();
         let cpu_temp = v.get("cpu_temp").and_then(|t| t.as_i64()).map(|t| t as i32);
         let cpu_src = v.get("cpu_src").and_then(|s| s.as_str()).map(str::to_string);
@@ -422,11 +428,18 @@ try {
     "$($d.DiskReadBytesPersec) $($d.DiskWriteBytesPersec)"
 } catch { "0 0" }
 "#;
-        let out = crate::maintenance::commands::execute_system_command(
+        // Best-effort : le script PowerShell rend deja "0 0" sur erreur WMI. Si le
+        // process entier est coupe par le timeout (PC tres charge), on rend aussi
+        // (0, 0) plutot que de propager une erreur — un releve disque rate ne doit
+        // pas faire echouer le tick de monitoring (debit disque simplement a 0).
+        let out = match crate::maintenance::commands::execute_system_command(
             "powershell",
             &["-NoProfile", "-NonInteractive", "-Command", ps],
             5,
-        ).map_err(|e| e.to_string())?;
+        ) {
+            Ok(o) => o,
+            Err(_) => return Ok((0, 0)),
+        };
         let parts: Vec<&str> = out.stdout.split_whitespace().collect();
         let r = parts.first().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
         let w = parts.get(1).and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);

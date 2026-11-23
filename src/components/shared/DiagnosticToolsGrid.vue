@@ -48,7 +48,7 @@ const TOOLS: ToolDef[] = [
   { label: "Dossier Temp",                     emoji: "📁",  type: "cmd",      cmd: "explorer %TEMP%" },
   { label: "AppData Local",                    emoji: "📂",  type: "cmd",      cmd: "explorer %LOCALAPPDATA%" },
   { label: "Version Windows",                  emoji: "🪟",  type: "cmd",      cmd: "winver" },
-  { label: "Tout Mettre à Jour",               emoji: "🔄",  type: "catalog",  catalog: { name: "Upgrade All", section: "WinGet Package Manager" } },
+  { label: "Tout Mettre à Jour",               emoji: "🔄",  type: "catalog",  catalog: { name: "Tout mettre à jour", section: "WinGet Package Manager" } },
   { label: "Drivers NVIDIA",                   emoji: "🟢",  type: "url",      url: "https://www.nvidia.com/fr-fr/drivers/" },
   { label: "Drivers AMD",                      emoji: "🔴",  type: "url",      url: "https://www.amd.com/fr/support/download/drivers.html" },
   { label: "Réparer Image Windows",            emoji: "🔧",  type: "catalog",  catalog: { name: "DISM Restore", section: "Réparation Système" } },

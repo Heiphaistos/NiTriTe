@@ -1,8 +1,11 @@
 //! Module principal de sauvegarde
 pub mod collectors;
+pub mod collectors_extra;
+pub mod diagnostic;
 pub mod render;
 pub mod formatters;
 pub use collectors::*;
+pub use collectors_extra::*;
 pub use render::*;
 pub use formatters::*;
 
@@ -92,225 +95,231 @@ pub struct BackupManifest {
     pub timestamp: String,
     pub items: Vec<BackupItem>,
     pub total_items: usize,
+    /// Éléments réellement collectés avec des données (statut `ok`).
+    pub ok_count: usize,
+    /// Éléments collectés mais vides (statut `vide`, légitime).
+    pub empty_count: usize,
+    /// Éléments en échec réel (statut `echec`).
+    pub failed_count: usize,
+    /// Chemin du lot (dossier horodaté).
     pub path: String,
+}
+
+/// Statut de collecte d'un élément — rend visible ce qui a réellement été pris,
+/// au lieu du saut silencieux `if let Ok(..)`.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum BackupStatus {
+    /// Données non vides collectées.
+    Ok,
+    /// Collecté sans erreur mais rien à sauvegarder (ex. aucune imprimante). Légitime.
+    Vide,
+    /// Erreur réelle de collecte (voir `detail`).
+    Echec,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct BackupItem {
+    pub id: String,
     pub name: String,
     pub category: String,
     pub data: String,
     pub size_bytes: usize,
+    pub status: BackupStatus,
+    /// Message d'échec (si `Echec`) ou note (si `Vide`), sinon vide.
+    pub detail: String,
+    /// Nom du fichier de cet élément dans le lot (vide si rien écrit).
+    pub file: String,
+}
+
+/// Déclaration d'un collecteur simple : identifiant UI, libellé, catégorie, fonction.
+type CollectFn = Box<dyn Fn() -> Result<String, NiTriTeError>>;
+struct CollectorDecl {
+    id: &'static str,
+    name: &'static str,
+    category: &'static str,
+    run: CollectFn,
+}
+
+/// Table de tous les collecteurs « texte ». Remplace l'ancien `match` de ~160 lignes :
+/// une seule boucle les exécute et chacun reçoit TOUJOURS un statut (plus de saut
+/// silencieux sur échec/vide).
+fn collector_table() -> Vec<CollectorDecl> {
+    macro_rules! c {
+        ($id:expr, $name:expr, $cat:expr, $f:expr) => {
+            CollectorDecl { id: $id, name: $name, category: $cat, run: Box::new($f) }
+        };
+    }
+    vec![
+        c!("installed_apps", "Applications installees", "Logiciels", collect_installed_apps),
+        c!("winget_export", "WinGet Export JSON", "Logiciels", collect_winget_export),
+        c!("drivers", "Pilotes systeme", "Logiciels", collect_drivers),
+        c!("windows_features", "Fonctionnalites Windows", "Logiciels", collect_windows_features),
+        c!("installed_fonts", "Polices installees", "Logiciels", collect_installed_fonts),
+        c!("hotfixes", "Correctifs KB installes", "Logiciels", collect_hotfixes),
+        c!("network_config", "Configuration reseau", "Reseau", collect_network_config),
+        c!("wifi_passwords", "Mots de passe WiFi", "Reseau", collect_wifi_passwords),
+        c!("firewall_rules", "Regles pare-feu", "Reseau", collect_firewall_rules),
+        c!("network_shares", "Partages reseau", "Reseau", collect_network_shares),
+        c!("hosts_file", "Fichier hosts", "Reseau", collect_hosts_file),
+        c!("vpn_profiles", "Profils VPN", "Reseau", collect_vpn_profiles),
+        c!("windows_license", "Licence Windows", "Licences", collect_windows_license),
+        c!("bitlocker_keys", "Cles BitLocker", "Licences", collect_bitlocker_keys),
+        c!("office_license", "Licence Office", "Licences", collect_office_license),
+        c!("chrome_bookmarks", "Favoris Chrome", "Navigateurs", || collect_browser_bookmarks("Google\\Chrome")),
+        c!("edge_bookmarks", "Favoris Edge", "Navigateurs", || collect_browser_bookmarks("Microsoft\\Edge")),
+        c!("brave_bookmarks", "Favoris Brave", "Navigateurs", || collect_browser_bookmarks("BraveSoftware\\Brave-Browser")),
+        c!("startup_programs", "Programmes demarrage", "Demarrage & Taches", collect_startup),
+        c!("scheduled_tasks", "Taches planifiees", "Demarrage & Taches", collect_scheduled_tasks),
+        c!("scheduled_tasks_xml", "Taches planifiees (XML)", "Demarrage & Taches", collect_scheduled_tasks_xml),
+        c!("registry_export", "Export registre (HKCU)", "Demarrage & Taches", collect_registry_export),
+        c!("services", "Services Windows", "Demarrage & Taches", collect_services),
+        c!("env_variables", "Variables d'environnement", "Developpeur", collect_env_vars),
+        c!("ssh_keys", "Cles SSH", "Developpeur", collect_ssh_keys),
+        c!("pip_packages", "Packages Python (pip)", "Developpeur", collect_pip_packages),
+        c!("vscode_extensions", "Extensions VSCode", "Developpeur", collect_vscode_extensions),
+        c!("wsl_config", "Config WSL", "Developpeur", collect_wsl_config),
+        c!("powershell_profile", "Profil PowerShell", "Developpeur", collect_powershell_profile),
+        c!("system_components", "Composants PC", "Materiel", collect_system_components),
+        c!("power_plans", "Plans alimentation", "Materiel", collect_power_plans),
+        c!("printer_config", "Imprimantes", "Materiel", collect_printer_config),
+        c!("battery", "Batterie", "Materiel", collect_battery),
+        c!("folder_sizes", "Taille des dossiers C", "Diagnostic", collect_folder_sizes),
+        c!("desktop_files", "Fichiers Bureau", "Diagnostic", collect_desktop_files),
+        c!("suspicious_processes", "Processus suspects", "Diagnostic", collect_suspicious_processes),
+        c!("restore_points", "Points de restauration", "Diagnostic", collect_restore_points),
+        c!("event_logs", "Journaux d'evenements (7j)", "Diagnostic", collect_event_logs),
+    ]
+}
+
+/// Classe une sortie de collecteur en statut visible.
+fn classify(result: Result<String, NiTriTeError>) -> (BackupStatus, String, String) {
+    match result {
+        Err(e) => (BackupStatus::Echec, String::new(), format!("{}", e)),
+        Ok(data) if data.trim().is_empty() => (
+            BackupStatus::Vide,
+            String::new(),
+            "Collecté sans erreur, mais aucune donnée à sauvegarder.".into(),
+        ),
+        Ok(data) => (BackupStatus::Ok, data, String::new()),
+    }
+}
+
+fn item_ext(data: &str) -> &'static str {
+    let t = data.trim_start();
+    if t.starts_with('{') || t.starts_with('[') { "json" } else { "txt" }
 }
 
 pub fn create_backup(selected_items: Vec<String>, format: String, custom_path: Option<String>) -> Result<BackupManifest, NiTriTeError> {
-    let mut items = Vec::new();
     let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+    let table = collector_table();
+    let mut items: Vec<BackupItem> = Vec::new();
+    let mut file_index = 0usize;
 
-    for item_id in &selected_items {
-        match item_id.as_str() {
-            "installed_apps" => {
-                if let Ok(data) = collect_installed_apps() {
-                    items.push(BackupItem { name: "Applications installees".into(), category: "Systeme".into(), size_bytes: data.len(), data });
+    // Scan PC complet du Diagnostic (gros élément : matériel, sécurité, processus, services…).
+    let mut scan_html: Option<(String, String)> = None; // (nom fichier HTML, contenu HTML)
+    if selected_items.iter().any(|s| s == "diagnostic_scan") {
+        file_index += 1;
+        let scan = diagnostic::run_scan_blocking();
+        let (status, data, detail, file) = match serde_json::to_string_pretty(&scan) {
+            Ok(json) => {
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&json) {
+                    scan_html = Some((format!("{:02}_diagnostic-scan.html", file_index), render_scan_html(&value)));
                 }
+                (BackupStatus::Ok, json, String::new(), format!("{:02}_diagnostic-scan.json", file_index))
             }
-            "drivers" => {
-                if let Ok(data) = collect_drivers() {
-                    items.push(BackupItem { name: "Pilotes systeme".into(), category: "Systeme".into(), size_bytes: data.len(), data });
-                }
-            }
-            "network_config" => {
-                if let Ok(data) = collect_network_config() {
-                    items.push(BackupItem { name: "Configuration reseau".into(), category: "Reseau".into(), size_bytes: data.len(), data });
-                }
-            }
-            "startup_programs" => {
-                if let Ok(data) = collect_startup() {
-                    items.push(BackupItem { name: "Programmes demarrage".into(), category: "Systeme".into(), size_bytes: data.len(), data });
-                }
-            }
-            "env_variables" => {
-                if let Ok(data) = collect_env_vars() {
-                    items.push(BackupItem { name: "Variables d'environnement".into(), category: "Systeme".into(), size_bytes: data.len(), data });
-                }
-            }
-            "firewall_rules" => {
-                if let Ok(data) = collect_firewall_rules() {
-                    items.push(BackupItem { name: "Regles pare-feu".into(), category: "Securite".into(), size_bytes: data.len(), data });
-                }
-            }
-            "chrome_bookmarks" => {
-                if let Ok(data) = collect_browser_bookmarks("Google\\Chrome") {
-                    items.push(BackupItem { name: "Favoris Chrome".into(), category: "Navigateurs".into(), size_bytes: data.len(), data });
-                }
-            }
-            "edge_bookmarks" => {
-                if let Ok(data) = collect_browser_bookmarks("Microsoft\\Edge") {
-                    items.push(BackupItem { name: "Favoris Edge".into(), category: "Navigateurs".into(), size_bytes: data.len(), data });
-                }
-            }
-            "brave_bookmarks" => {
-                if let Ok(data) = collect_browser_bookmarks("BraveSoftware\\Brave-Browser") {
-                    items.push(BackupItem { name: "Favoris Brave".into(), category: "Navigateurs".into(), size_bytes: data.len(), data });
-                }
-            }
-            "windows_license" => {
-                if let Ok(data) = collect_windows_license() {
-                    items.push(BackupItem { name: "Licence Windows".into(), category: "Licences".into(), size_bytes: data.len(), data });
-                }
-            }
-            "bitlocker_keys" => {
-                if let Ok(data) = collect_bitlocker_keys() {
-                    items.push(BackupItem { name: "Cles BitLocker".into(), category: "Securite".into(), size_bytes: data.len(), data });
-                }
-            }
-            "office_license" => {
-                if let Ok(data) = collect_office_license() {
-                    items.push(BackupItem { name: "Licence Office".into(), category: "Licences".into(), size_bytes: data.len(), data });
-                }
-            }
-            "installed_fonts" => {
-                if let Ok(data) = collect_installed_fonts() {
-                    items.push(BackupItem { name: "Polices installees".into(), category: "Systeme".into(), size_bytes: data.len(), data });
-                }
-            }
-            "scheduled_tasks" => {
-                if let Ok(data) = collect_scheduled_tasks() {
-                    items.push(BackupItem { name: "Taches planifiees".into(), category: "Systeme".into(), size_bytes: data.len(), data });
-                }
-            }
-            "windows_features" => {
-                if let Ok(data) = collect_windows_features() {
-                    items.push(BackupItem { name: "Fonctionnalites Windows".into(), category: "Systeme".into(), size_bytes: data.len(), data });
-                }
-            }
-            "folder_sizes" => {
-                if let Ok(data) = collect_folder_sizes() {
-                    items.push(BackupItem { name: "Taille des dossiers C:\\".into(), category: "Diagnostic".into(), size_bytes: data.len(), data });
-                }
-            }
-            "desktop_files" => {
-                if let Ok(data) = collect_desktop_files() {
-                    items.push(BackupItem { name: "Fichiers Bureau".into(), category: "Utilisateur".into(), size_bytes: data.len(), data });
-                }
-            }
-            "wifi_passwords" => {
-                if let Ok(data) = collect_wifi_passwords() {
-                    items.push(BackupItem { name: "Mots de passe WiFi".into(), category: "Reseau".into(), size_bytes: data.len(), data });
-                }
-            }
-            "registry_export" => {
-                if let Ok(data) = collect_registry_export() {
-                    items.push(BackupItem { name: "Export registre (HKCU)".into(), category: "Systeme".into(), size_bytes: data.len(), data });
-                }
-            }
-            "suspicious_processes" => {
-                if let Ok(data) = collect_suspicious_processes() {
-                    items.push(BackupItem { name: "Processus suspects".into(), category: "Securite".into(), size_bytes: data.len(), data });
-                }
-            }
-            "winget_export" => {
-                if let Ok(data) = collect_winget_export() {
-                    items.push(BackupItem { name: "WinGet Export JSON".into(), category: "Systeme".into(), size_bytes: data.len(), data });
-                }
-            }
-            "network_shares" => {
-                if let Ok(data) = collect_network_shares() {
-                    items.push(BackupItem { name: "Partages reseau".into(), category: "Reseau".into(), size_bytes: data.len(), data });
-                }
-            }
-            "hosts_file" => {
-                if let Ok(data) = collect_hosts_file() {
-                    items.push(BackupItem { name: "Fichier hosts".into(), category: "Reseau".into(), size_bytes: data.len(), data });
-                }
-            }
-            "ssh_keys" => {
-                if let Ok(data) = collect_ssh_keys() {
-                    items.push(BackupItem { name: "Cles SSH".into(), category: "Dev".into(), size_bytes: data.len(), data });
-                }
-            }
-            "pip_packages" => {
-                if let Ok(data) = collect_pip_packages() {
-                    items.push(BackupItem { name: "Packages Python (pip)".into(), category: "Dev".into(), size_bytes: data.len(), data });
-                }
-            }
-            "vscode_extensions" => {
-                if let Ok(data) = collect_vscode_extensions() {
-                    items.push(BackupItem { name: "Extensions VSCode".into(), category: "Dev".into(), size_bytes: data.len(), data });
-                }
-            }
-            "wsl_config" => {
-                if let Ok(data) = collect_wsl_config() {
-                    items.push(BackupItem { name: "Config WSL".into(), category: "Dev".into(), size_bytes: data.len(), data });
-                }
-            }
-            "powershell_profile" => {
-                if let Ok(data) = collect_powershell_profile() {
-                    items.push(BackupItem { name: "Profil PowerShell".into(), category: "Dev".into(), size_bytes: data.len(), data });
-                }
-            }
-            "power_plans" => {
-                if let Ok(data) = collect_power_plans() {
-                    items.push(BackupItem { name: "Plans alimentation".into(), category: "Systeme".into(), size_bytes: data.len(), data });
-                }
-            }
-            "printer_config" => {
-                if let Ok(data) = collect_printer_config() {
-                    items.push(BackupItem { name: "Imprimantes".into(), category: "Materiel".into(), size_bytes: data.len(), data });
-                }
-            }
-            "system_components" => {
-                if let Ok(data) = collect_system_components() {
-                    items.push(BackupItem { name: "Composants PC".into(), category: "Materiel".into(), size_bytes: data.len(), data });
-                }
-            }
-            "battery" => {
-                if let Ok(data) = collect_battery() {
-                    items.push(BackupItem { name: "Batterie".into(), category: "Materiel".into(), size_bytes: data.len(), data });
-                }
-            }
-            _ => {}
-        }
+            Err(e) => (BackupStatus::Echec, String::new(), format!("Sérialisation du scan: {}", e), String::new()),
+        };
+        items.push(BackupItem {
+            id: "diagnostic_scan".into(),
+            name: "Scan PC complet (Diagnostic)".into(),
+            category: "Diagnostic".into(),
+            size_bytes: data.len(),
+            data,
+            status,
+            detail,
+            file,
+        });
     }
 
-    // Tri par catégorie pour éviter les sections dupliquées dans le rendu
+    for item_id in &selected_items {
+        if item_id == "diagnostic_scan" { continue; }
+        let Some(decl) = table.iter().find(|d| d.id == *item_id) else { continue };
+        let (status, data, detail) = classify((decl.run)());
+        file_index += 1;
+        let file = if status == BackupStatus::Ok {
+            format!("{:02}_{}.{}", file_index, formatters::safe_filename(decl.name), item_ext(&data))
+        } else {
+            String::new()
+        };
+        items.push(BackupItem {
+            id: decl.id.to_string(),
+            name: decl.name.to_string(),
+            category: decl.category.to_string(),
+            size_bytes: data.len(),
+            data,
+            status,
+            detail,
+            file,
+        });
+    }
+
+    // Tri par catégorie pour un rendu groupé sans sections dupliquées.
     items.sort_by(|a, b| a.category.cmp(&b.category));
     let total_items = items.len();
+    let ok_count = items.iter().filter(|i| i.status == BackupStatus::Ok).count();
+    let empty_count = items.iter().filter(|i| i.status == BackupStatus::Vide).count();
+    let failed_count = items.iter().filter(|i| i.status == BackupStatus::Echec).count();
 
-    let backup_dir = if let Some(ref p) = custom_path {
-        std::path::PathBuf::from(p)
-    } else {
-        paths::backups_dir()
+    // Un seul lot regroupé : dossier horodaté.
+    let base_dir = match custom_path {
+        Some(ref p) => std::path::PathBuf::from(p),
+        None => paths::backups_dir(),
     };
-    std::fs::create_dir_all(&backup_dir)
-        .map_err(|e| NiTriTeError::System(format!("Impossible de créer le dossier backups: {}", e)))?;
+    let bundle_dir = base_dir.join(format!("backup_{}", timestamp));
+    let elements_dir = bundle_dir.join("elements");
+    std::fs::create_dir_all(&elements_dir)
+        .map_err(|e| NiTriTeError::System(format!("Impossible de créer le lot de sauvegarde: {}", e)))?;
 
-    let ext = match format.as_str() {
-        "html" => "html",
-        "md"   => "md",
-        "txt"  => "txt",
-        _      => "json",
-    };
-    let backup_file = backup_dir.join(format!("backup_{}.{}", timestamp, ext));
-    let path_str = backup_file.to_string_lossy().to_string();
+    // Fichier par élément (données brutes, UTF-8, binaire-safe pour hosts/bookmarks/clés).
+    for item in &items {
+        if item.file.is_empty() { continue; }
+        std::fs::write(elements_dir.join(&item.file), item.data.as_bytes())
+            .map_err(|e| NiTriTeError::System(format!("Écriture élément {}: {}", item.file, e)))?;
+    }
+    // Rapport HTML lisible du scan PC.
+    if let Some((file, html)) = &scan_html {
+        std::fs::write(elements_dir.join(file), html.as_bytes())
+            .map_err(|e| NiTriTeError::System(format!("Écriture scan HTML: {}", e)))?;
+    }
 
+    let path_str = bundle_dir.to_string_lossy().to_string();
     let manifest = BackupManifest {
         timestamp: timestamp.clone(),
-        items: items.clone(),
+        items,
         total_items,
+        ok_count,
+        empty_count,
+        failed_count,
         path: path_str.clone(),
     };
 
-    let content = match format.as_str() {
-        "txt"  => render_txt(&manifest),
-        "html" => render_html(&manifest),
-        "md"   => render_md(&manifest),
-        _      => serde_json::to_string_pretty(&manifest)
-            .map_err(|e| NiTriTeError::System(format!("Sérialisation échouée: {}", e)))?,
-    };
+    // manifeste.json : statuts + tailles (rejouable, vérifiable).
+    let manifest_json = serde_json::to_string_pretty(&manifest)
+        .map_err(|e| NiTriTeError::System(format!("Sérialisation manifeste: {}", e)))?;
+    std::fs::write(bundle_dir.join("manifeste.json"), manifest_json.as_bytes())
+        .map_err(|e| NiTriTeError::System(format!("Écriture manifeste: {}", e)))?;
 
-    std::fs::write(&backup_file, content.as_bytes())
-        .map_err(|e| NiTriTeError::System(format!("Écriture fichier échouée ({}): {}", path_str, e)))?;
+    // LISEZ-MOI.html : récapitulatif lisible (statuts visibles).
+    std::fs::write(bundle_dir.join("LISEZ-MOI.html"), render_html(&manifest).as_bytes())
+        .map_err(|e| NiTriTeError::System(format!("Écriture LISEZ-MOI: {}", e)))?;
+
+    // Rapport combiné au format choisi (continuité txt/md), en plus du HTML/JSON déjà écrits.
+    match format.as_str() {
+        "txt" => { let _ = std::fs::write(bundle_dir.join("rapport.txt"), render_txt(&manifest).as_bytes()); }
+        "md"  => { let _ = std::fs::write(bundle_dir.join("rapport.md"), render_md(&manifest).as_bytes()); }
+        _     => {} // html = LISEZ-MOI.html, json = manifeste.json
+    }
 
     Ok(manifest)
 }
@@ -324,17 +333,48 @@ pub fn list_backups() -> Result<Vec<BackupEntryInfo>, NiTriTeError> {
         for entry in std::fs::read_dir(&backup_dir)? {
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().to_string();
+            let meta = match entry.metadata()
+                .or_else(|_| std::fs::metadata(entry.path()))
+            {
+                Ok(m) => m,
+                Err(_) => continue, // inaccessible — ignorer
+            };
+
+            // Nouveau format : lot = dossier backup_<ts>/ avec manifeste.json.
+            if meta.is_dir() {
+                if !name.starts_with("backup_") { continue; }
+                let manifest_path = entry.path().join("manifeste.json");
+                if !manifest_path.exists() { continue; }
+                let (size, items_count) = match std::fs::read_to_string(&manifest_path)
+                    .ok()
+                    .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+                {
+                    Some(v) => {
+                        let count = v.get("total_items").and_then(|n| n.as_u64()).unwrap_or(0) as usize;
+                        let ok = v.get("ok_count").and_then(|n| n.as_u64()).unwrap_or(0);
+                        let failed = v.get("failed_count").and_then(|n| n.as_u64()).unwrap_or(0);
+                        (format!("{} ok · {} échec(s)", ok, failed), count)
+                    }
+                    None => ("—".to_string(), 0),
+                };
+                let stem = name.strip_prefix("backup_").unwrap_or(&name);
+                let date = {
+                    let parts: Vec<&str> = stem.splitn(2, '_').collect();
+                    match parts.as_slice() {
+                        [d, t] => format!("{} {}", d, t.replace('-', ":")),
+                        _ => stem.replace('-', "/"),
+                    }
+                };
+                backups.push(BackupEntryInfo { filename: name, date, size, items_count });
+                continue;
+            }
+
+            // Ancien format : fichier unique backup_<ts>.<ext> (rétro-compat).
             let is_backup = name.starts_with("backup_")
                 && (name.ends_with(".json") || name.ends_with(".txt")
                     || name.ends_with(".html") || name.ends_with(".md"));
             if !is_backup { continue; }
 
-            let meta = match entry.metadata()
-                .or_else(|_| std::fs::metadata(entry.path()))
-            {
-                Ok(m) => m,
-                Err(_) => continue, // fichier inaccessible — ignorer
-            };
             let size_bytes = meta.len();
             let size = if size_bytes < 1_048_576 {
                 format!("{:.1} Ko", size_bytes as f64 / 1024.0)
@@ -372,5 +412,64 @@ mod timeout_tests {
         let o = Command::new("cmd").args(["/c", "echo", "ok"]).output_timeout().unwrap();
         assert!(o.status.success());
         assert!(crate::maintenance::commands::decode_output(&o.stdout).contains("ok"));
+    }
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+
+    #[test]
+    fn classify_ok_on_non_empty() {
+        let (s, data, detail) = classify(Ok("des données".into()));
+        assert_eq!(s, BackupStatus::Ok);
+        assert_eq!(data, "des données");
+        assert!(detail.is_empty());
+    }
+
+    #[test]
+    fn classify_vide_on_blank() {
+        let (s, data, detail) = classify(Ok("   \n ".into()));
+        assert_eq!(s, BackupStatus::Vide);
+        assert!(data.is_empty());
+        assert!(!detail.is_empty()); // note explicite, jamais un saut silencieux
+    }
+
+    #[test]
+    fn classify_echec_keeps_error_message() {
+        let (s, _data, detail) = classify(Err(NiTriTeError::System("accès refusé".into())));
+        assert_eq!(s, BackupStatus::Echec);
+        assert!(detail.contains("accès refusé"));
+    }
+
+    #[test]
+    fn status_serializes_lowercase() {
+        assert_eq!(serde_json::to_string(&BackupStatus::Ok).unwrap(), "\"ok\"");
+        assert_eq!(serde_json::to_string(&BackupStatus::Vide).unwrap(), "\"vide\"");
+        assert_eq!(serde_json::to_string(&BackupStatus::Echec).unwrap(), "\"echec\"");
+    }
+
+    #[test]
+    fn collector_table_ids_are_unique() {
+        let table = collector_table();
+        let mut ids: Vec<&str> = table.iter().map(|d| d.id).collect();
+        ids.sort_unstable();
+        let before = ids.len();
+        ids.dedup();
+        assert_eq!(before, ids.len(), "identifiants de collecteurs dupliqués");
+    }
+
+    #[test]
+    fn item_ext_detects_json() {
+        assert_eq!(item_ext("{\"a\":1}"), "json");
+        assert_eq!(item_ext("[1,2]"), "json");
+        assert_eq!(item_ext("texte simple"), "txt");
+    }
+
+    #[test]
+    fn safe_filename_strips_accents_and_specials() {
+        assert_eq!(formatters::safe_filename("Taille des dossiers C:\\"), "taille-des-dossiers-c");
+        assert_eq!(formatters::safe_filename("Variables d'environnement"), "variables-d-environnement");
+        assert!(!formatters::safe_filename("Évènement / spécial").contains('/'));
     }
 }
