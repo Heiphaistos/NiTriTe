@@ -40,16 +40,11 @@ const points = computed(() => {
 const fillPath = computed(() => {
   if (!points.value) return "";
   const d = visibleData.value;
-  const min = Math.min(...d);
-  const max = Math.max(...d);
-  const range = max - min || 1;
   const step = w / (d.length - 1);
   const last = `${(d.length - 1) * step},${h.value}`;
-  const first = `0,${h.value}`;
-  return `M ${first} L ${points.value
-    .split(" ")
-    .map((p) => `L ${p}`)
-    .join(" ")} L ${last} Z`;
+  // Un seul « L » par point : « L L x,y » est un chemin SVG invalide (zone de remplissage absente).
+  const line = points.value.split(" ").map((p) => `L ${p}`).join(" ");
+  return `M 0,${h.value} ${line} L ${last} Z`;
 });
 
 // Coordonnées du dernier point (dot indicateur)

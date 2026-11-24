@@ -143,11 +143,25 @@ $out | ConvertTo-Json -Depth 3 -Compress
                 }).collect()
             }).unwrap_or_default();
 
+            // RAM : repli sysinfo si WMI a rendu 0 (sur un PC charge, la requete
+            // WMI peut etre lente/coupee par le timeout -> la page Perf affichait
+            // alors 0 Go). sysinfo lit la RAM sans processus externe, jamais 0.
+            let (mut ram_used, mut ram_total, mut ram_pct) = (
+                v["RamUsedGB"].as_f64().unwrap_or(0.0),
+                v["RamTotalGB"].as_f64().unwrap_or(0.0),
+                v["RamPct"].as_f64().unwrap_or(0.0),
+            );
+            if ram_total <= 0.0 {
+                let (u, t, p) = ram_from_sysinfo();
+                ram_used = u;
+                ram_total = t;
+                ram_pct = p;
+            }
             return PerfSnapshot {
                 cpu_percent: v["CpuPct"].as_f64().unwrap_or(0.0),
-                ram_used_gb: v["RamUsedGB"].as_f64().unwrap_or(0.0),
-                ram_total_gb: v["RamTotalGB"].as_f64().unwrap_or(0.0),
-                ram_percent: v["RamPct"].as_f64().unwrap_or(0.0),
+                ram_used_gb: ram_used,
+                ram_total_gb: ram_total,
+                ram_percent: ram_pct,
                 page_file_used_gb: v["PageUsedGB"].as_f64().unwrap_or(0.0),
                 page_file_total_gb: v["PageTotalGB"].as_f64().unwrap_or(0.0),
                 disks,
@@ -159,7 +173,21 @@ $out | ConvertTo-Json -Depth 3 -Compress
             };
         }
     }
-    PerfSnapshot::default()
+    // WMI indisponible/coupe : au moins une RAM reelle via sysinfo.
+    let (ram_used, ram_total, ram_pct) = ram_from_sysinfo();
+    PerfSnapshot { ram_used_gb: ram_used, ram_total_gb: ram_total, ram_percent: ram_pct, ..PerfSnapshot::default() }
+}
+
+/// RAM (utilisee, totale en Go, pourcentage) via sysinfo — sans processus externe,
+/// donc jamais 0 sur une vraie machine, meme si WMI est lent ou coupe.
+fn ram_from_sysinfo() -> (f64, f64, f64) {
+    use sysinfo::System;
+    let mut sys = System::new();
+    sys.refresh_memory();
+    let total = sys.total_memory() as f64 / 1_073_741_824.0;
+    let used = sys.used_memory() as f64 / 1_073_741_824.0;
+    let pct = if total > 0.0 { used / total * 100.0 } else { 0.0 };
+    (used, total, pct)
 }
 
 #[cfg(test)]

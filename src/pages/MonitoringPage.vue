@@ -25,7 +25,7 @@ interface ProcessInfo { name: string; pid: number; cpu_percent: number; ram_perc
 interface GpuInfo { name: string; usage_percent: number; vram_used_mb: number; vram_total_mb: number; temperature_c: number; }
 interface DiskTemp { name: string; temp_c: number; }
 interface MonitorData {
-  cpu_usage: number; cpu_name?: string; cpu_temp_c?: number; cpu_cores: CoreUsage[];
+  cpu_usage: number; cpu_name?: string; cpu_temp_c?: number; cpu_temp_acpi?: boolean; cpu_cores: CoreUsage[];
   ram_used_gb: number; ram_total_gb: number; ram_percent: number;
   disk_percent?: number; disk_read_kbs: number; disk_write_kbs: number; disk_temps?: DiskTemp[];
   net_upload_kbs: number; net_download_kbs: number;
@@ -156,8 +156,17 @@ function tempColor(t: number): string {
 }
 
 async function launchOcct() {
-  try { await invoke("execute_tool", { command: "OCCT.exe", isUrl: false }); }
-  catch { window.open("https://www.occt.eu/download", "_blank"); }
+  // `execute_tool OCCT.exe` ouvrait un cmd « OCCT.exe n'est pas reconnu » sans jamais
+  // échouer (repli jamais atteint) et le repli visait occt.eu, domaine disparu.
+  try {
+    const apps = await invoke<{ id: string }[]>("get_portable_apps");
+    const id = apps.find(a => a.id.includes("occt"))?.id;
+    if (id) { await invoke("launch_portable", { appId: id }); return; }
+    notify.info("OCCT non trouvé", "Ouverture du site officiel (ocbase.com)");
+    await invoke("open_url", { url: "https://www.ocbase.com/download" });
+  } catch (e: unknown) {
+    notify.error("OCCT", String(e).slice(0, 160));
+  }
 }
 
 function generateDevData(): MonitorData {
@@ -203,6 +212,7 @@ onMounted(async () => {
         cpu_usage: raw.cpu_percent ?? raw.cpu_usage ?? 0,
         cpu_name: raw.cpu_name ?? undefined,
         cpu_temp_c: raw.cpu_temp_c ?? undefined,
+        cpu_temp_acpi: raw.cpu_temp_source === 'acpi',
         cpu_cores: (raw.cpu_per_core ?? raw.cpu_cores ?? []).map((u: number | { usage: number }, i: number) =>
           typeof u === "number" ? { id: i, usage: u } : u
         ),
@@ -351,7 +361,7 @@ onUnmounted(() => {
       <div class="stats-grid stagger-children">
         <StatsCard
           :title="data.cpu_name ? data.cpu_name.split(' ').slice(0,3).join(' ') : 'CPU'"
-          :subtitle="data.cpu_temp_c ? `${data.cpu_temp_c}°C — Processeur` : 'Processeur'"
+          :subtitle="data.cpu_temp_c ? `${data.cpu_temp_c}°C${data.cpu_temp_acpi ? ' (zone ACPI)' : ''} — Processeur` : 'Processeur'"
           :value="`${Math.round(data.cpu_usage)}%`"
           :icon="Cpu" :progress="data.cpu_usage" color="accent"
         />
@@ -380,14 +390,14 @@ onUnmounted(() => {
           <div class="section-header">
             <Thermometer :size="16" />
             <span>Températures Composants</span>
-            <Flame v-if="(data.cpu_temp_c ?? 0) > 80 || data.gpu_data.some(g => g.temperature_c > 85) || (data.disk_temps ?? []).some(d => d.temp_c > 55)"
+            <Flame v-if="(!data.cpu_temp_acpi && (data.cpu_temp_c ?? 0) > 80) || data.gpu_data.some(g => g.temperature_c > 85) || (data.disk_temps ?? []).some(d => d.temp_c > 55)"
               :size="14" style="color: var(--danger); margin-left: 4px;" />
           </div>
         </template>
         <div class="temps-grid">
           <div v-if="data.cpu_temp_c" class="temp-item">
             <Cpu :size="16" class="temp-icon" />
-            <span class="temp-label" :title="data.cpu_name">CPU{{ data.cpu_name ? ` — ${data.cpu_name.split(' ').slice(0,2).join(' ')}` : '' }}</span>
+            <span class="temp-label" :title="data.cpu_temp_acpi ? 'Zone thermique ACPI (valeur du firmware, souvent figée) : installez LibreHardwareMonitor pour la vraie température CPU' : data.cpu_name">{{ data.cpu_temp_acpi ? 'Zone ACPI' : 'CPU' }}{{ data.cpu_name ? ` — ${data.cpu_name.split(' ').slice(0,2).join(' ')}` : '' }}</span>
             <div class="temp-bar-wrap">
               <div class="temp-bar-track">
                 <div class="temp-bar-fill" :style="{ width: `${Math.min((data.cpu_temp_c / 100) * 100, 100)}%`, background: tempColor(data.cpu_temp_c) }" />

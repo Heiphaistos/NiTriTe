@@ -1,3 +1,4 @@
+use crate::maintenance::commands::TimedOutput;
 
 /// PID/nom de processus dont la terminaison plante immédiatement Windows
 /// (BSOD ou déconnexion de session forcée) — ce n'est pas juste "risqué",
@@ -25,7 +26,7 @@ async fn kill_process(pid: u32) -> Result<String, String> {
                 .args(["-NoProfile", "-NonInteractive", "-Command",
                     &format!("(Get-Process -Id {} -ErrorAction SilentlyContinue).ProcessName", pid)])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .ok()
                 .map(|o| crate::maintenance::commands::decode_output(&o.stdout).trim().to_string())
                 .unwrap_or_default();
@@ -38,7 +39,7 @@ async fn kill_process(pid: u32) -> Result<String, String> {
             let out = std::process::Command::new("taskkill")
                 .args(["/PID", &pid.to_string(), "/F"])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             if out.status.success() {
                 Ok(format!("Processus {} terminé", pid))
@@ -157,7 +158,7 @@ async fn control_service(name: String, action: String) -> Result<String, String>
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             // decode_output (repli OEM) : le message d'erreur PowerShell FR
             // (« Impossible de démarrer le service… ») serait sinon mojibake.
@@ -191,7 +192,7 @@ async fn set_service_start_mode(name: String, mode: String) -> Result<String, St
             let out = std::process::Command::new("sc")
                 .args(["config", &name, &format!("start= {}", sc_mode)])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             if out.status.success() {
                 Ok(format!("Service '{}' : mode '{}' appliqué", name, mode))
@@ -226,7 +227,7 @@ async fn set_environment_variable(name: String, value: String, scope: String) ->
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             let stdout = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
             if out.status.success() && stdout.contains("OK") {
@@ -261,7 +262,7 @@ async fn delete_environment_variable(name: String, scope: String) -> Result<Stri
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             let stdout = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
             if out.status.success() && stdout.contains("OK") {
@@ -326,7 +327,7 @@ async fn toggle_startup_program(name: String, location: String, command: String,
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             let stdout = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
             if out.status.success() && stdout.contains("OK") {
@@ -347,26 +348,40 @@ async fn remove_startup_program(name: String, location: String) -> Result<String
     tokio::task::spawn_blocking(move || {
         #[cfg(target_os = "windows")]
         {
-            let hive = if location.contains("HKCU") { "HKCU:" } else { "HKLM:" };
-            let reg_path = if location.contains("x86") {
-                format!("{}\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run", hive)
+            // L'ancien script (`-ErrorAction SilentlyContinue; Write-Output 'OK'`)
+            // annonçait « supprimée » même quand rien n'était supprimé : entrées
+            // RunOnce (chemin Run visé) et dossiers Démarrage (jamais gérés).
+            let safe_name = name.replace('\'', "''");
+            let ps = if location.starts_with("Dossier") {
+                let folder = if location.contains("commun") { "CommonStartup" } else { "Startup" };
+                format!(
+                    "try {{ $f = @(Get-ChildItem -LiteralPath ([Environment]::GetFolderPath('{folder}')) -File -ErrorAction Stop | Where-Object {{ $_.BaseName -eq '{safe_name}' }}); \
+                     if ($f.Count -eq 0) {{ throw 'Raccourci introuvable dans le dossier Démarrage' }}; \
+                     $f | Remove-Item -Force -ErrorAction Stop; Write-Output 'OK' }} catch {{ Write-Output $_.Exception.Message; exit 1 }}"
+                )
             } else {
-                format!("{}\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", hive)
+                let hive = if location.contains("HKCU") { "HKCU:" } else { "HKLM:" };
+                let reg_path = if location.contains("x86") {
+                    format!("{}\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run", hive)
+                } else if location.contains("RunOnce") {
+                    format!("{}\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce", hive)
+                } else {
+                    format!("{}\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", hive)
+                };
+                format!(
+                    "try {{ Remove-ItemProperty -Path '{}' -Name '{}' -ErrorAction Stop; Write-Output 'OK' }} catch {{ Write-Output $_.Exception.Message; exit 1 }}",
+                    reg_path.replace('\'', "''"),
+                    safe_name
+                )
             };
-            let ps = format!(
-                "Remove-ItemProperty -Path '{}' -Name '{}' -ErrorAction SilentlyContinue; Write-Output 'OK'",
-                reg_path.replace('\'', "''"),
-                name.replace('\'', "''")
-            );
-            let out = std::process::Command::new("powershell")
-                .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
-                .creation_flags(0x08000000)
-                .output()
+            let out = crate::maintenance::commands::execute_system_command(
+                "powershell", &["-NoProfile", "-NonInteractive", "-Command", &ps], 30)
                 .map_err(|e| e.to_string())?;
-            if out.status.success() {
+            let stdout = out.stdout.trim().to_string();
+            if out.success && stdout.contains("OK") {
                 Ok(format!("Entrée '{}' supprimée du démarrage", name))
             } else {
-                Err(crate::maintenance::commands::decode_output(&out.stderr).trim().to_string())
+                Err(if !stdout.is_empty() { stdout } else { out.stderr.trim().to_string() })
             }
         }
         #[cfg(not(target_os = "windows"))]
@@ -428,7 +443,7 @@ try {{
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             let stdout = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
             if out.status.success() && stdout.contains("OK") {
@@ -457,7 +472,7 @@ async fn delete_scheduled_task(task_name: String, task_path: String) -> Result<S
             let out = std::process::Command::new("schtasks")
                 .args(["/Delete", "/TN", &full_name, "/F"])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             if out.status.success() {
                 Ok(format!("Tâche '{}' supprimée", task_name))
@@ -482,7 +497,7 @@ async fn run_scheduled_task_now(task_name: String) -> Result<String, String> {
             let out = std::process::Command::new("schtasks")
                 .args(["/Run", "/TN", &task_name])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             if out.status.success() {
                 Ok(format!("Tâche '{}' démarrée", task_name))
@@ -504,7 +519,7 @@ async fn set_power_plan(guid: String) -> Result<String, String> {
             let out = std::process::Command::new("powercfg")
                 .args(["/setactive", &guid])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             if out.status.success() {
                 Ok(format!("Plan d'alimentation {} activé", guid))
@@ -532,7 +547,7 @@ async fn set_default_printer(printer_name: String) -> Result<String, String> {
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             let stdout = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
             if out.status.success() && stdout.contains("OK") {
@@ -618,7 +633,14 @@ async fn install_package_manager(manager: String, window: tauri::Window) -> Resu
                 "scoop" => r#"
 try {
     Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction Stop
-    Invoke-RestMethod -Uri 'https://get.scoop.sh' -ErrorAction Stop | Invoke-Expression
+    # NiTriTe tourne en administrateur : `irm get.scoop.sh | iex` s'arrête alors
+    # (« Running the installer as administrator is disabled ») avec un code 0,
+    # d'où un faux succès. Installeur téléchargé puis lancé avec -RunAsAdmin.
+    $f = Join-Path $env:TEMP 'nitrite-install-scoop.ps1'
+    Invoke-RestMethod -Uri 'https://get.scoop.sh' -OutFile $f -ErrorAction Stop
+    & $f -RunAsAdmin
+    Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue
+    if (-not (Test-Path (Join-Path $env:USERPROFILE 'scoop\shims\scoop.ps1'))) { throw 'Scoop non installé (voir le journal ci-dessus)' }
     Write-Output 'Scoop installé !'
 } catch { Write-Output $_.Exception.Message; exit 1 }
 "#,
@@ -627,6 +649,7 @@ try {
     Set-ExecutionPolicy Bypass -Scope Process -Force -ErrorAction Stop
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
     Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+    if (-not (Test-Path (Join-Path $env:ProgramData 'chocolatey\bin\choco.exe'))) { throw 'Chocolatey non installé (voir le journal ci-dessus)' }
     Write-Output 'Chocolatey installé !'
 } catch { Write-Output $_.Exception.Message; exit 1 }
 "#,
@@ -643,7 +666,7 @@ try {
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(900)
                 .map_err(|e| e.to_string())?;
             let stdout = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
             let _ = window.emit("pkg-manager-install-done", &stdout);

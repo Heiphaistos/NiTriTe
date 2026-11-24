@@ -72,7 +72,7 @@ const cpuScore = computed(() => {
       <div class="diag-stat-row"><span>Global</span><NProgress :value="sysInfo.cpu.usage_percent" size="sm" showLabel /></div>
 
       <!-- Températures par zone thermique (cœurs) -->
-      <NCollapse title="Températures CPU" storageKey="diag-cpu-temps" :defaultOpen="true" style="margin-top:12px">
+      <NCollapse title="Températures (zones ACPI)" storageKey="diag-cpu-temps" :defaultOpen="true" style="margin-top:12px">
         <div v-if="coreTempsLoading" class="diag-loading"><div class="diag-spinner"></div> Lecture des capteurs thermiques...</div>
         <div v-else-if="coreTemps.length === 0" class="card-block" style="margin-top:0">
           <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)">
@@ -81,13 +81,14 @@ const cpuScore = computed(() => {
           </div>
         </div>
         <template v-else>
+          <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px">Zones thermiques ACPI : valeurs du firmware, souvent figées ou mesurées ailleurs que sur le CPU. Pour la vraie température par cœur, utilisez LibreHardwareMonitor ou HWiNFO64.</p>
           <div style="display:flex;flex-wrap:wrap;gap:10px">
             <div v-for="c in coreTemps" :key="c.core" style="display:flex;flex-direction:column;align-items:center;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:12px 16px;gap:6px;min-width:90px">
               <Thermometer :size="16" :style="{ color: c.temp_celsius >= 90 ? 'var(--danger)' : c.temp_celsius >= 70 ? 'var(--warning)' : 'var(--success)' }" />
               <div style="font-size:20px;font-weight:700" :style="{ color: c.temp_celsius >= 90 ? 'var(--danger)' : c.temp_celsius >= 70 ? 'var(--warning)' : 'var(--success)' }">
                 {{ c.temp_celsius.toFixed(0) }}°C
               </div>
-              <NBadge :variant="tempVariant(c.temp_celsius)" size="sm">Zone {{ c.core + 1 }}</NBadge>
+              <NBadge :variant="tempVariant(c.temp_celsius)" size="sm" :title="c.label">Zone {{ c.core + 1 }}</NBadge>
             </div>
           </div>
         </template>

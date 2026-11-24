@@ -1,8 +1,5 @@
 use serde::Serialize;
-use std::process::Command;
 use tauri::Emitter;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 // ─── Événements streaming ──────────────────────────────────────────────────────
 
@@ -32,18 +29,23 @@ pub struct CleanResult {
     pub message: String,
 }
 
-fn ps_run(ps: &str) -> Option<serde_json::Value> {
-    #[cfg(target_os = "windows")]
-    {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",ps]).creation_flags(0x08000000).output().ok()?;
-        // decode_output : les libellés de catégorie ('Système', 'Cache système')
-        // sont accentués et écrits en OEM par PowerShell sans $OutputEncoding.
-        let t = crate::maintenance::commands::decode_output(&o.stdout);
-        serde_json::from_str(t.trim()).ok()
-    }
-    #[cfg(not(target_os = "windows"))]
-    None
+/// Exécute un script PowerShell et parse sa sortie JSON. Timeout obligatoire :
+/// `.output()` brut (version d'origine) n'avait aucune limite, un `net stop`
+/// ou un parcours récursif figé bloquait la page indéfiniment.
+/// `ps_with_timeout` décode déjà la sortie (UTF-8 puis OEM) pour les libellés
+/// accentués ('Système', 'Cache système').
+fn ps_run_timeout(ps: &str, timeout_secs: u64) -> Option<serde_json::Value> {
+    let t = crate::utils::ps::ps_with_timeout(ps, timeout_secs).ok()?;
+    serde_json::from_str(t.trim()).ok()
 }
+
+fn ps_run(ps: &str) -> Option<serde_json::Value> {
+    ps_run_timeout(ps, 120)
+}
+
+/// Fragment PowerShell commun : supprime chaque fichier de `$files`, compte
+/// réellement ce qui a été supprimé ($b/$c) et les échecs ($errs).
+const DELETE_FILES_PS: &str = "$b=0;$c=0;$errs=0;$files|ForEach-Object{try{Remove-Item -LiteralPath $_.FullName -Force -EA Stop;$b+=$_.Length;$c++}catch{$errs++}};@{freed=[math]::Round($b/1MB,2);count=$c;ok=($errs -eq 0)}|ConvertTo-Json -Compress";
 
 // Anti-freeze : PowerShell (calcul tailles dossiers) est bloquant —
 // jamais inline sur le thread de commande.
@@ -131,39 +133,33 @@ pub async fn scan_clean_targets_stream(app: tauri::AppHandle) {
         let total = targets.len() as u8;
         for (idx, (name, path, cat)) in targets.iter().enumerate() {
             let ps_resolve = format!(r#"
-$name='{name}';$path='{path}';$cat='{cat}'
+$name='{name}';$path='{path}';$cat='{cat}';$glob=$null;$rec=$true
 if($name -eq '%TEMP%'){{$path=$env:TEMP}}
 elseif($name -eq 'Windows Error Reports'){{$path="$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive"}}
 elseif($name -eq 'Chrome Cache'){{$path="$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Cache"}}
 elseif($name -eq 'Edge Cache'){{$path="$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache"}}
-elseif($name -eq 'Firefox Cache'){{$path="$env:APPDATA\Mozilla\Firefox\Profiles"}}
+elseif($name -eq 'Firefox Cache'){{$path="$env:LOCALAPPDATA\Mozilla\Firefox\Profiles";$glob="$path\*\cache2"}}
+elseif($name -eq 'Thumbnails DB'){{$path="$env:LOCALAPPDATA\Microsoft\Windows\Explorer";$glob="$path\*cache_*.db";$rec=$false}}
+elseif($name -eq 'Prefetch'){{$glob="$path\*.pf";$rec=$false}}
+if(-not $glob){{$glob=$path}}
 $sz=0.0;$cnt=0
-if($path -and (Test-Path $path)){{
-    $files=@(Get-ChildItem $path -Recurse -File -EA SilentlyContinue)
+if($name -eq 'Corbeille'){{
+    try{{
+        $items=@((New-Object -ComObject Shell.Application).Namespace(0xA).Items());$cnt=$items.Count
+        $bytes=($items|ForEach-Object{{[double]$_.ExtendedProperty('System.Size')}}|Measure-Object -Sum).Sum
+        $sz=if($bytes){{[math]::Round($bytes/1MB,2)}}else{{0}}
+    }}catch{{}}
+}}elseif($glob -and (Test-Path $glob)){{
+    $files=@(Get-ChildItem $glob -Recurse:$rec -File -EA SilentlyContinue)
     $cnt=$files.Count
     $bytes=($files|Measure-Object -Property Length -Sum -EA SilentlyContinue).Sum
     $sz=if($bytes){{[math]::Round($bytes/1MB,2)}}else{{0}}
-}}elseif($name -eq 'Corbeille'){{
-    try{{$rb=(New-Object -ComObject Shell.Application).Namespace(0xA);$cnt=@($rb.Items()).Count;$sz=0.1*$cnt}}catch{{}}
 }}
 @{{name=$name;path=[string]$path;mb=$sz;count=$cnt;cat=$cat}}|ConvertTo-Json -Compress
 "#, name=name, path=path, cat=cat);
 
-            let result = {
-                #[cfg(target_os = "windows")]
-                {
-                    Command::new("powershell")
-                        .args(["-NoProfile", "-NonInteractive", "-Command", &ps_resolve])
-                        .creation_flags(0x08000000)
-                        .output()
-                        .ok()
-                        .and_then(|o| serde_json::from_str::<serde_json::Value>(
-                            crate::maintenance::commands::decode_output(&o.stdout).trim()
-                        ).ok())
-                }
-                #[cfg(not(target_os = "windows"))]
-                { None::<serde_json::Value> }
-            };
+            // Timeout par cible : un parcours figé ne bloque plus tout le scan.
+            let result = ps_run_timeout(&ps_resolve, 180);
 
             let item = result.as_ref().map(|v| CleanTarget {
                 name:       v["name"].as_str().unwrap_or(name).to_string(),
@@ -204,35 +200,55 @@ fn clean_target_blocking(target_name: String) -> CleanResult {
     // rapport. Désormais chaque suppression est comptée en succès/échec réel
     // ($errs) et ok = (aucune erreur), freed/count ne comptent que ce qui a
     // réellement été supprimé.
+    // Fichiers à supprimer par cible ; DELETE_FILES_PS fait le reste.
+    let files_ps: Option<&str> = match target_name.as_str() {
+        // Affichées et cochées par défaut (catégorie « Logs ») mais absentes du
+        // match d'origine : chaque nettoyage par défaut finissait en « Nettoyage
+        // partiel — 2 cible(s) en échec » (Cible inconnue).
+        // CBS.log est tenu ouvert par TrustedInstaller : on ne vise que les
+        // archives (CbsPersist_*), sinon le verrou compterait comme un échec.
+        "Logs CBS"              => Some("$files=@(Get-ChildItem 'C:\\Windows\\Logs\\CBS' -File -EA SilentlyContinue|Where-Object{$_.Name -ne 'CBS.log'})"),
+        "Windows Error Reports" => Some("$files=@(Get-ChildItem \"$env:LOCALAPPDATA\\Microsoft\\Windows\\WER\\ReportArchive\" -Recurse -File -EA SilentlyContinue)"),
+        // Uniquement les dossiers cache2 du profil LOCAL (jamais le profil
+        // Roaming : favoris, mots de passe, historique).
+        "Firefox Cache"         => Some("$files=@(Get-ChildItem \"$env:LOCALAPPDATA\\Mozilla\\Firefox\\Profiles\\*\\cache2\" -Recurse -File -EA SilentlyContinue)"),
+        _ => None,
+    };
+    if let Some(f) = files_ps {
+        let ps = format!("{f};{DELETE_FILES_PS}");
+        return clean_result_from_ps(target_name, &ps);
+    }
     let ps = match target_name.as_str() {
         "%TEMP%"               => "$b=0;$c=0;$errs=0;@(Get-ChildItem $env:TEMP -Recurse -File -EA SilentlyContinue)|ForEach-Object{try{Remove-Item $_.FullName -Force -EA Stop;$b+=$_.Length;$c++}catch{$errs++}};@{freed=[math]::Round($b/1MB,2);count=$c;ok=($errs -eq 0)}|ConvertTo-Json -Compress".to_string(),
         "Windows\\Temp"        => "$b=0;$c=0;$errs=0;@(Get-ChildItem 'C:\\Windows\\Temp' -Recurse -File -EA SilentlyContinue)|ForEach-Object{try{Remove-Item $_.FullName -Force -EA Stop;$b+=$_.Length;$c++}catch{$errs++}};@{freed=[math]::Round($b/1MB,2);count=$c;ok=($errs -eq 0)}|ConvertTo-Json -Compress".to_string(),
         "Prefetch"             => "$b=0;$c=0;$errs=0;@(Get-ChildItem 'C:\\Windows\\Prefetch\\*.pf' -EA SilentlyContinue)|ForEach-Object{try{Remove-Item $_.FullName -Force -EA Stop;$b+=$_.Length;$c++}catch{$errs++}};@{freed=[math]::Round($b/1MB,2);count=$c;ok=($errs -eq 0)}|ConvertTo-Json -Compress".to_string(),
         "Dumps mémoire"        => "$b=0;$c=0;$errs=0;@(Get-ChildItem 'C:\\Windows\\Minidump\\*.dmp' -EA SilentlyContinue)+@(Get-Item 'C:\\Windows\\MEMORY.DMP' -EA SilentlyContinue)|ForEach-Object{try{Remove-Item $_.FullName -Force -EA Stop;$b+=$_.Length;$c++}catch{$errs++}};@{freed=[math]::Round($b/1MB,2);count=$c;ok=($errs -eq 0)}|ConvertTo-Json -Compress".to_string(),
-        "Corbeille"            => "try{Clear-RecycleBin -Force -EA Stop;@{freed=0;count=0;ok=$true}}catch{@{freed=0;count=0;ok=$false}}|ConvertTo-Json -Compress".to_string(),
+        // Taille mesurée AVANT vidage (le rapport affichait toujours « 0 Ko
+        // libérés ») ; Corbeille déjà vide = succès (Clear-RecycleBin lève
+        // une erreur sur une corbeille vide en PowerShell 5.1).
+        "Corbeille"            => "$items=@((New-Object -ComObject Shell.Application).Namespace(0xA).Items());$n=$items.Count;$b=($items|ForEach-Object{[double]$_.ExtendedProperty('System.Size')}|Measure-Object -Sum).Sum;if($n -eq 0){@{freed=0;count=0;ok=$true}|ConvertTo-Json -Compress}else{try{Clear-RecycleBin -Force -EA Stop;@{freed=[math]::Round($b/1MB,2);count=$n;ok=$true}|ConvertTo-Json -Compress}catch{@{freed=0;count=0;ok=$false}|ConvertTo-Json -Compress}}".to_string(),
         "Chrome Cache"         => "$p=\"$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\Cache\";$b=0;$c=0;$errs=0;if(Test-Path $p){@(Get-ChildItem $p -Recurse -File -EA SilentlyContinue)|ForEach-Object{try{Remove-Item $_.FullName -Force -EA Stop;$b+=$_.Length;$c++}catch{$errs++}}};@{freed=[math]::Round($b/1MB,2);count=$c;ok=($errs -eq 0)}|ConvertTo-Json -Compress".to_string(),
         "Edge Cache"           => "$p=\"$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\Cache\";$b=0;$c=0;$errs=0;if(Test-Path $p){@(Get-ChildItem $p -Recurse -File -EA SilentlyContinue)|ForEach-Object{try{Remove-Item $_.FullName -Force -EA Stop;$b+=$_.Length;$c++}catch{$errs++}}};@{freed=[math]::Round($b/1MB,2);count=$c;ok=($errs -eq 0)}|ConvertTo-Json -Compress".to_string(),
         "Windows Update Cache" => "net stop wuauserv /y 2>&1|Out-Null;net stop bits /y 2>&1|Out-Null;Start-Sleep -Seconds 2;$b=0;$c=0;$errs=0;@(Get-ChildItem 'C:\\Windows\\SoftwareDistribution\\Download' -Recurse -File -EA SilentlyContinue)|ForEach-Object{try{Remove-Item $_.FullName -Force -EA Stop;$b+=$_.Length;$c++}catch{$errs++}};net start bits 2>&1|Out-Null;net start wuauserv 2>&1|Out-Null;@{freed=[math]::Round($b/1MB,2);count=$c;ok=($errs -eq 0)}|ConvertTo-Json -Compress".to_string(),
         "Thumbnails DB"        => "$b=0;$c=0;$errs=0;try{Stop-Process -Name explorer -Force -EA SilentlyContinue;Start-Sleep -Milliseconds 500;$p=\"$env:LOCALAPPDATA\\Microsoft\\Windows\\Explorer\";@(Get-ChildItem $p -Filter 'thumbcache_*.db' -EA SilentlyContinue)|ForEach-Object{try{Remove-Item $_.FullName -Force -EA Stop;$b+=$_.Length;$c++}catch{$errs++}};@(Get-ChildItem $p -Filter 'iconcache_*.db' -EA SilentlyContinue)|ForEach-Object{try{Remove-Item $_.FullName -Force -EA Stop;$b+=$_.Length;$c++}catch{$errs++}}}finally{if(-not(Get-Process explorer -EA SilentlyContinue)){Start-Process explorer}};@{freed=[math]::Round($b/1MB,2);count=$c;ok=($errs -eq 0)}|ConvertTo-Json -Compress".to_string(),
         _ => return CleanResult { target: target_name, success: false, message: "Cible inconnue".to_string(), ..Default::default() },
     };
-    #[cfg(target_os = "windows")]
-    {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",&ps]).creation_flags(0x08000000).output();
-        if let Ok(o) = o {
-            let t = String::from_utf8_lossy(&o.stdout);
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(t.trim()) {
-                return CleanResult {
-                    target: target_name,
-                    freed_mb: v["freed"].as_f64().unwrap_or(0.0),
-                    files_deleted: v["count"].as_u64().unwrap_or(0) as u32,
-                    success: v["ok"].as_bool().unwrap_or(false),
-                    message: String::new(),
-                };
-            }
-        }
+    clean_result_from_ps(target_name, &ps)
+}
+
+/// Lance le script de nettoyage (timeout 10 min : le cache Windows Update peut
+/// peser plusieurs Go) et convertit son JSON en CleanResult.
+fn clean_result_from_ps(target_name: String, ps: &str) -> CleanResult {
+    match ps_run_timeout(ps, 600) {
+        Some(v) => CleanResult {
+            target: target_name,
+            freed_mb: v["freed"].as_f64().unwrap_or(0.0),
+            files_deleted: v["count"].as_u64().unwrap_or(0) as u32,
+            success: v["ok"].as_bool().unwrap_or(false),
+            message: String::new(),
+        },
+        None => CleanResult { target: target_name, success: false, message: "Erreur ou délai dépassé".to_string(), ..Default::default() },
     }
-    CleanResult { target: target_name, success: false, message: "Erreur".to_string(), ..Default::default() }
 }
 
 /// Quarantine: move files to %LOCALAPPDATA%\NiTriTe\quarantine\ instead of deleting
@@ -262,13 +278,23 @@ fn quarantine_target_blocking(target_name: String) -> CleanResult {
     // comme si c'était le cas.
     let ps = format!(r#"
 $src = {src}
-$qDir = "$env:LOCALAPPDATA\NiTriTe\quarantine\{name}"
+# Un sous-dossier par session + chemin relatif conservé : l'ancien
+# `Join-Path $qDir $_.Name` aplatissait l'arborescence et `-Force` écrasait
+# silencieusement les homonymes (deux « data_1 » de sous-dossiers différents,
+# ou une quarantaine précédente) : fichiers perdus alors que la quarantaine
+# est justement censée être récupérable.
+$qDir = "$env:LOCALAPPDATA\NiTriTe\quarantine\{name}\" + (Get-Date -Format 'yyyyMMdd-HHmmss')
 New-Item -ItemType Directory -Force -Path $qDir | Out-Null
 $b=0; $c=0; $errs=0
-if (Test-Path $src) {{
-    @(Get-ChildItem $src -Recurse -File -EA SilentlyContinue) | ForEach-Object {{
-        $dst = Join-Path $qDir $_.Name
-        try {{ Move-Item $_.FullName -Destination $dst -Force -EA Stop; $b += $_.Length; $c++ }} catch {{ $errs++ }}
+if (Test-Path -LiteralPath $src) {{
+    $root = (Resolve-Path -LiteralPath $src).ProviderPath.TrimEnd('\')
+    @(Get-ChildItem -LiteralPath $root -Recurse -File -EA SilentlyContinue) | ForEach-Object {{
+        $rel = $_.FullName.Substring($root.Length).TrimStart('\')
+        $dst = Join-Path $qDir $rel
+        try {{
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) -EA Stop | Out-Null
+            Move-Item -LiteralPath $_.FullName -Destination $dst -EA Stop; $b += $_.Length; $c++
+        }} catch {{ $errs++ }}
     }}
 }}
 @{{freed=[math]::Round($b/1MB,2);count=$c;ok=($errs -eq 0)}} | ConvertTo-Json -Compress
@@ -340,6 +366,8 @@ fn sanitize_quarantine_entry_name(name: &str) -> Option<String> {
     }
 }
 
+const CLEAR_QUARANTINE_PS: &str = "$ok=$true;if(Test-Path -LiteralPath $p){try{Remove-Item -LiteralPath $p -Recurse -Force -EA Stop}catch{$ok=$false}};$ok|ConvertTo-Json -Compress";
+
 fn clear_quarantine_blocking(entry_name: Option<String>) -> bool {
     // Contrairement à toutes les autres fonctions PS de ce fichier, ce script
     // se terminait par un `$true` NU (pas `| ConvertTo-Json`) : PowerShell
@@ -354,11 +382,13 @@ fn clear_quarantine_blocking(entry_name: Option<String>) -> bool {
             Some(s) => s,
             None => return false,
         };
-        format!("$p=\"$env:LOCALAPPDATA\\NiTriTe\\quarantine\\{safe}\";if(Test-Path $p){{Remove-Item $p -Recurse -Force -EA SilentlyContinue}};$true | ConvertTo-Json -Compress")
+        format!("$p=\"$env:LOCALAPPDATA\\NiTriTe\\quarantine\\{safe}\";{CLEAR_QUARANTINE_PS}")
     } else {
-        "$p=\"$env:LOCALAPPDATA\\NiTriTe\\quarantine\";if(Test-Path $p){Remove-Item $p -Recurse -Force -EA SilentlyContinue};$true | ConvertTo-Json -Compress".to_string()
+        format!("$p=\"$env:LOCALAPPDATA\\NiTriTe\\quarantine\";{CLEAR_QUARANTINE_PS}")
     };
-    ps_run(&ps).is_some()
+    // Avant : `-EA SilentlyContinue` puis `$true` codé en dur → succès
+    // rapporté même quand un fichier verrouillé restait en place.
+    ps_run(&ps).and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
 #[tauri::command]
@@ -400,16 +430,12 @@ fn get_large_files_sync(folder: String, min_size_mb: f64) -> Vec<serde_json::Val
     Select-Object -First 100 |
     ForEach-Object {{ @{{ name=$_.Name; path=$_.FullName; mb=[math]::Round($_.Length/1MB,1); ext=$_.Extension; mod=[string]$_.LastWriteTime.ToString('yyyy-MM-dd') }} }}) | ConvertTo-Json -Compress
 "#, folder=f, min=min_bytes);
-    #[cfg(target_os = "windows")]
-    {
-        let o = Command::new("powershell").args(["-NoProfile","-NonInteractive","-Command",&ps]).creation_flags(0x08000000).output();
-        if let Ok(o) = o {
-            // decode_output : noms de fichiers réels souvent accentués (FR).
-            let t = crate::maintenance::commands::decode_output(&o.stdout);
-            let t = t.trim();
-            let arr_t = if t.starts_with('{') { format!("[{}]",t) } else { t.to_string() };
-            if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&arr_t) { return arr; }
-        }
+    // Timeout 5 min : parcours récursif de C:\Users potentiellement très long.
+    // ps_with_timeout décode la sortie (noms de fichiers accentués).
+    if let Ok(t) = crate::utils::ps::ps_with_timeout(&ps, 300) {
+        let t = t.trim();
+        let arr_t = if t.starts_with('{') { format!("[{}]",t) } else { t.to_string() };
+        if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&arr_t) { return arr; }
     }
     vec![]
 }

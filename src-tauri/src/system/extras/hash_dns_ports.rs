@@ -21,21 +21,39 @@ pub async fn hash_file(path: String, algorithm: String) -> Result<HashResult, St
         .map_err(|e| e.to_string())?
 }
 
-fn hash_file_blocking(path: String, algorithm: String) -> Result<HashResult, String> {
-    let algo = match algorithm.to_uppercase().as_str() {
+/// Délai maximal d'un hachage : un fichier de 100 Go sur disque USB 2.0 reste
+/// sous l'heure ; au-delà le processus PowerShell est tué (pas de gel infini).
+const HASH_TIMEOUT_SECS: u64 = 3600;
+
+fn hash_algo(algorithm: &str) -> &'static str {
+    match algorithm.to_uppercase().as_str() {
         "MD5" => "MD5",
         "SHA1" => "SHA1",
-        "SHA256" => "SHA256",
         _ => "SHA256",
-    };
+    }
+}
+
+fn hash_file_blocking(path: String, algorithm: String) -> Result<HashResult, String> {
+    let algo = hash_algo(&algorithm);
+    let meta = std::fs::metadata(&path).map_err(|e| format!("Fichier inaccessible : {}", e))?;
+    if !meta.is_file() {
+        return Err("Le chemin n'est pas un fichier".to_string());
+    }
     // Chemin passé via $args[0] (arg processus séparé) — aucune interpolation PS possible
     let script = format!(
-        "Get-FileHash -LiteralPath $args[0] -Algorithm {} | Select-Object -ExpandProperty Hash",
+        "(Get-FileHash -LiteralPath $args[0] -Algorithm {} -ErrorAction Stop).Hash",
         algo
     );
-    let hash = ps_with_args(&script, &[&path])?;
-    let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-    Ok(HashResult { path, algorithm: algo.to_string(), hash: hash.trim().to_string(), size_bytes: size })
+    let r = ps_with_args(&script, &[&path], HASH_TIMEOUT_SECS)?;
+    let hash = r.stdout.trim().to_string();
+    // Fichier verrouillé (pagefile, VHDX monté) : Get-FileHash n'écrit rien sur
+    // stdout et l'erreur part sur stderr — l'ancien code renvoyait Ok avec un
+    // hash vide, affiché comme un résultat.
+    if hash.is_empty() || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+        let err = r.stderr.lines().find(|l| !l.trim().is_empty()).unwrap_or("hachage impossible").trim().to_string();
+        return Err(format!("Hachage impossible : {}", err));
+    }
+    Ok(HashResult { path, algorithm: algo.to_string(), hash, size_bytes: meta.len() })
 }
 
 // Anti-freeze : hachage d'un dossier entier (jusqu'à 500 fichiers) est
@@ -48,22 +66,20 @@ pub async fn hash_folder(path: String, algorithm: String, max_files: u32) -> Res
 }
 
 fn hash_folder_blocking(path: String, algorithm: String, max_files: u32) -> Result<Vec<HashResult>, String> {
-    let algo = match algorithm.to_uppercase().as_str() {
-        "MD5"    => "MD5",
-        "SHA1"   => "SHA1",
-        "SHA256" => "SHA256",
-        _        => "SHA256",
-    };
+    let algo = hash_algo(&algorithm);
     let n = max_files.min(500);
     // Chemin passé via $args[0] (arg processus séparé) — aucune interpolation PS possible
     let script = format!(r#"Get-ChildItem -LiteralPath $args[0] -File -ErrorAction SilentlyContinue | Select-Object -First {n} | ForEach-Object {{
-    $h = (Get-FileHash $_.FullName -Algorithm {algo} -ErrorAction SilentlyContinue).Hash
+    $h = (Get-FileHash -LiteralPath $_.FullName -Algorithm {algo} -ErrorAction SilentlyContinue).Hash
     if ($h) {{ [PSCustomObject]@{{ path=$_.FullName; size=$_.Length; hash=$h }} }}
 }} | ConvertTo-Json -Compress"#,
         n = n, algo = algo);
-    let out = ps_with_args(&script, &[&path])?;
+    // -LiteralPath : sans lui, un nom contenant [ ] (« photo [1].jpg ») était lu
+    // comme un motif générique et ignoré en silence.
+    let out = ps_with_args(&script, &[&path], HASH_TIMEOUT_SECS)?.stdout;
+    let out = out.trim();
     if out.is_empty() { return Ok(vec![]); }
-    let arr: Vec<serde_json::Value> = parse_json_arr(&out);
+    let arr: Vec<serde_json::Value> = parse_json_arr(out);
     Ok(arr.iter().filter_map(|v| {
         let hash = v["hash"].as_str().unwrap_or("").to_string();
         if hash.is_empty() { return None; }
@@ -84,6 +100,12 @@ pub struct DnsPreset {
     pub name: String,
     pub primary: String,
     pub secondary: String,
+    /// Adresses IPv6 du même fournisseur. Sans elles, les box (Free, Orange,
+    /// SFR, Bouygues) continuent de distribuer leurs DNS IPv6 (RA/DHCPv6) et
+    /// Windows les interroge aussi : un DNS filtrant (Family, AdGuard, Quad9)
+    /// était contourné sur tout réseau IPv6.
+    pub primary6: String,
+    pub secondary6: String,
     pub description: String,
 }
 
@@ -95,17 +117,27 @@ pub struct NetworkAdapterInfo {
     pub current_dns: Vec<String>,
 }
 
+fn preset(id: &str, name: &str, ips: [&str; 4], description: &str) -> DnsPreset {
+    DnsPreset {
+        id: id.into(), name: name.into(),
+        primary: ips[0].into(), secondary: ips[1].into(),
+        primary6: ips[2].into(), secondary6: ips[3].into(),
+        description: description.into(),
+    }
+}
+
+// Adresses publiques officielles des fournisseurs (revues le 2026-11-23).
 #[tauri::command]
 pub fn get_dns_presets() -> Vec<DnsPreset> {
     vec![
-        DnsPreset { id: "google".into(),      name: "Google".into(),            primary: "8.8.8.8".into(),         secondary: "8.8.4.4".into(),        description: "Rapide, fiable, mondial".into() },
-        DnsPreset { id: "cloudflare".into(),   name: "Cloudflare".into(),        primary: "1.1.1.1".into(),         secondary: "1.0.0.1".into(),        description: "Le plus rapide, confidentialité".into() },
-        DnsPreset { id: "cloudflare-doh".into(),name: "Cloudflare Family".into(),primary: "1.1.1.3".into(),         secondary: "1.0.0.3".into(),        description: "Filtrage malware + adult".into() },
-        DnsPreset { id: "opendns".into(),      name: "OpenDNS".into(),           primary: "208.67.222.222".into(),  secondary: "208.67.220.220".into(),  description: "Filtrage contenus, Cisco".into() },
-        DnsPreset { id: "nextdns".into(),      name: "NextDNS".into(),           primary: "45.90.28.0".into(),      secondary: "45.90.30.0".into(),      description: "DNS personnalisable avec dashboard".into() },
-        DnsPreset { id: "quad9".into(),        name: "Quad9".into(),             primary: "9.9.9.9".into(),         secondary: "149.112.112.112".into(), description: "Sécurisé, bloque malwares".into() },
-        DnsPreset { id: "adguard".into(),      name: "AdGuard".into(),           primary: "94.140.14.14".into(),    secondary: "94.140.15.15".into(),    description: "Bloque pubs et trackers".into() },
-        DnsPreset { id: "auto".into(),         name: "Automatique (DHCP)".into(),primary: "".into(),                secondary: "".into(),               description: "Remettre le DNS automatique".into() },
+        preset("google", "Google", ["8.8.8.8", "8.8.4.4", "2001:4860:4860::8888", "2001:4860:4860::8844"], "Rapide, fiable, mondial"),
+        preset("cloudflare", "Cloudflare", ["1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001"], "Très rapide, respect de la vie privée"),
+        preset("cloudflare-doh", "Cloudflare Family", ["1.1.1.3", "1.0.0.3", "2606:4700:4700::1113", "2606:4700:4700::1003"], "Filtrage malwares + contenus adultes"),
+        preset("opendns", "OpenDNS", ["208.67.222.222", "208.67.220.220", "2620:119:35::35", "2620:119:53::53"], "Filtrage contenus, Cisco"),
+        preset("nextdns", "NextDNS", ["45.90.28.0", "45.90.30.0", "2a07:a8c0::", "2a07:a8c1::"], "Sans compte : résolveur simple ; filtrage après liaison de l'IP sur nextdns.io"),
+        preset("quad9", "Quad9", ["9.9.9.9", "149.112.112.112", "2620:fe::fe", "2620:fe::9"], "Sécurisé, bloque les malwares (Suisse)"),
+        preset("adguard", "AdGuard", ["94.140.14.14", "94.140.15.15", "2a10:50c0::ad1:ff", "2a10:50c0::ad2:ff"], "Bloque pubs et traqueurs"),
+        preset("auto", "Automatique (DHCP)", ["", "", "", ""], "Remettre le DNS automatique (IPv4 et IPv6)"),
     ]
 }
 
@@ -120,7 +152,8 @@ pub async fn get_network_adapters_for_dns() -> Result<Vec<NetworkAdapterInfo>, S
 fn get_network_adapters_for_dns_blocking() -> Result<Vec<NetworkAdapterInfo>, String> {
     let script = r#"
 Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | ForEach-Object {
-    $dns = (Get-DnsClientServerAddress -InterfaceAlias $_.Name -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses
+    # IPv4 + IPv6 ; fec0:0:0:ffff::1..3 = valeurs par défaut Windows sans DNS IPv6, pas de vrais serveurs
+    $dns = (Get-DnsClientServerAddress -InterfaceAlias $_.Name -ErrorAction SilentlyContinue).ServerAddresses | Where-Object { $_ -notlike 'fec0:0:0:ffff::*' }
     [PSCustomObject]@{
         name = $_.Name
         description = $_.InterfaceDescription
@@ -146,37 +179,53 @@ Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | ForEach-Object {
 
 // Anti-freeze : PowerShell est bloquant — jamais inline sur le thread de commande.
 #[tauri::command]
-pub async fn switch_dns(adapter: String, primary: String, secondary: String) -> Result<String, String> {
-    tokio::task::spawn_blocking(move || switch_dns_blocking(adapter, primary, secondary))
+pub async fn switch_dns(adapter: String, primary: String, secondary: String, ipv6: Option<Vec<String>>) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || switch_dns_blocking(adapter, primary, secondary, ipv6.unwrap_or_default()))
         .await
         .map_err(|e| e.to_string())?
 }
 
-fn switch_dns_blocking(adapter: String, primary: String, secondary: String) -> Result<String, String> {
-    // Valider les IPs avant usage — après validation, ne contiennent que [0-9.:/]
-    if !primary.is_empty() {
-        primary.parse::<std::net::IpAddr>().map_err(|_| format!("IP DNS primaire invalide : {}", primary))?;
+/// Valide chaque adresse (IpAddr) et la rend sous forme canonique : ensuite
+/// elle ne contient que [0-9a-f.:], donc sûre dans une chaîne PS simple-quote.
+fn canonical_ips(list: &[&str], label: &str) -> Result<Vec<String>, String> {
+    list.iter().map(|s| s.trim()).filter(|s| !s.is_empty())
+        .map(|s| s.parse::<std::net::IpAddr>().map(|ip| ip.to_string()).map_err(|_| format!("IP DNS {} invalide : {}", label, s)))
+        .collect()
+}
+
+fn ps_list(ips: &[String]) -> String {
+    format!("@({})", ips.iter().map(|i| format!("'{}'", i)).collect::<Vec<_>>().join(","))
+}
+
+fn switch_dns_script(main: &[String], v6: &[String]) -> String {
+    if main.is_empty() {
+        return "try { Set-DnsClientServerAddress -InterfaceAlias $args[0] -ResetServerAddresses -ErrorAction Stop; 'OK' } catch { \"ERR:$($_.Exception.Message)\" }".to_string();
     }
-    if !secondary.is_empty() {
-        secondary.parse::<std::net::IpAddr>().map_err(|_| format!("IP DNS secondaire invalide : {}", secondary))?;
+    // Liste combinée IPv4+IPv6 d'abord ; si l'adaptateur la refuse (IPv6
+    // désactivé), repli IPv4 seul signalé par OK4 plutôt qu'un échec complet.
+    format!(
+        "$m = {m}; $v6 = {v6}; try {{ Set-DnsClientServerAddress -InterfaceAlias $args[0] -ServerAddresses ($m + $v6) -ErrorAction Stop; 'OK' }} catch {{ $e = $_.Exception.Message; if ($v6.Count) {{ try {{ Set-DnsClientServerAddress -InterfaceAlias $args[0] -ServerAddresses $m -ErrorAction Stop; 'OK4' }} catch {{ \"ERR:$($_.Exception.Message)\" }} }} else {{ \"ERR:$e\" }} }}",
+        m = ps_list(main), v6 = ps_list(v6),
+    )
+}
+
+fn switch_dns_blocking(adapter: String, primary: String, secondary: String, ipv6: Vec<String>) -> Result<String, String> {
+    let main = canonical_ips(&[&primary, &secondary], "primaire/secondaire")?;
+    let v6 = canonical_ips(&ipv6.iter().map(String::as_str).collect::<Vec<_>>(), "IPv6")?;
+    if main.is_empty() && !v6.is_empty() {
+        return Err("Serveur DNS primaire requis".to_string());
     }
-    // Adaptateur passé via $args[0] pour éviter l'injection PS par bypass '''.
-    // IPs validées (IpAddr) donc sûres à embarquer dans la chaîne simple-quote.
-    let action = if primary.is_empty() {
-        "Set-DnsClientServerAddress -InterfaceAlias $args[0] -ResetServerAddresses -ErrorAction Stop".to_string()
-    } else if secondary.is_empty() {
-        format!("Set-DnsClientServerAddress -InterfaceAlias $args[0] -ServerAddresses '{}' -ErrorAction Stop", primary)
-    } else {
-        format!("Set-DnsClientServerAddress -InterfaceAlias $args[0] -ServerAddresses '{}','{}' -ErrorAction Stop", primary, secondary)
-    };
-    // -ErrorAction Stop + try/catch : sans ça, un échec non-terminant (adaptateur
-    // introuvable, accès refusé) laisserait '; OK' s'imprimer → faux succès, car
-    // ps_with_args ne vérifie pas le code de sortie.
-    let script = format!("try {{ {action}; 'OK' }} catch {{ \"ERR:$($_.Exception.Message)\" }}");
-    let out = ps_with_args(&script, &[&adapter])?;
-    let t = out.trim();
-    if t.starts_with("OK") {
+    // Adaptateur passé via $args[0] (argument de processus séparé) : aucune
+    // injection possible par son nom. -ErrorAction Stop + try/catch : sans ça
+    // un échec non terminant laissait 'OK' s'imprimer.
+    let r = ps_with_args(&switch_dns_script(&main, &v6), &[&adapter], 60)?;
+    let t = r.stdout.trim();
+    if t.starts_with("OK4") {
+        Ok("Serveurs DNS IPv4 mis à jour (IPv6 refusé par l'adaptateur : les DNS IPv6 du réseau restent actifs)".to_string())
+    } else if t.starts_with("OK") {
         Ok("Serveurs DNS mis à jour".to_string())
+    } else if t.is_empty() {
+        Err(r.stderr.lines().find(|l| !l.trim().is_empty()).unwrap_or("échec PowerShell sans message").trim().to_string())
     } else {
         Err(t.trim_start_matches("ERR:").trim().to_string())
     }
@@ -284,7 +333,9 @@ $conns | ConvertTo-Json -Compress
             process_name: v["proc"].as_str().unwrap_or("").to_string(),
         })
     }).collect();
-    ports.sort_by_key(|p| p.local_port);
+    // Tri (port, protocole) : dedup_by_key ne retire que les doublons CONSÉCUTIFS ;
+    // trié par port seul, TCP/UDP alternés sur un même port restaient en double.
+    ports.sort_by(|a, b| (a.local_port, &a.protocol).cmp(&(b.local_port, &b.protocol)));
     ports.dedup_by_key(|p| (p.protocol.clone(), p.local_port));
     Ok(ports)
 }
@@ -330,6 +381,36 @@ mod tests {
             assert!(!p.id.is_empty(), "Preset has empty id");
             assert!(!p.name.is_empty(), "Preset '{}' has empty name", p.id);
         }
+    }
+
+    #[test]
+    fn dns_presets_all_ips_valid_and_ipv6_family() {
+        for p in get_dns_presets().iter().filter(|p| p.id != "auto") {
+            for ip in [&p.primary, &p.secondary] {
+                assert!(ip.parse::<std::net::Ipv4Addr>().is_ok(), "{} : {}", p.id, ip);
+            }
+            for ip in [&p.primary6, &p.secondary6] {
+                assert!(ip.parse::<std::net::Ipv6Addr>().is_ok(), "{} : {}", p.id, ip);
+            }
+        }
+    }
+
+    #[test]
+    fn canonical_ips_validates_and_normalizes() {
+        assert_eq!(canonical_ips(&["2606:4700:4700:0::1111", " 1.1.1.1 ", ""], "x").unwrap(), vec!["2606:4700:4700::1111", "1.1.1.1"]);
+        assert!(canonical_ips(&["1.1.1.1'; Remove-Item C:\\ -Recurse; '"], "x").is_err());
+        assert!(canonical_ips(&["8.8.8"], "x").is_err());
+    }
+
+    #[test]
+    fn switch_dns_script_shapes() {
+        let reset = switch_dns_script(&[], &[]);
+        assert!(reset.contains("-ResetServerAddresses"));
+        let s = switch_dns_script(&["1.1.1.1".into()], &["2606:4700:4700::1111".into()]);
+        assert!(s.contains("$m = @('1.1.1.1'); $v6 = @('2606:4700:4700::1111')"));
+        assert!(s.contains("'OK4'"), "repli IPv4 seul attendu");
+        let s = switch_dns_script(&["1.1.1.1".into()], &[]);
+        assert!(s.contains("$v6 = @()"));
     }
 
     #[test]

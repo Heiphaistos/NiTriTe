@@ -4,6 +4,7 @@ import { ref, computed, onMounted } from "vue";
 import { csvCell } from "@/composables/useExportData";
 import { invoke, isTauriContext } from "@/utils/invoke";
 import { confirm } from "@tauri-apps/plugin-dialog";
+import { parseDriverQueryCsv } from "@/utils/driverquery";
 import { sdiAcquire, sdiRelease } from "@/utils/sdiGuard";
 import type { CommandResult } from "@/types/diagnostic";
 import NCard from "@/components/ui/NCard.vue";
@@ -102,24 +103,13 @@ const filteredDrivers = computed(() => {
 });
 
 function parseCSV(csv: string): DriverEntry[] {
-  const lines = csv.trim().split("\n").filter((l) => l.trim());
-  if (lines.length < 2) return [];
-
-  const result: DriverEntry[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].match(/("([^"]*)"|[^,]+)/g)?.map((c) => c.replace(/^"|"$/g, "").trim()) ?? [];
-    if (cols.length >= 5) {
-      result.push({
-        module: cols[0] ?? "",
-        displayName: cols[1] ?? "",
-        driverType: cols[3] ?? "",
-        linkDate: cols[5] ?? cols[4] ?? "",
-        state: cols[2] ?? "",
-        provider: cols[6] ?? undefined,
-      });
-    }
-  }
-  return result;
+  return parseDriverQueryCsv(csv).map((r) => ({
+    module: r.module,
+    displayName: r.displayName,
+    driverType: r.driverType,
+    linkDate: r.linkDate,
+    state: r.state,
+  }));
 }
 
 async function loadDrivers() {
@@ -539,8 +529,10 @@ onMounted(() => {
                           <RotateCcw :size="12" />
                           Rollback
                         </NButton>
-                        <!-- Enable / Disable -->
+                        <!-- Enable / Disable : driverquery ne fournit aucun identifiant
+                             PnP, le bouton ne pouvait qu'afficher une erreur. -->
                         <NButton
+                          v-if="d.instance_id"
                           :variant="isRunning(d) ? 'warning' : 'success'"
                           size="sm"
                           :loading="togglingIds.includes(driverKey(d))"

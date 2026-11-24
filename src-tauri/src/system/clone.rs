@@ -16,6 +16,10 @@ pub struct DiskInfo {
     pub partitions: Vec<PartitionInfo>,
     pub disk_type: String,
     pub bus_type: String,
+    /// Clé USB / carte mémoire (Win32_DiskDrive « Removable Media »). Un disque
+    /// dur externe USB est « External hard disk media » → false. BusType vaut
+    /// « USB » pour les deux : c'est ce champ qui les distingue.
+    pub is_removable: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -47,6 +51,10 @@ try {
     $disks = Get-Disk -ErrorAction SilentlyContinue
     if (-not $disks) { Write-Output '[]'; exit }
     $result = @()
+    $removable = @{}
+    Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue | ForEach-Object {
+        $removable[[int]$_.Index] = ([string]$_.MediaType -like 'Removable*')
+    }
     foreach ($disk in $disks) {
         $partitions = @()
         $parts = Get-Partition -DiskNumber $disk.Number -ErrorAction SilentlyContinue
@@ -70,6 +78,7 @@ try {
             size_gb    = [math]::Round([double]$disk.Size / 1GB, 2)
             disk_type  = [string]$disk.MediaType
             bus_type   = [string]$disk.BusType
+            is_removable = [bool]$removable[[int]$disk.Number]
             partitions = $partitions
         }
     }
@@ -99,6 +108,7 @@ fn parse_disk(v: serde_json::Value) -> Option<DiskInfo> {
         size_gb: v["size_gb"].as_f64().unwrap_or(0.0),
         disk_type: v["disk_type"].as_str().unwrap_or("HDD").to_string(),
         bus_type: v["bus_type"].as_str().unwrap_or("").to_string(),
+        is_removable: v["is_removable"].as_bool().unwrap_or(false),
         partitions: parts,
     })
 }
@@ -319,7 +329,7 @@ fn is_admin() -> bool {
             .args(["/groups"])
             .creation_flags(0x08000000)
             .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).contains("S-1-16-12288"))
+            .map(|o| crate::maintenance::commands::decode_output(&o.stdout).contains("S-1-16-12288"))
             .unwrap_or(false)
     }
     #[cfg(not(target_os = "windows"))]
@@ -401,6 +411,13 @@ pub fn clone_with_robocopy(
                 "/COPY:DAT",
                 "/R:2", "/W:3",
                 "/MT:8",
+                // /XJ : sans lui robocopy suit les jonctions de C:\ (« Documents
+                // and Settings », « Application Data » qui pointe sur son propre
+                // parent…) : chemins sans fin et données copiées en double.
+                "/XJ",
+                // Fichiers et dossiers propres au volume source, jamais à cloner.
+                "/XD", "System Volume Information", "$Recycle.Bin",
+                "/XF", "pagefile.sys", "hiberfil.sys", "swapfile.sys",
                 "/NFL", "/NDL", "/NP",
             ])
             .creation_flags(0x08000000)
@@ -500,19 +517,13 @@ fn emit(window: &tauri::Window, step: &str, pct: u32, msg: &str) {
     }));
 }
 
+/// Lecture des disques avec délai maximal : un Get-Disk/Get-Volume figé sur
+/// un disque USB mourant ne bloque plus la page indéfiniment. decode_output
+/// (via execute_system_command) : labels de volume FR accentués.
 fn run_ps(script: &str) -> Option<String> {
-    #[cfg(target_os = "windows")]
-    {
-        let o = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", script])
-            .creation_flags(0x08000000)
-            .output().ok()?;
-        // decode_output : labels de disque/volume souvent nommés par l'utilisateur
-        // en FR accentué ("Données", "Système") — sinon mojibake dans get_disks.
-        Some(crate::maintenance::commands::decode_output(&o.stdout))
-    }
-    #[cfg(not(target_os = "windows"))]
-    None
+    crate::maintenance::commands::execute_system_command(
+        "powershell", &["-NoProfile", "-NonInteractive", "-Command", script], 90,
+    ).ok().map(|o| o.stdout)
 }
 
 #[cfg(test)]

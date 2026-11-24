@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { invoke } from "@/utils/invoke";
+import { useNotificationStore } from "@/stores/notifications";
 import { HardDrive } from "lucide-vue-next";
 import NBadge from "@/components/ui/NBadge.vue";
 import NButton from "@/components/ui/NButton.vue";
@@ -27,13 +28,19 @@ const channels = computed(() => {
   return `${populated} modules`;
 });
 
+// L'ancien `cmd /c start "" cpuz_x64.exe || …` cherchait CPU-Z dans le PATH (jamais
+// le cas) et avalait l'erreur : bouton sans effet. On passe par les portables de l'app.
 async function openCpuZ() {
+  const notify = useNotificationStore();
   try {
-    await invoke('run_system_command', {
-      cmd: 'cmd',
-      args: ['/c', 'start "" cpuz_x64.exe 2>nul || start "" cpuz.exe 2>nul'],
-    });
-  } catch { /* lancement CPU-Z non critique */ }
+    const apps = await invoke<{ id: string }[]>("get_portable_apps");
+    const id = apps.find(a => a.id.toLowerCase().includes("cpuz") || a.id.toLowerCase().includes("cpu-z"))?.id;
+    if (id) { await invoke("launch_portable", { appId: id }); return; }
+    notify.info("CPU-Z non trouvé", "Ouverture du site officiel");
+    await invoke("open_url", { url: "https://www.cpuid.com/softwares/cpu-z.html" });
+  } catch (e: unknown) {
+    notify.error("CPU-Z", String(e).slice(0, 160));
+  }
 }
 </script>
 

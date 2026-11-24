@@ -65,8 +65,8 @@ fn enable_firewall_all_profiles_blocking() -> Result<String, String> {
         .creation_flags(0x08000000)
         .output()
         .map_err(|e| e.to_string())?;
-    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if out.status.success() { Ok(s) } else { Err(String::from_utf8_lossy(&out.stderr).to_string()) }
+    let s = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
+    if out.status.success() { Ok(s) } else { Err(crate::maintenance::commands::decode_output(&out.stderr).to_string()) }
 }
 
 // ─── Software Uninstall (quick) ───────────────────────────────────────────────

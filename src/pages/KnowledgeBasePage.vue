@@ -2,6 +2,7 @@
 import { ref, computed, markRaw, onMounted, type Component } from "vue";
 import { invoke, isTauriContext } from "@/utils/invoke";
 import { useNotificationStore } from "@/stores/notifications";
+import { confirm } from "@tauri-apps/plugin-dialog";
 import NCard from "@/components/ui/NCard.vue";
 import NSearchBar from "@/components/ui/NSearchBar.vue";
 import { knowledgeBase } from "@/data/knowledgeBase";
@@ -137,11 +138,34 @@ function relatedItems(item: KBItem, catId: string): KBItem[] {
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────
+// Commandes a copier seulement : exemples a adapter (proxy, IP, nom de
+// logiciel, fichiers video) ou trop longues pour la limite de 60 s cote Rust
+// (sfc, DISM, scan Defender, winget --all seraient tues en cours de route).
+const COPY_ONLY = /corp\.com|192\.168\.|NomDu|input\.mp4|HandBrakeCLI|^vlc |\bsfc\b|\bdism\b|MpCmdRun|winget upgrade --all|winword/i;
+function canRun(cmd: string): boolean { return !COPY_ONLY.test(cmd); }
+
+const cmdOutput  = ref<Record<string, { ok: boolean; text: string }>>({});
+const runningCmd = ref<string | null>(null);
+
 async function runCommand(cmd: string) {
+  // Plusieurs commandes de la base agissent (redemarrage vers le BIOS,
+  // reset reseau, hibernation...) : jamais en un seul clic.
+  if (!(await confirm(`Exécuter cette commande sur ce PC ?\n\n${cmd}`, { title: "Base de connaissances", kind: "warning" }))) return;
+  runningCmd.value = cmd;
   try {
-    await invoke("run_system_command", { cmd: "cmd", args: ["/C", cmd] });
+    // Le resultat etait jete : « Exécuter » ne montrait rien, succes ou echec.
+    const r = await invoke<{ success: boolean; stdout: string; stderr: string }>(
+      "run_system_command", { cmd: "cmd", args: ["/C", cmd] }, 70_000);
+    const text = (r.stdout || r.stderr || "Commande lancée, aucune sortie.").trim();
+    cmdOutput.value[cmd] = { ok: r.success, text: text.slice(0, 4000) };
+    if (r.success) notify.success("Commande exécutée", cmd.slice(0, 80));
+    else notify.warning("Commande en échec", "Voir la sortie sous la commande");
   } catch (e: unknown) {
-    if (isTauriContext()) notify.error("Commande", (e instanceof Error ? e.message : String(e)).slice(0, 120));
+    const msg = e instanceof Error ? e.message : String(e);
+    cmdOutput.value[cmd] = { ok: false, text: msg };
+    if (isTauriContext()) notify.error("Commande", msg.slice(0, 120));
+  } finally {
+    runningCmd.value = null;
   }
 }
 
@@ -332,10 +356,11 @@ onMounted(loadFavorites);
                 >
                   <Copy :size="12" />
                 </button>
-                <button class="run-btn" @click="runCommand(item.command!)">
-                  <Terminal :size="12" /> Exécuter
+                <button v-if="canRun(item.command)" class="run-btn" :disabled="runningCmd === item.command" @click="runCommand(item.command!)">
+                  <Terminal :size="12" /> {{ runningCmd === item.command ? "En cours…" : "Exécuter" }}
                 </button>
               </div>
+              <pre v-if="item.command && cmdOutput[item.command]" class="cmd-output" :class="{ failed: !cmdOutput[item.command].ok }">{{ cmdOutput[item.command].text }}</pre>
 
               <!-- Note -->
               <div v-if="item.note" class="note-block">
@@ -624,6 +649,21 @@ onMounted(loadFavorites);
 }
 
 /* ── Commande rapide ── */
+.cmd-output {
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--success, #22c55e);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+.cmd-output.failed { border-left-color: var(--danger, #ef4444); }
 .command-block {
   display: flex;
   align-items: center;

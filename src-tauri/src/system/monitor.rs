@@ -26,6 +26,8 @@ pub struct MonitorData {
     pub cpu_freq_mhz: u64,
     pub cpu_name: String,
     pub cpu_temp_c: Option<i32>,
+    /// `LibreHardwareMonitor`, `OpenHardwareMonitor` ou `acpi` (zone firmware, indicative).
+    pub cpu_temp_source: Option<String>,
     pub ram_percent: f32,
     pub ram_used_gb: f64,
     pub ram_total_gb: f64,
@@ -87,7 +89,7 @@ pub fn start_monitoring(
     // GPU + temperature data shared between polling thread and main monitoring thread
     let gpu_shared: Arc<Mutex<Vec<GpuData>>> = Arc::new(Mutex::new(Vec::new()));
     let gpu_shared_writer = gpu_shared.clone();
-    let temp_shared: Arc<Mutex<(Option<i32>, Vec<DiskTemp>)>> = Arc::new(Mutex::new((None, vec![])));
+    let temp_shared: Arc<Mutex<Temps>> = Arc::new(Mutex::new((None, None, vec![])));
     let temp_shared_writer = temp_shared.clone();
     let running_gpu = running.clone();
 
@@ -99,10 +101,10 @@ pub fn start_monitoring(
                     *g = gpus;
                 }
             }
-            if let Ok((cpu_t, disk_t)) = collect_temperatures() {
-                if let Ok(mut t) = temp_shared_writer.lock() {
-                    *t = (cpu_t, disk_t);
-                }
+            // Échec (timeout PowerShell…) : on vide plutôt que d'afficher une valeur périmée.
+            let temps = collect_temperatures().unwrap_or((None, None, vec![]));
+            if let Ok(mut t) = temp_shared_writer.lock() {
+                *t = temps;
             }
             std::thread::sleep(std::time::Duration::from_secs(4));
         }
@@ -204,7 +206,7 @@ pub fn start_monitoring(
             }
 
             let gpu_snapshot = gpu_shared.lock().map(|g| g.clone()).unwrap_or_default();
-            let (cpu_temp_c, disk_temps) = temp_shared.lock().map(|t| t.clone()).unwrap_or((None, vec![]));
+            let (cpu_temp_c, cpu_temp_source, disk_temps) = temp_shared.lock().map(|t| t.clone()).unwrap_or((None, None, vec![]));
 
             let data = MonitorData {
                 cpu_percent,
@@ -212,6 +214,7 @@ pub fn start_monitoring(
                 cpu_freq_mhz: cpu_freq,
                 cpu_name,
                 cpu_temp_c,
+                cpu_temp_source,
                 ram_percent,
                 ram_used_gb: used_mem,
                 ram_total_gb: total_mem,
@@ -343,29 +346,66 @@ try {
     Ok(vec![])
 }
 
-fn collect_temperatures() -> Result<(Option<i32>, Vec<DiskTemp>), String> {
+/// (température CPU, source du capteur CPU, températures disques)
+type Temps = (Option<i32>, Option<String>, Vec<DiskTemp>);
+
+fn collect_temperatures() -> Result<Temps, String> {
     #[cfg(target_os = "windows")]
     {
+        // CPU : capteur LibreHardwareMonitor/OpenHardwareMonitor d'abord (hors
+        // « Distance to TjMax », qui monte quand le CPU refroidit), zone ACPI en
+        // dernier recours : souvent figée par le firmware, donc marquée `acpi`
+        // pour que l'UI l'affiche comme indicative et n'alerte jamais dessus.
+        // Disques : `Temperature` n'existe pas sur MSFT_PhysicalDisk, elle vient
+        // de Get-StorageReliabilityCounter (l'ancien filtre ne renvoyait jamais rien).
         let ps = r#"
-$out = @{ cpu_temp = $null; disk_temps = @() }
+$out = @{ cpu_temp = $null; cpu_src = $null; disk_temps = @() }
+foreach ($ns in 'LibreHardwareMonitor', 'OpenHardwareMonitor') {
+    if ($null -ne $out.cpu_temp) { break }
+    try {
+        $s = @(Get-CimInstance -Namespace "root/$ns" -ClassName Sensor -ErrorAction Stop |
+            Where-Object { $_.SensorType -eq 'Temperature' -and $_.Identifier -match 'cpu' -and $_.Name -notmatch 'TjMax|Distance' -and $_.Value -gt 0 -and $_.Value -lt 120 })
+        if ($s.Count) {
+            $best = $s | Where-Object { $_.Name -match 'Package|Tctl|Tdie' } | Select-Object -First 1
+            if (-not $best) { $best = $s | Sort-Object Value -Descending | Select-Object -First 1 }
+            $out.cpu_temp = [int][math]::Round($best.Value); $out.cpu_src = $ns
+        }
+    } catch {}
+}
+if ($null -eq $out.cpu_temp) {
+    try {
+        $zones = @(Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop |
+            ForEach-Object { [PSCustomObject]@{ n = $_.InstanceName; c = [math]::Round($_.CurrentTemperature / 10.0 - 273.15) } } |
+            Where-Object { $_.c -gt 0 -and $_.c -lt 120 })
+        if ($zones.Count) {
+            $z = $zones | Where-Object { $_.n -match 'CPU' } | Select-Object -First 1
+            if (-not $z) { $z = $zones | Sort-Object c -Descending | Select-Object -First 1 }
+            $out.cpu_temp = [int]$z.c; $out.cpu_src = 'acpi'
+        }
+    } catch {}
+}
 try {
-    $zones = Get-WmiObject -Namespace root/wmi -Class MSAcpi_ThermalZoneTemperature -ErrorAction Stop
-    $vals = $zones | ForEach-Object { [math]::Round($_.CurrentTemperature / 10.0 - 273.15) } | Where-Object { $_ -gt 0 -and $_ -lt 120 }
-    if ($vals) { $out.cpu_temp = ($vals | Measure-Object -Minimum).Minimum }
-} catch {}
-try {
-    $disks = Get-PhysicalDisk -ErrorAction Stop | Where-Object { $_.Temperature -gt 0 } | Select-Object FriendlyName, Temperature
-    $out.disk_temps = @($disks | ForEach-Object { @{ name = $_.FriendlyName; temp = [int]$_.Temperature } })
+    $out.disk_temps = @(Get-PhysicalDisk -ErrorAction Stop | ForEach-Object {
+        $r = $_ | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
+        if ($r -and $r.Temperature -gt 0) { @{ name = $_.FriendlyName; temp = [int]$r.Temperature } }
+    })
 } catch {}
 $out | ConvertTo-Json -Compress -Depth 3
 "#;
-        let out = crate::maintenance::commands::execute_system_command(
+        // Best-effort comme collect_disk_io : un relevé de température coupé par le
+        // timeout (PC chargé) rend « aucune température » (None/vide), pas une
+        // erreur qui ferait échouer le tick de monitoring.
+        let out = match crate::maintenance::commands::execute_system_command(
             "powershell",
             &["-NoProfile", "-NonInteractive", "-Command", ps],
-            5,
-        ).map_err(|e| e.to_string())?;
+            10,
+        ) {
+            Ok(o) => o,
+            Err(_) => return Ok((None, None, vec![])),
+        };
         let v: serde_json::Value = serde_json::from_str(out.stdout.trim()).unwrap_or_default();
         let cpu_temp = v.get("cpu_temp").and_then(|t| t.as_i64()).map(|t| t as i32);
+        let cpu_src = v.get("cpu_src").and_then(|s| s.as_str()).map(str::to_string);
         let disk_temps = v.get("disk_temps").and_then(|a| a.as_array()).map(|arr| {
             arr.iter().filter_map(|item| {
                 let name = item.get("name")?.as_str()?.to_string();
@@ -373,10 +413,10 @@ $out | ConvertTo-Json -Compress -Depth 3
                 if temp > 0 { Some(DiskTemp { name, temp_c: temp }) } else { None }
             }).collect()
         }).unwrap_or_default();
-        Ok((cpu_temp, disk_temps))
+        Ok((cpu_temp, cpu_src, disk_temps))
     }
     #[cfg(not(target_os = "windows"))]
-    Ok((None, vec![]))
+    Ok((None, None, vec![]))
 }
 
 fn collect_disk_io() -> Result<(u64, u64), String> {
@@ -388,11 +428,18 @@ try {
     "$($d.DiskReadBytesPersec) $($d.DiskWriteBytesPersec)"
 } catch { "0 0" }
 "#;
-        let out = crate::maintenance::commands::execute_system_command(
+        // Best-effort : le script PowerShell rend deja "0 0" sur erreur WMI. Si le
+        // process entier est coupe par le timeout (PC tres charge), on rend aussi
+        // (0, 0) plutot que de propager une erreur — un releve disque rate ne doit
+        // pas faire echouer le tick de monitoring (debit disque simplement a 0).
+        let out = match crate::maintenance::commands::execute_system_command(
             "powershell",
             &["-NoProfile", "-NonInteractive", "-Command", ps],
             5,
-        ).map_err(|e| e.to_string())?;
+        ) {
+            Ok(o) => o,
+            Err(_) => return Ok((0, 0)),
+        };
         let parts: Vec<&str> = out.stdout.split_whitespace().collect();
         let r = parts.first().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
         let w = parts.get(1).and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);

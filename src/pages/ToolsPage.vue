@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, type Component } from "vue";
 import { invoke, isTauriContext } from "@/utils/invoke";
-import { message } from "@tauri-apps/plugin-dialog";
+import { message, confirm } from "@tauri-apps/plugin-dialog";
 import type { ToolEntry } from "@/types/diagnostic";
 import NButton from "@/components/ui/NButton.vue";
 import NSpinner from "@/components/ui/NSpinner.vue";
@@ -269,6 +269,16 @@ async function loadTools() {
 }
 
 async function launchTool(tool: ToolInfo) {
+  // L'app tourne deja en administrateur (requireAdministrator) : aucune invite
+  // UAC ne s'affiche, donc un clic lancait directement un reset pare-feu,
+  // un DISM /ResetBase ou un slmgr /rearm. Confirmation explicite ici.
+  if (!tool.is_url && tool.requires_admin) {
+    const ok = await confirm(
+      `Lancer « ${tool.name} » en administrateur ?\n\n${tool.description}\n\nCommande : ${tool.command}`,
+      { title: "Nitrite", kind: "warning" },
+    ).catch(() => false);
+    if (!ok) return;
+  }
   launchingId.value = tool.id;
   trackUsage(tool.id);
 
@@ -346,7 +356,7 @@ onMounted(() => {
                 </NBadge>
               </div>
               <div class="tool-desc">{{ tool.description }}</div>
-              <span v-if="tool.requires_admin" class="admin-check admin-required" title="Windows demandera une confirmation (UAC)">
+              <span v-if="tool.requires_admin" class="admin-check admin-required" title="Droits administrateur : une confirmation sera demandée avant le lancement">
                 <ShieldAlert :size="11" />
                 Administrateur requis
               </span>
@@ -389,7 +399,7 @@ onMounted(() => {
                 </NBadge>
               </div>
               <div class="tool-desc">{{ tool.description }}</div>
-              <span v-if="tool.requires_admin" class="admin-check admin-required" title="Windows demandera une confirmation (UAC)">
+              <span v-if="tool.requires_admin" class="admin-check admin-required" title="Droits administrateur : une confirmation sera demandée avant le lancement">
                 <ShieldAlert :size="11" />
                 Administrateur requis
               </span>
@@ -434,7 +444,7 @@ onMounted(() => {
                   </NBadge>
                 </div>
                 <div class="tool-desc">{{ tool.description }}</div>
-                <span v-if="tool.requires_admin" class="admin-check admin-required" title="Windows demandera une confirmation (UAC)">
+                <span v-if="tool.requires_admin" class="admin-check admin-required" title="Droits administrateur : une confirmation sera demandée avant le lancement">
                   <ShieldAlert :size="11" />
                   Administrateur requis
                 </span>

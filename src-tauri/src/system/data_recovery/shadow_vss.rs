@@ -468,7 +468,7 @@ try {{
         Get-ChildItem -LiteralPath $shadowPath -Force -ErrorAction SilentlyContinue | ForEach-Object {{
             $shadowItems[$_.Name] = @{{
                 size     = if ($_.PSIsContainer) {{ 0 }} else {{ try {{ $_.Length }} catch {{ 0 }} }}
-                modified = try {{ $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') }} catch {{ '' }}
+                modified = $(try {{ $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') }} catch {{ '' }})
                 is_dir   = $_.PSIsContainer
                 full     = $_.FullName
             }}
@@ -479,7 +479,7 @@ try {{
         Get-ChildItem -LiteralPath $livePath -Force -ErrorAction SilentlyContinue | ForEach-Object {{
             $liveItems[$_.Name] = @{{
                 size     = if ($_.PSIsContainer) {{ 0 }} else {{ try {{ $_.Length }} catch {{ 0 }} }}
-                modified = try {{ $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') }} catch {{ '' }}
+                modified = $(try {{ $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') }} catch {{ '' }})
                 is_dir   = $_.PSIsContainer
                 full     = $_.FullName
             }}

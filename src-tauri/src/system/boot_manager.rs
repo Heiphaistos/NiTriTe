@@ -50,6 +50,8 @@ try {
     $current = $null
     $defaultId = ''
     $timeout = 30
+    $safe = $false
+    $debug = $false
     $prev = ''
     $bcd | ForEach-Object {
         $line = "$_"
@@ -73,6 +75,14 @@ try {
             # en premier (timeout firmware, souvent 0) — le « premier timeout
             # rencontré » renvoyait cette valeur au lieu du délai du menu Windows.
             if ($current -and $current.id -eq '{bootmgr}') { $timeout = [int]$Matches[1] }
+        } elseif ($line -match '^safeboot\s+\S') {
+            # safe_mode/debug_mode étaient toujours renvoyés à false : la page
+            # affichait « Normal » et masquait « Désactiver le Safe Mode » même
+            # quand safeboot était posé sur {current}. Valeurs non localisées
+            # (« Yes » y compris sur Windows FR, vérifié).
+            if ($current -and $current.id -eq '{current}') { $safe = $true }
+        } elseif ($line -match '^debug\s+Yes') {
+            if ($current -and $current.id -eq '{current}') { $debug = $true }
         }
         $prev = $line
     }
@@ -82,7 +92,7 @@ try {
     $defLine = $bcd | Where-Object { $_ -match 'default\s+(\{[^\}]+\})' } | Select-Object -First 1
     if ($defLine -match '\{[^\}]+\}') { $defaultId = $Matches[0] }
 
-    @{ entries=$entries; default=$defaultId; timeout=$timeout; safe=$false; debug=$false } | ConvertTo-Json -Depth 4 -Compress
+    @{ entries=$entries; default=$defaultId; timeout=$timeout; safe=$safe; debug=$debug } | ConvertTo-Json -Depth 4 -Compress
 } catch {
     @{ entries=@(); default=''; timeout=30; safe=$false; debug=$false } | ConvertTo-Json -Compress
 }
@@ -121,8 +131,8 @@ try {
                     entries,
                     default_id: v["default"].as_str().unwrap_or("").to_string(),
                     timeout_secs: v["timeout"].as_u64().unwrap_or(30) as u32,
-                    safe_mode: false,
-                    debug_mode: false,
+                    safe_mode: v["safe"].as_bool().unwrap_or(false),
+                    debug_mode: v["debug"].as_bool().unwrap_or(false),
                 };
             }
         }

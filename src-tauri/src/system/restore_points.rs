@@ -13,6 +13,16 @@ pub struct RestorePoint {
     pub restore_type: String,
 }
 
+/// PowerShell avec timeout : `.output()` brut n'avait aucune limite, un service
+/// VSS / System Restore bloqué figeait la page indéfiniment.
+fn run_ps(script: &str, timeout_secs: u64) -> Result<crate::maintenance::commands::CommandResult, NiTriTeError> {
+    crate::maintenance::commands::execute_system_command(
+        "powershell",
+        &["-NoProfile", "-NonInteractive", "-Command", script],
+        timeout_secs,
+    )
+}
+
 pub fn list_restore_points() -> Result<Vec<RestorePoint>, NiTriTeError> {
     let ps = r#"
 try {
@@ -34,14 +44,8 @@ try {
     "[]"
 }
 "#;
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", ps])
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| NiTriTeError::System(e.to_string()))?;
-
-    let raw = crate::maintenance::commands::decode_output(&output.stdout);
-    let trimmed = raw.trim();
+    let output = run_ps(ps, 60)?;
+    let trimmed = output.stdout.trim();
 
     if trimmed.is_empty() || trimmed == "[]" {
         return Ok(vec![]);
@@ -81,35 +85,40 @@ pub fn create_restore_point(description: &str) -> Result<(), NiTriTeError> {
     let ps = format!(
         r#"
 $desc = '{}'
+$key  = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
+$name = 'SystemRestorePointCreationFrequency'
+$prev = (Get-ItemProperty -Path $key -Name $name -EA SilentlyContinue).$name
+$before = @(Get-ComputerRestorePoint -EA SilentlyContinue | ForEach-Object {{ $_.SequenceNumber }})
 try {{
     # Contourne la limite de fréquence Windows (1 point / 24 h par défaut) : sans
     # ça, Checkpoint-Computer ne fait RIEN et sort quand même en 0 → faux succès
     # (« point créé » sans point réel). Mettre la fréquence à 0 force la création.
-    try {{
-        New-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore' `
-            -Name 'SystemRestorePointCreationFrequency' -Value 0 -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
-    }} catch {{}}
+    New-ItemProperty -Path $key -Name $name -Value 0 -PropertyType DWord -Force -EA SilentlyContinue | Out-Null
     Checkpoint-Computer -Description $desc -RestorePointType "APPLICATION_INSTALL" -ErrorAction Stop
+    # Preuve : un NOUVEAU point portant cette description doit exister.
+    $new = Get-ComputerRestorePoint -EA SilentlyContinue | Where-Object {{ $before -notcontains $_.SequenceNumber -and $_.Description -eq $desc }}
+    if (-not $new) {{ throw "Windows n'a créé aucun point (protection du système désactivée sur C: ?)" }}
     Write-Output "OK"
 }} catch {{
     Write-Error $_.Exception.Message
     exit 1
+}} finally {{
+    # Remet la valeur d'origine : la fréquence 0 restait sinon en place pour
+    # toujours (modification permanente d'un réglage système). `finally`
+    # s'exécute aussi après `exit` dans le catch.
+    if ($null -eq $prev) {{ Remove-ItemProperty -Path $key -Name $name -EA SilentlyContinue }}
+    else {{ Set-ItemProperty -Path $key -Name $name -Value $prev -EA SilentlyContinue }}
 }}
 "#,
         description.replace('\'', "''")
     );
 
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| NiTriTeError::System(e.to_string()))?;
-
-    if !output.status.success() {
-        let err = crate::maintenance::commands::decode_output(&output.stderr);
+    // Checkpoint-Computer peut durer plusieurs minutes (VSS sur gros disque).
+    let output = run_ps(&ps, 600)?;
+    if !output.success {
         return Err(NiTriTeError::System(format!(
             "Échec création point de restauration : {}",
-            err.trim()
+            output.stderr.trim()
         )));
     }
 
@@ -133,41 +142,30 @@ pub async fn create_restore_point_cmd(description: String) -> Result<(), NiTriTe
 #[tauri::command]
 pub async fn delete_restore_point_cmd(sequence_number: u32) -> Result<(), NiTriTeError> {
     tokio::task::spawn_blocking(move || {
-        // Find the restore point's creation time, then locate its VSS shadow copy
-        // via Win32_ShadowCopy matching by date (within 60s tolerance), and delete it.
+        // API officielle SRRemoveRestorePoint (srclient.dll) par numéro de
+        // séquence. L'ancienne méthode supprimait « le premier cliché VSS créé
+        // à ±60 s » : elle pouvait viser le cliché d'un AUTRE volume ou d'un
+        // logiciel de sauvegarde, et laisser le point en place.
         let ps = format!(
             r#"
 $seq = {seq}
 $rp = Get-ComputerRestorePoint | Where-Object {{ $_.SequenceNumber -eq $seq }} | Select-Object -First 1
 if (-not $rp) {{ throw "Point de restauration #{seq} introuvable." }}
-$rpDate = $rp.ConvertToDateTime($rp.CreationTime)
-$shadow = Get-WmiObject Win32_ShadowCopy | Where-Object {{
-    try {{
-        $sd = $_.ConvertToDateTime($_.InstallDate)
-        [Math]::Abs(($sd - $rpDate).TotalSeconds) -lt 60
-    }} catch {{ $false }}
-}} | Select-Object -First 1
-if ($shadow) {{
-    $shadow.Delete() | Out-Null
-    Write-Output "OK"
-}} else {{
-    throw "Shadow copy correspondant au point #{seq} introuvable — essayez via l'outil Restauration du système Windows."
-}}
+Add-Type -Namespace NiTriTe -Name SrClient -MemberDefinition '[DllImport("srclient.dll")] public static extern int SRRemoveRestorePoint(int index);'
+$rc = [NiTriTe.SrClient]::SRRemoveRestorePoint($seq)
+if ($rc -ne 0) {{ throw "SRRemoveRestorePoint a renvoyé le code $rc." }}
+if (Get-ComputerRestorePoint | Where-Object {{ $_.SequenceNumber -eq $seq }}) {{ throw "Le point #{seq} est toujours présent après la suppression." }}
+Write-Output "OK"
 "#,
             seq = sequence_number
         );
-        let output = Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
-            .creation_flags(0x08000000)
-            .output()
-            .map_err(|e| NiTriTeError::System(e.to_string()))?;
-        if output.status.success() {
+        let output = run_ps(&ps, 120)?;
+        if output.success {
             Ok(())
         } else {
-            let err = crate::maintenance::commands::decode_output(&output.stderr);
             Err(NiTriTeError::System(format!(
                 "Suppression échouée : {}",
-                err.trim()
+                output.stderr.trim()
             )))
         }
     })

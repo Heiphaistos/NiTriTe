@@ -57,9 +57,12 @@ async function saveDesc(e: BcdEntry) {
     // run_system_command ne rejette jamais sur un code de sortie non-nul (voir
     // execute_system_command) — sans verifier .success, un bcdedit refuse
     // (app non elevee) affichait quand meme "Description mise a jour".
+    // e.id contient déjà les accolades (« {current} ») : `{${e.id}}` donnait
+    // « {{current}} », refusé par bcdedit → la modification échouait toujours.
+    const id = `{${e.id.replace(/^\{|\}$/g, "")}}`;
     const r = await invoke<CommandResult>("run_system_command", {
       cmd: "bcdedit",
-      args: ["/set", `{${e.id}}`, "description", desc],
+      args: ["/set", id, "description", desc],
     });
     if (r.success) {
       notify.success("Description mise à jour");
@@ -133,9 +136,13 @@ async function load() {
   loading.value = false;
 }
 
-async function setDefault(id: string) {
+async function setDefault(e: BcdEntry) {
+  const label = e.description || e.id;
+  if (!(await confirm(`Démarrer par défaut sur « ${label} » ?\n\n${e.id}`, { title: "Nitrite", kind: "warning" }))) return;
   try {
-    await invoke("set_default_boot", { id });
+    // La commande Rust attend `entry_id` (→ `entryId` côté JS) : `{ id }`
+    // faisait échouer l'appel à chaque fois (« missing required key entryId »).
+    await invoke("set_default_boot", { entryId: e.id });
     notify.success("Entrée de démarrage modifiée");
     await load();
   } catch (e: unknown) {
@@ -156,6 +163,12 @@ async function saveTimeout() {
 }
 
 async function bootToRecovery() {
+  // shutdown /r /o /f /t 0 : redémarrage IMMÉDIAT et forcé (applications
+  // fermées sans enregistrer). Aucun garde-fou avant ce correctif.
+  if (!(await confirm(
+    "Redémarrer MAINTENANT dans l'environnement de récupération ?\n\nToutes les applications seront fermées sans enregistrer.",
+    { title: "Nitrite", kind: "warning" },
+  ))) return;
   booting.value = true;
   try {
     await invoke("boot_to_recovery");
@@ -256,7 +269,9 @@ onMounted(load);
               >
                 <Pencil :size="12" />
               </NButton>
-              <NButton v-if="!e.is_default" variant="secondary" size="sm" @click="setDefault(e.id)">
+              <!-- Seuls les chargeurs Windows (winload) peuvent être l'entrée par
+                   défaut de {bootmgr} : pas les applis firmware, ni memdiag. -->
+              <NButton v-if="!e.is_default && /winload/i.test(e.path)" variant="secondary" size="sm" @click="setDefault(e)">
                 <Star :size="12" /> Définir par défaut
               </NButton>
             </div>
@@ -308,7 +323,7 @@ onMounted(load);
           <div class="section-header"><Shield :size="15" /><span>Récupération système</span></div>
         </template>
         <div class="recovery-section">
-          <p class="recovery-desc">Redémarre le système en environnement de récupération Windows (WinRE) au prochain démarrage.</p>
+          <p class="recovery-desc">Redémarre immédiatement le système dans l'environnement de récupération Windows (WinRE).</p>
           <NButton variant="danger" size="sm" :loading="booting" @click="bootToRecovery">
             <Shield :size="13" /> Redémarrer en récupération
           </NButton>

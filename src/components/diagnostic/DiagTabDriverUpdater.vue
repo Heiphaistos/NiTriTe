@@ -71,7 +71,7 @@ async function launchSdi() {
   } catch (e) {
     sdiRelease();
     notify.warning("SDI non trouvé sur ce PC", "Redirection vers le site officiel...");
-    await invoke("open_url", { url: "https://www.snappy-driver-installer.org/download/" }).catch(() => {});
+    await invoke("open_url", { url: "https://www.snappy-driver-installer.org/" }).catch(() => {});
   }
 }
 

@@ -116,14 +116,15 @@ async function loadWinEvents() {
 
 async function clearFileLogs() {
   if (!(await confirm("Archiver et vider le fichier de log ?", { title: "Nitrite", kind: "warning" }))) return;
-  try { await invoke("clear_logs"); await loadFileLogs(); } catch { /* ignore */ }
+  try { await invoke("clear_logs"); await loadFileLogs(); }
+  catch (e: unknown) { notify.error("Logs", `Vidage impossible : ${String(e)}`.slice(0, 160)); }
 }
 
 async function openLogFile() {
   try {
     const path = await invoke<string>("get_log_file_path");
     await invoke("open_path", { path });
-  } catch { /* ignore */ }
+  } catch (e: unknown) { notify.error("Logs", `Ouverture impossible : ${String(e)}`.slice(0, 160)); }
 }
 
 // ── Follow mode fichier ───────────────────────────────────────────────────────

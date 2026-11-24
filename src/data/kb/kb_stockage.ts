@@ -26,7 +26,7 @@ export const kbStockage: KBCategory[] = [
         symptoms: "Clics, grattements, temps d'accès élevés, Gestionnaire des tâches montre disque à 100%",
         solution: [
           "SAUVEGARDER IMMÉDIATEMENT toutes les données importantes vers un disque externe",
-          "Lancer un diagnostic SMART : wmic diskdrive get status",
+          "Lancer un diagnostic SMART : Get-PhysicalDisk | Get-StorageReliabilityCounter (PowerShell admin)",
           "Utiliser CrystalDiskInfo pour voir l'état SMART détaillé (chercher 'Caution' ou 'Bad')",
           "Lancer chkdsk /f /r (programme un scan au prochain redémarrage)",
           "Si SMART indique 'Reallocated Sectors' élevé : remplacement urgent",
@@ -34,7 +34,7 @@ export const kbStockage: KBCategory[] = [
           "Vérifier câble SATA (desserré = ralentissement ou erreurs)",
           "Remplacer par un SSD SATA ou NVMe — amélioration de performance x5 minimum",
         ],
-        command: "wmic diskdrive get status,model,size",
+        command: "powershell -c \"Get-PhysicalDisk | Select FriendlyName, HealthStatus, MediaType, Size\"",
       },
       {
         title: "SSD santé et optimisation",

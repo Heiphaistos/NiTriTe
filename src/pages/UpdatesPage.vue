@@ -76,10 +76,11 @@ function toggleBackup() {
 
 async function createRestorePoint(description: string) {
   try {
-    await invoke("create_restore_point_cmd", { description });
+    // invokeRaw : la création dure souvent plus que le timeout par défaut de 30 s.
+    await invokeRaw("create_restore_point_cmd", { description });
     notify.success("Point de restauration créé", description);
   } catch (e: unknown) {
-    notify.warning("Point de restauration", "Impossible de créer (droits admin ?)");
+    notify.warning("Point de restauration non créé", String(e).slice(0, 160));
   }
 }
 
@@ -131,7 +132,8 @@ async function checkWinget() {
   try {
     wingetOk.value = await invoke<boolean>("check_winget");
     if (!wingetOk.value) { wingetStatus.value = "error"; return; }
-    wingetPkgs.value = await invoke<WingetPackage[]>("list_upgradable");
+    // 180 s : la 1re requête rafraîchit les sources winget (borne Rust : 150 s).
+    wingetPkgs.value = await invoke<WingetPackage[]>("list_upgradable", undefined, 180_000);
     wingetStatus.value = wingetPkgs.value.length > 0 ? "idle" : "done";
   } catch (e: unknown) {
     if (!isTauriContext()) {

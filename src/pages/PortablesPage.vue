@@ -17,7 +17,8 @@ import {
 
 const notify = useNotificationStore();
 
-const installedMap   = ref<Record<string, string | boolean>>({});
+// id du catalogue -> id du dossier détecté dans logiciel/ (celui qu'attend launch_portable)
+const installedMap   = ref<Record<string, string>>({});
 const search         = ref("");
 const activeCategory = ref("Tous");
 const showPopular    = ref(false);
@@ -144,11 +145,6 @@ const recentApps = computed(() =>
   recentIds.value.map(id => apps.value.find(a => a.id === id)).filter(Boolean) as PortableApp[]
 );
 
-function hasVersionMismatch(app: PortableApp): boolean {
-  if (!app.version || !installedMap.value[app.id]) return false;
-  const installed = installedMap.value[`${app.id}_version`];
-  return installed ? installed !== app.version : false;
-}
 
 // ── Actions ───────────────────────────────────────────────────
 async function openDownload(app: PortableApp) {
@@ -166,7 +162,7 @@ async function openDownload(app: PortableApp) {
 
 async function launchApp(app: PortableApp) {
   try {
-    await invoke("launch_portable", { appId: app.id });
+    await invoke("launch_portable", { appId: installedMap.value[app.id] ?? app.id });
     trackRecent(app);
     notify.success(`${app.name} lancé`);
   } catch (e: unknown) {
@@ -182,19 +178,31 @@ async function openPortablesFolder() {
   }
 }
 
+// Un seul scan du dossier logiciel/ (avant : un appel par app du catalogue,
+// qui testait logiciel/<id du catalogue> — « cpuz » ne trouvait jamais le
+// dossier « CPU-Z », et le bouton Lancer n'apparaissait donc pas). On associe
+// par identifiant normalisé OU par nom d'exécutable.
+interface DetectedPortable { id: string; exe_name: string; }
 async function refreshInstalled() {
   loading.value = true;
-  const results = await Promise.allSettled(
-    apps.value.map(app => invoke<boolean>("check_portable_installed", { appId: app.id }))
-  );
-  const map: Record<string, boolean> = {};
-  apps.value.forEach((app, i) => {
-    const r = results[i];
-    map[app.id] = r.status === "fulfilled" ? r.value : false;
-  });
-  installedMap.value = map;
-  loading.value = false;
+  try {
+    const found = await invoke<DetectedPortable[]>("get_portable_apps");
+    const byId = new Map(found.map(f => [f.id, f.id]));
+    const byExe = new Map(found.map(f => [f.exe_name.toLowerCase(), f.id]));
+    const map: Record<string, string> = {};
+    for (const app of apps.value) {
+      const hit = byId.get(app.id) ?? byExe.get(app.exe_name.toLowerCase());
+      if (hit) map[app.id] = hit;
+    }
+    installedMap.value = map;
+  } catch (e: unknown) {
+    notify.error("Détection des apps portables impossible", String(e).slice(0, 120));
+  } finally {
+    loading.value = false;
+  }
 }
+
+onMounted(refreshInstalled);
 </script>
 
 <template>
@@ -220,7 +228,7 @@ async function refreshInstalled() {
 
     <!-- Filtres ─────────────────────────────────────── -->
     <div class="port-filters">
-      <NSearchBar v-model="search" placeholder="Rechercher parmi {{ apps.length }} applications…" />
+      <NSearchBar v-model="search" :placeholder="`Rechercher parmi ${apps.length} applications…`" />
       <div class="port-cats">
         <button
           v-for="cat in PORTABLE_CATEGORIES" :key="cat"
@@ -302,7 +310,6 @@ async function refreshInstalled() {
               <span class="port-card-name">{{ app.name }}</span>
               <div class="port-card-badges">
                 <NBadge v-if="installedMap[app.id]" variant="success" size="sm">✓</NBadge>
-                <NBadge v-if="hasVersionMismatch(app)" variant="warning" size="sm">Update dispo</NBadge>
               </div>
             </div>
             <div class="port-card-bottom" style="margin-top:4px">
@@ -351,7 +358,6 @@ async function refreshInstalled() {
             <span class="port-card-name">{{ app.name }}</span>
             <div class="port-card-badges">
               <NBadge v-if="installedMap[app.id]" variant="success" size="sm">✓ Installée</NBadge>
-              <NBadge v-if="hasVersionMismatch(app)" variant="warning" size="sm">Update dispo</NBadge>
               <NBadge variant="neutral" size="sm">{{ app.category }}</NBadge>
             </div>
           </div>

@@ -226,7 +226,7 @@ fn measure_folder(path: &str) -> (f64, u64) {
 
     match output {
         Ok(o) => {
-            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            let s = crate::maintenance::commands::decode_output(&o.stdout).trim().to_string();
             let parts: Vec<&str> = s.splitn(2, ',').collect();
             let bytes: f64 = parts.first().and_then(|v| v.parse().ok()).unwrap_or(0.0);
             let count: u64 = parts.get(1).and_then(|v| v.parse().ok()).unwrap_or(0);

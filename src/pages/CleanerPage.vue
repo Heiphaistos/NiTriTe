@@ -82,9 +82,12 @@ async function clearQuarantineEntry(name: string | null) {
     : "Vider toute la quarantaine ?\n\nTous les éléments seront supprimés définitivement. Cette action est irréversible.";
   if (!(await confirm(msg, { title: "Nitrite", kind: "warning" }))) return;
   try {
-    await invoke("clear_quarantine", { entryName: name });
+    // clear_quarantine renvoie un booléen : ignoré avant, « Quarantaine
+    // vidée » s'affichait même quand des fichiers verrouillés restaient.
+    const ok = await invoke<boolean>("clear_quarantine", { entryName: name });
     await loadQuarantine();
-    notify.success("Quarantaine vidée");
+    if (ok) notify.success("Quarantaine vidée");
+    else notify.error("Quarantaine", "Certains fichiers n'ont pas pu être supprimés (fichier ouvert ou accès refusé).");
   } catch (e: unknown) { notify.error("Erreur", String(e)); }
 }
 
@@ -124,8 +127,9 @@ async function load() {
     scanTotal.value = p.total;
     if (p.item) {
       targets.value.push(p.item);
-      // Auto-sélection des cibles sûres
-      if (["Temp", "Logs", "Cache système"].includes(p.item.category))
+      // Auto-sélection des cibles sûres. « Cache système » (miniatures) en est
+      // retiré : son nettoyage redémarre l'Explorateur (fenêtres fermées).
+      if (["Temp", "Logs"].includes(p.item.category))
         selected.value = new Set([...selected.value, p.item.name]);
     }
     if (p.done) scanning.value = false;
@@ -152,6 +156,15 @@ async function loadLargeFiles() {
 async function clean() {
   const names = [...selected.value];
   if (!names.length) return;
+  // Suppression définitive : même garde-fou que la vidange de quarantaine.
+  if (!quarantineMode.value) {
+    const extra = names.includes("Thumbnails DB") ? "\n\nL'Explorateur Windows sera redémarré (fenêtres ouvertes fermées)." : "";
+    const ok = await confirm(
+      `Supprimer définitivement ${formatMb(selectedSizeMb.value)} (${names.length} cible(s)) ?\n\n${names.join(", ")}${extra}`,
+      { title: "Nitrite", kind: "warning" },
+    );
+    if (!ok) return;
+  }
   cleaning.value = true; cleanProgress.value = 0; totalFreed.value = 0;
   const cmd = quarantineMode.value ? "quarantine_target" : "clean_target";
   let failCount = 0;

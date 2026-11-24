@@ -1,8 +1,7 @@
 use serde::Serialize;
 use tauri::Emitter;
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+use crate::maintenance::commands::execute_system_command;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DepsProgress {
@@ -24,210 +23,104 @@ pub struct Dependency {
     pub install_url: String,
 }
 
+/// Duree maximale d'une verification : `code --version`, `java -version` ou un
+/// PowerShell froid peuvent rester bloques ; sans borne, le scan ne finissait
+/// jamais (l'evenement `done` n'etait jamais emis).
+const CHECK_TIMEOUT_SECS: u64 = 20;
+
+/// Lance `cmd args` avec timeout (VS Code passe par `cmd /c` : `code` est un
+/// `.cmd`, que `Command::new` ne resout pas — il etait toujours vu absent). Installe = code 0 ET sortie non vide.
+/// (L'ancien test « code 0 OU stdout non vide » prenait pour une version le
+/// message d'erreur de `dotnet --version` sans SDK, et laissait passer les
+/// alias d'execution du Store.)
 fn run_cmd(cmd: &str, args: &[&str]) -> (bool, String) {
-    let mut command = std::process::Command::new(cmd);
-    command.args(args);
-    #[cfg(target_os = "windows")]
-    command.creation_flags(0x08000000);
-    match command.output() {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-            let combined = format!("{}{}", stdout, stderr);
-            let first_line = combined.lines().next().unwrap_or("").trim().to_string();
-            (out.status.success() || !stdout.trim().is_empty(), first_line)
+    match execute_system_command(cmd, args, CHECK_TIMEOUT_SECS) {
+        Ok(r) => {
+            let combined = format!("{}{}", r.stdout, r.stderr);
+            let first_line = combined.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("").to_string();
+            (r.success && !first_line.is_empty(), first_line)
         }
         Err(_) => (false, String::new()),
     }
-}
-
-fn check(cmd: &str, version_arg: &str) -> (bool, String) {
-    run_cmd(cmd, &[version_arg])
 }
 
 fn check_ps(ps_expr: &str) -> (bool, String) {
-    let mut command = std::process::Command::new("powershell");
-    command.args(["-NoProfile", "-NonInteractive", "-Command", ps_expr]);
-    #[cfg(target_os = "windows")]
-    command.creation_flags(0x08000000);
-    match command.output() {
-        Ok(out) => {
-            let out_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            (!out_str.is_empty() && out.status.success(), out_str)
-        }
-        Err(_) => (false, String::new()),
+    run_cmd("powershell", &["-NoProfile", "-NonInteractive", "-Command", ps_expr])
+}
+
+fn dep(id: &str, name: &str, cat: &str, desc: &str, (ok, version): (bool, String), wid: &str, url: &str) -> Dependency {
+    Dependency {
+        id: id.into(), name: name.into(), category: cat.into(), description: desc.into(),
+        installed: ok, version, winget_id: wid.into(), install_url: url.into(),
     }
 }
 
-macro_rules! dep {
-    ($id:expr, $name:expr, $cat:expr, $desc:expr, $ok:expr, $v:expr, $wid:expr, $url:expr) => {
-        Dependency {
-            id: $id.into(), name: $name.into(), category: $cat.into(),
-            description: $desc.into(), installed: $ok, version: $v,
-            winget_id: $wid.into(), install_url: $url.into(),
-        }
-    };
+/// Test de presence par chemin (exe hors PATH : 7-Zip, Notepad++, VLC…).
+fn exists_any(paths: &[&str]) -> (bool, String) {
+    let ok = paths.iter().any(|p| {
+        let expanded = p.replace("%ProgramFiles%", &std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".into()))
+            .replace("%ProgramFiles(x86)%", &std::env::var("ProgramFiles(x86)").unwrap_or_else(|_| r"C:\Program Files (x86)".into()));
+        std::path::Path::new(&expanded).exists()
+    });
+    (ok, String::new())
 }
 
-/// Toutes les vérifications s'exécutent en parallèle via thread::scope.
-/// Réduit le temps de ~10-15s (séquentiel) à ~1-2s (parallèle).
+type CheckFn = Box<dyn Fn() -> Dependency + Send + Sync>;
+
+/// Liste unique des verifications (avant : dupliquee entre `check_all` et
+/// `check_all_streaming`, les deux copies divergeaient).
+/// Versions a jour 2026-11 : Python 3.14 (stable courante), .NET 10 (LTS ;
+/// .NET 8 hors support depuis le 10/11/2026), Java = Temurin 25 LTS (l'ancien
+/// `Oracle.JavaRuntimeEnvironment` est le JRE 8 sous licence Oracle), OpenSSH
+/// `Microsoft.OpenSSH.Preview` (l'id `.Beta` n'existe plus), `cURL.cURL`
+/// (l'id `curl.curl` n'existe pas dans winget).
+fn checks() -> Vec<CheckFn> {
+    vec![
+        Box::new(|| dep("git", "Git", "Développement", "Gestionnaire de versions distribué", run_cmd("git", &["--version"]), "Git.Git", "https://git-scm.com/download/win")),
+        Box::new(|| dep("nodejs", "Node.js", "Développement", "Runtime JavaScript (LTS)", run_cmd("node", &["--version"]), "OpenJS.NodeJS.LTS", "https://nodejs.org")),
+        Box::new(|| dep("python", "Python", "Développement", "Langage de script Python 3", run_cmd("python", &["--version"]), "Python.Python.3.14", "https://www.python.org/downloads/")),
+        Box::new(|| dep("rust", "Rust (rustc)", "Développement", "Compilateur Rust via rustup", run_cmd("rustc", &["--version"]), "Rustlang.Rustup", "https://rustup.rs")),
+        Box::new(|| dep("vscode", "Visual Studio Code", "Développement", "Éditeur de code Microsoft", run_cmd("cmd", &["/c", "code", "--version"]), "Microsoft.VisualStudioCode", "https://code.visualstudio.com")),
+        // --list-runtimes : fonctionne sans SDK (un simple runtime suffit aux apps).
+        Box::new(|| dep("dotnet", ".NET Runtime", "Runtimes", "Runtime .NET 10 (LTS)", run_cmd("dotnet", &["--list-runtimes"]), "Microsoft.DotNet.DesktopRuntime.10", "https://dotnet.microsoft.com/download/dotnet/10.0")),
+        Box::new(|| dep("winget", "WinGet", "Gestionnaires", "Gestionnaire de paquets Windows officiel", run_cmd("winget", &["--version"]), "", "ms-windows-store://pdp/?productid=9NBLGGH4NNS1")),
+        Box::new(|| dep("scoop", "Scoop", "Gestionnaires", "Gestionnaire de paquets sans admin", check_ps("if (Get-Command scoop -EA SilentlyContinue) { 'present' } else { exit 1 }"), "", "https://scoop.sh")),
+        Box::new(|| dep("chocolatey", "Chocolatey", "Gestionnaires", "Gestionnaire de paquets Windows", check_ps("if (Get-Command choco -EA SilentlyContinue) { choco --version } else { exit 1 }"), "", "https://chocolatey.org/install")),
+        Box::new(|| dep("curl", "curl", "Outils Système", "Outil de transfert HTTP/S en ligne de commande", run_cmd("curl", &["--version"]), "cURL.cURL", "https://curl.se")),
+        Box::new(|| dep("7zip", "7-Zip", "Outils Système", "Archiveur haute compression", exists_any(&[r"%ProgramFiles%\7-Zip\7z.exe", r"%ProgramFiles(x86)%\7-Zip\7z.exe"]), "7zip.7zip", "https://7-zip.org")),
+        Box::new(|| dep("notepadpp", "Notepad++", "Outils Système", "Éditeur de texte avancé", exists_any(&[r"%ProgramFiles%\Notepad++\notepad++.exe", r"%ProgramFiles(x86)%\Notepad++\notepad++.exe"]), "Notepad++.Notepad++", "https://notepad-plus-plus.org")),
+        Box::new(|| dep("openssh", "OpenSSH Client", "Outils Système", "Client SSH intégré Windows", run_cmd("ssh", &["-V"]), "Microsoft.OpenSSH.Preview", "")),
+        Box::new(|| dep("vlc", "VLC Media Player", "Médias", "Lecteur multimédia universel", exists_any(&[r"%ProgramFiles%\VideoLAN\VLC\vlc.exe", r"%ProgramFiles(x86)%\VideoLAN\VLC\vlc.exe"]), "VideoLAN.VLC", "https://www.videolan.org")),
+        Box::new(|| dep("powertoys", "PowerToys", "Productivité", "Suite d'utilitaires Microsoft pour power users", check_ps("if (Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*,HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* -EA SilentlyContinue | Where-Object { $_.DisplayName -like '*PowerToys*' }) { 'present' } else { exit 1 }"), "Microsoft.PowerToys", "")),
+        Box::new(|| dep("java", "Java (JRE)", "Runtimes", "Java Runtime Environment (Temurin 25 LTS)", run_cmd("java", &["-version"]), "EclipseAdoptium.Temurin.25.JRE", "https://adoptium.net")),
+        Box::new(|| dep("golang", "Go", "Runtimes", "Langage Go (runtime + compilateur)", run_cmd("go", &["version"]), "GoLang.Go", "https://go.dev")),
+    ]
+}
+
+/// Toutes les vérifications en parallèle.
 pub fn check_all() -> Vec<Dependency> {
+    let checks = checks();
     std::thread::scope(|s| {
-        // === Développement ===
-        let h_git = s.spawn(|| {
-            let (ok, v) = check("git", "--version");
-            dep!("git","Git","Développement","Gestionnaire de versions distribué",ok,v,"Git.Git","https://git-scm.com/download/win")
-        });
-        let h_node = s.spawn(|| {
-            let (ok, v) = check("node", "--version");
-            dep!("nodejs","Node.js","Développement","Runtime JavaScript (LTS)",ok,v,"OpenJS.NodeJS.LTS","https://nodejs.org")
-        });
-        let h_python = s.spawn(|| {
-            let (ok, v) = check("python", "--version");
-            dep!("python","Python","Développement","Langage de script Python 3",ok,v,"Python.Python.3.12","https://python.org")
-        });
-        let h_rust = s.spawn(|| {
-            let (ok, v) = check("rustc", "--version");
-            dep!("rust","Rust (rustc)","Développement","Compilateur Rust via rustup",ok,v,"Rustlang.Rustup","https://rustup.rs")
-        });
-        let h_vscode = s.spawn(|| {
-            let (ok, v) = check("code", "--version");
-            let short = v.lines().next().unwrap_or("").to_string();
-            dep!("vscode","Visual Studio Code","Développement","Éditeur de code Microsoft",ok,short,"Microsoft.VisualStudioCode","https://code.visualstudio.com")
-        });
-        let h_dotnet = s.spawn(|| {
-            let (ok, v) = check("dotnet", "--version");
-            dep!("dotnet",".NET Runtime","Développement","Runtime .NET Microsoft",ok,v,"Microsoft.DotNet.Runtime.8","https://dot.net")
-        });
-
-        // === Gestionnaires ===
-        let h_winget = s.spawn(|| {
-            let (ok, v) = check_ps("if (Get-Command winget -EA SilentlyContinue) { (winget --version) } else { exit 1 }");
-            dep!("winget","WinGet","Gestionnaires","Gestionnaire de paquets Windows officiel",ok,v,"","ms-windows-store://pdp/?productid=9NBLGGH4NNS1")
-        });
-        let h_scoop = s.spawn(|| {
-            let (ok, v) = check_ps("if (Get-Command scoop -EA SilentlyContinue) { scoop --version 2>&1 | Select-Object -First 1 } else { exit 1 }");
-            dep!("scoop","Scoop","Gestionnaires","Gestionnaire de paquets sans admin",ok,v,"","https://scoop.sh")
-        });
-        let h_choco = s.spawn(|| {
-            let (ok, v) = check_ps("if (Get-Command choco -EA SilentlyContinue) { choco --version } else { exit 1 }");
-            dep!("chocolatey","Chocolatey","Gestionnaires","Gestionnaire de paquets Windows",ok,v,"","https://chocolatey.org/install")
-        });
-
-        // === Outils Système ===
-        let h_curl = s.spawn(|| {
-            let (ok, v) = check("curl", "--version");
-            let short = v.lines().next().unwrap_or("").to_string();
-            dep!("curl","curl","Outils Système","Outil de transfert HTTP/S en ligne de commande",ok,short,"curl.curl","https://curl.se")
-        });
-        let h_7zip = s.spawn(|| {
-            let (ok, v) = check("7z", "i");
-            let short = v.lines().next().unwrap_or("").to_string();
-            dep!("7zip","7-Zip","Outils Système","Archiveur haute compression",ok,short,"7zip.7zip","https://7-zip.org")
-        });
-        let h_npp = s.spawn(|| {
-            let (ok, _) = check_ps("if (Test-Path 'C:\\Program Files\\Notepad++\\notepad++.exe') { 'present' } else { exit 1 }");
-            dep!("notepadpp","Notepad++","Outils Système","Éditeur de texte avancé",ok,String::new(),"Notepad++.Notepad++","https://notepad-plus-plus.org")
-        });
-        let h_ssh = s.spawn(|| {
-            let (ok, _) = check_ps("if (Get-Command ssh -EA SilentlyContinue) { 'present' } else { exit 1 }");
-            dep!("openssh","OpenSSH Client","Outils Système","Client SSH intégré Windows",ok,String::new(),"Microsoft.OpenSSH.Beta","")
-        });
-
-        // === Médias & Productivité ===
-        let h_vlc = s.spawn(|| {
-            let (ok, _) = check_ps("if (Test-Path 'C:\\Program Files\\VideoLAN\\VLC\\vlc.exe') { 'present' } else { exit 1 }");
-            dep!("vlc","VLC Media Player","Médias","Lecteur multimédia universel",ok,String::new(),"VideoLAN.VLC","https://www.videolan.org")
-        });
-        let h_pt = s.spawn(|| {
-            let (ok, _) = check_ps("if (Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* | Where-Object { $_.DisplayName -like '*PowerToys*' }) { 'present' } else { exit 1 }");
-            dep!("powertoys","PowerToys","Productivité","Suite d'utilitaires Microsoft pour power users",ok,String::new(),"Microsoft.PowerToys","")
-        });
-
-        // === Runtimes ===
-        let h_java = s.spawn(|| {
-            let (ok, v) = check_ps("if (Get-Command java -EA SilentlyContinue) { java -version 2>&1 | Select-Object -First 1 } else { exit 1 }");
-            dep!("java","Java (JRE)","Runtimes","Java Runtime Environment",ok,v,"Oracle.JavaRuntimeEnvironment","https://java.com")
-        });
-        let h_go = s.spawn(|| {
-            let (ok, v) = check_ps("if (Get-Command go -EA SilentlyContinue) { go version } else { exit 1 }");
-            dep!("golang","Go","Runtimes","Langage Go (runtime + compilateur)",ok,v,"GoLang.Go","https://go.dev")
-        });
-
-        vec![
-            h_git.join().unwrap_or_else(|_| dep!("git","Git","Développement","",false,String::new(),"Git.Git","")),
-            h_node.join().unwrap_or_else(|_| dep!("nodejs","Node.js","Développement","",false,String::new(),"OpenJS.NodeJS.LTS","")),
-            h_python.join().unwrap_or_else(|_| dep!("python","Python","Développement","",false,String::new(),"Python.Python.3.12","")),
-            h_rust.join().unwrap_or_else(|_| dep!("rust","Rust","Développement","",false,String::new(),"Rustlang.Rustup","")),
-            h_vscode.join().unwrap_or_else(|_| dep!("vscode","VS Code","Développement","",false,String::new(),"Microsoft.VisualStudioCode","")),
-            h_dotnet.join().unwrap_or_else(|_| dep!("dotnet",".NET","Développement","",false,String::new(),"Microsoft.DotNet.Runtime.8","")),
-            h_winget.join().unwrap_or_else(|_| dep!("winget","WinGet","Gestionnaires","",false,String::new(),"","")),
-            h_scoop.join().unwrap_or_else(|_| dep!("scoop","Scoop","Gestionnaires","",false,String::new(),"","")),
-            h_choco.join().unwrap_or_else(|_| dep!("chocolatey","Chocolatey","Gestionnaires","",false,String::new(),"","")),
-            h_curl.join().unwrap_or_else(|_| dep!("curl","curl","Outils Système","",false,String::new(),"curl.curl","")),
-            h_7zip.join().unwrap_or_else(|_| dep!("7zip","7-Zip","Outils Système","",false,String::new(),"7zip.7zip","")),
-            h_npp.join().unwrap_or_else(|_| dep!("notepadpp","Notepad++","Outils Système","",false,String::new(),"Notepad++.Notepad++","")),
-            h_ssh.join().unwrap_or_else(|_| dep!("openssh","OpenSSH","Outils Système","",false,String::new(),"Microsoft.OpenSSH.Beta","")),
-            h_vlc.join().unwrap_or_else(|_| dep!("vlc","VLC","Médias","",false,String::new(),"VideoLAN.VLC","")),
-            h_pt.join().unwrap_or_else(|_| dep!("powertoys","PowerToys","Productivité","",false,String::new(),"Microsoft.PowerToys","")),
-            h_java.join().unwrap_or_else(|_| dep!("java","Java","Runtimes","",false,String::new(),"Oracle.JavaRuntimeEnvironment","")),
-            h_go.join().unwrap_or_else(|_| dep!("golang","Go","Runtimes","",false,String::new(),"GoLang.Go","")),
-        ]
+        let handles: Vec<_> = checks.iter().map(|c| s.spawn(move || c())).collect();
+        handles.into_iter().filter_map(|h| h.join().ok()).collect()
     })
 }
 
 /// Vérifie chaque dépendance et émet un événement `deps:progress` au fur et à mesure.
-/// Permet à l'UI d'afficher les résultats en temps réel sans freeze.
 pub fn check_all_streaming(app: &tauri::AppHandle) {
-    // Closures pour chaque check — exécutées en parallèle
-    type CheckFn = Box<dyn Fn() -> Dependency + Send + Sync>;
-    let checks: Vec<CheckFn> = vec![
-        Box::new(|| { let (ok, v) = check("git", "--version"); dep!("git","Git","Développement","Gestionnaire de versions distribué",ok,v,"Git.Git","https://git-scm.com/download/win") }),
-        Box::new(|| { let (ok, v) = check("node", "--version"); dep!("nodejs","Node.js","Développement","Runtime JavaScript (LTS)",ok,v,"OpenJS.NodeJS.LTS","https://nodejs.org") }),
-        Box::new(|| { let (ok, v) = check("python", "--version"); dep!("python","Python","Développement","Langage de script Python 3",ok,v,"Python.Python.3.12","https://python.org") }),
-        Box::new(|| { let (ok, v) = check("rustc", "--version"); dep!("rust","Rust (rustc)","Développement","Compilateur Rust via rustup",ok,v,"Rustlang.Rustup","https://rustup.rs") }),
-        Box::new(|| { let (ok, v) = check("code", "--version"); let s=v.lines().next().unwrap_or("").to_string(); dep!("vscode","Visual Studio Code","Développement","Éditeur de code Microsoft",ok,s,"Microsoft.VisualStudioCode","https://code.visualstudio.com") }),
-        Box::new(|| { let (ok, v) = check("dotnet", "--version"); dep!("dotnet",".NET Runtime","Développement","Runtime .NET Microsoft",ok,v,"Microsoft.DotNet.Runtime.8","https://dot.net") }),
-        Box::new(|| { let (ok, v) = check_ps("if (Get-Command winget -EA SilentlyContinue) { (winget --version) } else { exit 1 }"); dep!("winget","WinGet","Gestionnaires","Gestionnaire de paquets Windows officiel",ok,v,"","ms-windows-store://pdp/?productid=9NBLGGH4NNS1") }),
-        Box::new(|| { let (ok, v) = check_ps("if (Get-Command scoop -EA SilentlyContinue) { scoop --version 2>&1 | Select-Object -First 1 } else { exit 1 }"); dep!("scoop","Scoop","Gestionnaires","Gestionnaire de paquets sans admin",ok,v,"","https://scoop.sh") }),
-        Box::new(|| { let (ok, v) = check_ps("if (Get-Command choco -EA SilentlyContinue) { choco --version } else { exit 1 }"); dep!("chocolatey","Chocolatey","Gestionnaires","Gestionnaire de paquets Windows",ok,v,"","https://chocolatey.org/install") }),
-        Box::new(|| { let (ok, v) = check("curl", "--version"); let s=v.lines().next().unwrap_or("").to_string(); dep!("curl","curl","Outils Système","Outil de transfert HTTP/S en ligne de commande",ok,s,"curl.curl","https://curl.se") }),
-        Box::new(|| { let (ok, v) = check("7z", "i"); let s=v.lines().next().unwrap_or("").to_string(); dep!("7zip","7-Zip","Outils Système","Archiveur haute compression",ok,s,"7zip.7zip","https://7-zip.org") }),
-        Box::new(|| { let (ok, _) = check_ps("if (Test-Path 'C:\\Program Files\\Notepad++\\notepad++.exe') { 'present' } else { exit 1 }"); dep!("notepadpp","Notepad++","Outils Système","Éditeur de texte avancé",ok,String::new(),"Notepad++.Notepad++","https://notepad-plus-plus.org") }),
-        Box::new(|| { let (ok, _) = check_ps("if (Get-Command ssh -EA SilentlyContinue) { 'present' } else { exit 1 }"); dep!("openssh","OpenSSH Client","Outils Système","Client SSH intégré Windows",ok,String::new(),"Microsoft.OpenSSH.Beta","") }),
-        Box::new(|| { let (ok, _) = check_ps("if (Test-Path 'C:\\Program Files\\VideoLAN\\VLC\\vlc.exe') { 'present' } else { exit 1 }"); dep!("vlc","VLC Media Player","Médias","Lecteur multimédia universel",ok,String::new(),"VideoLAN.VLC","https://www.videolan.org") }),
-        Box::new(|| { let (ok, _) = check_ps("if (Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* | Where-Object { $_.DisplayName -like '*PowerToys*' }) { 'present' } else { exit 1 }"); dep!("powertoys","PowerToys","Productivité","Suite d'utilitaires Microsoft pour power users",ok,String::new(),"Microsoft.PowerToys","") }),
-        Box::new(|| { let (ok, v) = check_ps("if (Get-Command java -EA SilentlyContinue) { java -version 2>&1 | Select-Object -First 1 } else { exit 1 }"); dep!("java","Java (JRE)","Runtimes","Java Runtime Environment",ok,v,"Oracle.JavaRuntimeEnvironment","https://java.com") }),
-        Box::new(|| { let (ok, v) = check_ps("if (Get-Command go -EA SilentlyContinue) { go version } else { exit 1 }"); dep!("golang","Go","Runtimes","Langage Go (runtime + compilateur)",ok,v,"GoLang.Go","https://go.dev") }),
-    ];
-
+    let checks = checks();
     let total = checks.len() as u8;
-    // Exécuter en parallèle mais émettre les résultats dès qu'ils arrivent
-    let (tx, rx) = std::sync::mpsc::channel::<(u8, Dependency)>();
-
+    let (tx, rx) = std::sync::mpsc::channel::<Dependency>();
     std::thread::scope(|s| {
-        for (i, check_fn) in checks.iter().enumerate() {
+        for check_fn in &checks {
             let tx = tx.clone();
-            s.spawn(move || {
-                let dep = check_fn();
-                let _ = tx.send((i as u8, dep));
-            });
+            s.spawn(move || { let _ = tx.send(check_fn()); });
         }
-        drop(tx); // ferme le sender scope
+        drop(tx);
         let mut received = 0u8;
-        let mut ordered: Vec<Option<Dependency>> = vec![None; total as usize];
-        for (idx, dep) in rx {
-            ordered[idx as usize] = Some(dep);
+        for item in rx {
             received += 1;
-            // Émettre chaque résultat immédiatement
-            if let Some(ref item) = ordered[idx as usize] {
-                let _ = app.emit("deps:progress", DepsProgress {
-                    checked: received,
-                    total,
-                    item: item.clone(),
-                    done: received == total,
-                });
-            }
+            let _ = app.emit("deps:progress", DepsProgress { checked: received, total, item, done: received == total });
         }
     });
 }
@@ -236,22 +129,36 @@ pub fn install_via_winget(winget_id: &str) -> Result<String, String> {
     if winget_id.is_empty() {
         return Err("Pas d'ID winget — installez manuellement.".into());
     }
-    let mut cmd = std::process::Command::new("winget");
-    cmd.args(["install", "--id", winget_id, "--accept-source-agreements", "--accept-package-agreements", "-h"]);
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(0x08000000);
-    match cmd.output() {
-        Ok(out) => {
-            // decode_output : winget émet des messages d'erreur localisés FR
-            // accentués ("package introuvable"...), sans $OutputEncoding préalable.
-            let stdout = crate::maintenance::commands::decode_output(&out.stdout);
-            let stderr = crate::maintenance::commands::decode_output(&out.stderr);
-            if out.status.success() {
-                Ok(format!("✓ {} installé avec succès", winget_id))
-            } else {
-                Err(format!("Erreur winget: {}{}", stdout, stderr))
-            }
+    // --exact : sans lui, un id partiel pouvait installer un autre paquet.
+    // Timeout 30 min : un installeur bloque sur une fenetre invisible ne doit
+    // pas laisser le bouton « Installation… » tourner indefiniment.
+    let r = execute_system_command(
+        "winget",
+        &["install", "--id", winget_id, "--exact", "--silent",
+          "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"],
+        30 * 60,
+    ).map_err(|e| format!("winget : {e}"))?;
+    if r.success || crate::installer::winget::OK_EXIT_CODES.contains(&r.exit_code) {
+        Ok(format!("{} : {}", winget_id, if r.success { "installé avec succès".to_string() } else { crate::installer::winget::describe_exit(r.exit_code) }))
+    } else {
+        let detail = r.stdout.lines().chain(r.stderr.lines()).map(str::trim).rfind(|l| !l.is_empty()).unwrap_or("");
+        Err(format!("{} — {}", crate::installer::winget::describe_exit(r.exit_code), detail))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_ids_are_unique_and_winget_ids_current() {
+        let all: Vec<Dependency> = checks().iter().map(|c| c()).collect();
+        let mut ids = std::collections::HashSet::new();
+        for d in &all {
+            assert!(ids.insert(d.id.clone()), "doublon {}", d.id);
+            // Identifiants retires/renommes de winget (verifie 2026-11-23 sur l'index winget).
+            assert!(!["curl.curl", "Microsoft.OpenSSH.Beta", "Microsoft.DotNet.Runtime.8", "Oracle.JavaRuntimeEnvironment", "Python.Python.3.12"].contains(&d.winget_id.as_str()), "{}", d.winget_id);
         }
-        Err(e) => Err(format!("Impossible de lancer winget: {}", e)),
+        assert_eq!(all.len(), 17);
     }
 }

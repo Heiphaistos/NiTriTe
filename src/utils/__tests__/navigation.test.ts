@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { navigationSections } from "@/data/navigation";
 import routerSource from "@/router/index.ts?raw";
-import sidebarSource from "@/components/layout/AppSidebar.vue?raw";
+import { iconMap } from "@/data/navIcons";
 
 describe("navigation", () => {
   const items = navigationSections.flatMap((s) => s.items);
@@ -18,6 +18,6 @@ describe("navigation", () => {
   });
 
   it("chaque icône est connue de la barre latérale", () => {
-    for (const i of items) expect(sidebarSource, i.icon).toContain(`"${i.icon}"`.replace(/^"([a-z]+)"$/, "$1:"));
+    for (const i of items) expect(iconMap[i.icon], i.icon).toBeDefined();
   });
 });

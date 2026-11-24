@@ -30,7 +30,7 @@ export const kbCmd: KBCategory[] = [
           "bootrec /fixmbr : réparer le MBR (depuis WinRE)",
           "bootrec /rebuildbcd : reconstruire le BCD (boot configuration)",
           "bcdedit : gérer les entrées de démarrage",
-          "wmic diskdrive get status : état SMART des disques",
+          "Get-PhysicalDisk | Select FriendlyName, HealthStatus (PowerShell) : état des disques (wmic est retiré de Windows 11 24H2/25H2)",
           "systeminfo : informations complètes système",
         ],
         command: "sfc /scannow",

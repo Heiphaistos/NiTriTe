@@ -160,7 +160,7 @@ $out | ConvertTo-Json -Depth 3 -Compress
             .output();
 
         if let Ok(o) = output {
-            let text = String::from_utf8_lossy(&o.stdout);
+            let text = crate::maintenance::commands::decode_output(&o.stdout);
             let v: serde_json::Value = match serde_json::from_str(text.trim()) {
                 Ok(val) => val, Err(_) => return SystemHistory::default(),
             };

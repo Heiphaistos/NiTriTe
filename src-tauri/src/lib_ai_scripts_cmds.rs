@@ -25,13 +25,21 @@ async fn ai_query(
     model: Option<String>,
     system_prompt: Option<String>,
     history: Option<Vec<serde_json::Value>>,   // [{role, content}]
+    backend: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, NiTriTeError> {
-    let (backend, port, ollama_url, default_model) = {
+    let (cfg_backend, port, ollama_url, default_model, cfg_temp) = {
         let config = state.config.lock().await;
-        (config.ai_backend.clone(), config.llamacpp_port, config.ollama_url.clone(), config.ollama_model.clone())
+        (config.ai_backend.clone(), config.llamacpp_port, config.ollama_url.clone(), config.ollama_model.clone(), config.ollama_temperature)
     };
-    let temp = 0.7_f64;
+    // Le moteur choisi dans la page (llama.cpp / Ollama) prime : `ai_backend`
+    // n'etait jamais ecrit par l'interface et restait a "llamacpp", donc le
+    // bouton Ollama envoyait les questions a un llama-server absent.
+    let backend = match backend.as_deref() {
+        Some(b @ ("llamacpp" | "ollama")) => b.to_string(),
+        _ => cfg_backend,
+    };
+    let temp = if cfg_temp.is_finite() && (0.0..=2.0).contains(&cfg_temp) { cfg_temp } else { 0.7 };
     let m = model.unwrap_or(default_model);
 
     // Construire les messages

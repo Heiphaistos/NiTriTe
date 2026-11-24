@@ -38,7 +38,7 @@ pub fn get_event_logs(log_name: &str, count: u32) -> Result<Vec<EventLogEntry>, 
         .output()
         .map_err(|e| NiTriTeError::System(format!("Erreur wevtutil: {}", e)))?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = crate::maintenance::commands::decode_output(&output.stdout);
 
     if stdout.trim().is_empty() {
         return Ok(Vec::new());

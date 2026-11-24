@@ -102,13 +102,16 @@ async function fixIssue(action: string) {
         await updateDefenderDefs();
         break;
       case 'run_sfc':
-        await invoke('run_repair_command', { repairType: 'sfc' });
-        notify.info("SFC lancé", "Vérification des fichiers système en cours...");
+      case 'run_dism': {
+        // run_repair_command attend la fin (10 à 30 min) et ne rejette jamais :
+        // prévenir avant, puis juger sur `success`.
+        const isSfc = action === 'run_sfc';
+        notify.info(isSfc ? "SFC lancé" : "DISM lancé", "Opération longue (jusqu'à 30 min), résultat à la fin...");
+        const r = await invoke<{ success: boolean; output: string }>('run_repair_command', { repairType: isSfc ? 'sfc' : 'dism_restore' });
+        if (r.success) notify.success(isSfc ? "SFC terminé" : "DISM terminé", r.output.slice(-300));
+        else notify.error(isSfc ? "SFC en échec" : "DISM en échec", r.output.slice(-300));
         break;
-      case 'run_dism':
-        await invoke('run_repair_command', { repairType: 'dism_restore' });
-        notify.info("DISM lancé", "Restauration de l'image système en cours...");
-        break;
+      }
       case 'settings_activation':
         await invoke('open_url', { url: 'ms-settings:windowsdefender' });
         break;

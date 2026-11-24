@@ -1,9 +1,5 @@
 use serde::Serialize;
 use tauri::Emitter;
-use crate::maintenance::commands::decode_output;
-
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct InstalledApp {
@@ -59,22 +55,10 @@ $apps = Get-ItemProperty $paths -ErrorAction SilentlyContinue |
 $apps | ConvertTo-Json -Compress -Depth 2
 "#;
 
-    #[cfg(target_os = "windows")]
-    let result = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", ps])
-        .creation_flags(0x08000000)
-        .output();
-
-    #[cfg(not(target_os = "windows"))]
-    let result: Result<std::process::Output, _> =
-        Err(std::io::Error::new(std::io::ErrorKind::Other, "not windows"));
-
-    let output = match result { Ok(o) => o, Err(_) => return vec![] };
-    // decode_output : DisplayName/Publisher viennent du registre et sont
-    // frequemment accentues (editeurs FR, composants Microsoft localises —
-    // ex. « Extensions de l'environnement de preinstallation Windows »),
-    // sortent en OEM cote PowerShell → mojibake avec from_utf8_lossy.
-    let text = decode_output(&output.stdout);
+    // run_ps decode via decode_output : DisplayName/Publisher viennent du
+    // registre et sont frequemment accentues (editeurs FR, composants Microsoft
+    // localises), sortis en OEM cote PowerShell → mojibake avec from_utf8_lossy.
+    let Some(text) = run_ps(ps, 60) else { return vec![] };
     let text = text.trim();
     if text.is_empty() || text == "null" { return vec![]; }
     let json_text = if text.starts_with('{') { format!("[{}]", text) } else { text.to_string() };
@@ -178,15 +162,38 @@ fn run_uninstall_silent(app_name: &str, uninstall_string: &str) -> bool {
         }
     }
 
-    // Encoder les valeurs via JSON : double quotes autour, caractères spéciaux échappés.
-    // La chaîne JSON est directement interprétable par ConvertFrom-Json dans PS.
-    // Pas de format!() avec ces valeurs — on construit le script par concaténation contrôlée.
-    let app_json = serde_json::to_string(app_name).unwrap_or_else(|_| "\"\"".to_string());
-    let us_json  = serde_json::to_string(uninstall_string).unwrap_or_else(|_| "\"\"".to_string());
+    // 15 min : au-dela, le desinstalleur attend une fenetre invisible.
+    match run_ps(&uninstall_script(app_name, uninstall_string), 900) {
+        Some(t) => t.trim().starts_with("OK:"),
+        None    => false,
+    }
+}
 
-    // Le script PowerShell utilise ConvertFrom-Json pour désérialiser les valeurs JSON.
-    // Ceci protège contre toute injection : guillemets, backticks, $(), etc. sont neutralisés.
-    let ps = format!(
+/// Chaine PowerShell litterale entre apostrophes : rien n'y est interprete
+/// (ni `$`, ni backtick, ni `"`). PowerShell traite aussi les apostrophes
+/// typographiques (U+2018-U+201B) comme delimiteurs : elles sont doublees
+/// comme `'`, sinon un nom comme « Assistant d’installation » fermait la chaine.
+fn ps_lit(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('\'');
+    for c in value.chars() {
+        if matches!(c, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') {
+            out.push(c);
+        }
+        out.push(c);
+    }
+    out.push('\'');
+    out
+}
+
+/// Script de desinstallation silencieuse. Avant : les valeurs etaient
+/// injectees en JSON brut (`"…\"C:\\…\"…" | ConvertFrom-Json`) — PowerShell
+/// n'interprete pas `\"` : tout UninstallString entre guillemets (la majorite)
+/// rendait le script syntaxiquement invalide, et `"Nom" | ConvertFrom-Json`
+/// donnait `$null` pour le nom, donc `-like '**'` : la desinstallation propre
+/// echouait a coup sur (verifie 2026-11-23 avec le parseur PowerShell).
+fn uninstall_script(app_name: &str, uninstall_string: &str) -> String {
+    format!(
         r#"
 function Is-Installed($name) {{
     $paths = @(
@@ -194,15 +201,17 @@ function Is-Installed($name) {{
         'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
         'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
     )
-    $pat = '*' + [Management.Automation.WildcardPattern]::Escape($name) + '*'
+    # Egalite exacte : le nom vient du registre lui-meme. Un -like *nom*
+    # declarait « toujours installee » une app desinstallee des qu'une autre
+    # la contenait (« Git » / « GitHub Desktop ») — faux echec.
     $found = Get-ItemProperty $paths -ErrorAction SilentlyContinue |
-        Where-Object {{ $_.DisplayName -and $_.DisplayName -like $pat }}
+        Where-Object {{ $_.DisplayName -and $_.DisplayName -eq $name }}
     return ($null -ne $found)
 }}
 
-# Valeurs passées via JSON — protège contre l'injection PowerShell
-$appName = {app_json} | ConvertFrom-Json
-$s = ({us_json} | ConvertFrom-Json).Trim()
+# Valeurs en chaines litterales (ps_lit) — aucune interpretation possible
+$appName = {app_lit}
+$s = ({us_lit}).Trim()
 
 $proc = $null
 try {{
@@ -255,14 +264,9 @@ if (Is-Installed $appName) {{
     Write-Output "OK:$code"
 }}
 "#,
-        app_json = app_json,
-        us_json  = us_json
-    );
-
-    match run_ps(&ps) {
-        Some(t) => t.trim().starts_with("OK:"),
-        None    => false,
-    }
+        app_lit = ps_lit(app_name),
+        us_lit  = ps_lit(uninstall_string)
+    )
 }
 
 // ── Recherche des résidus (sans supprimer) ───────────────────────────────────
@@ -272,10 +276,19 @@ fn find_residuals(app_name: &str, publisher: &str) -> Vec<String> {
 }
 
 /// Prévisualise les résidus qu'une désinstallation propre supprimerait (sans rien effacer)
-pub fn preview_residuals(app_name: String, publisher: String) -> Vec<String> {
-    let generic: &[&str] = &[
-        "software", "corp", "inc", "ltd", "llc", "gmbh",
+/// Mots-cles de recherche des residus. Exclut les mots generiques ET les noms
+/// de « dossiers parapluie » partages par plusieurs produits : avant, une app
+/// Microsoft (editeur « Microsoft Corporation ») donnait le mot-cle
+/// « microsoft », qui faisait lister %APPDATA%\Microsoft et
+/// %LOCALAPPDATA%\Microsoft entiers comme residus — un clic sur « Supprimer »
+/// effacait profils Office/Teams/Edge, identifiants, etc. Les jetons sans
+/// lettre (« 2015-2022 », « 2024 ») matchaient eux aussi n'importe quoi.
+fn residual_keywords(app_name: &str, publisher: &str) -> Vec<String> {
+    const GENERIC: &[&str] = &[
+        "software", "corp", "corporation", "inc", "ltd", "llc", "gmbh",
         "technologies", "solutions", "systems", "group", "the", "and",
+        "microsoft", "windows", "google", "apple", "update", "runtime",
+        "redistributable", "edition", "version", "setup", "x64", "x86",
     ];
     // Vec::dedup ne retire que les doublons CONSÉCUTIFS ; app_name et publisher
     // partagent souvent un mot (« Adobe Photoshop » + « Adobe Inc »), non adjacent
@@ -285,16 +298,33 @@ pub fn preview_residuals(app_name: String, publisher: String) -> Vec<String> {
     for word in app_name.split_whitespace().chain(publisher.split_whitespace()) {
         let w = word.to_lowercase();
         let w = w.trim_matches(|c: char| !c.is_alphanumeric());
-        if w.len() >= 4 && !generic.contains(&w) && seen.insert(w.to_string()) {
+        if w.len() >= 4 && w.chars().any(char::is_alphabetic) && !GENERIC.contains(&w) && seen.insert(w.to_string()) {
             keywords.push(w.to_string());
         }
     }
     keywords.truncate(4);
-    if keywords.is_empty() { return vec![]; }
+    keywords
+}
 
-    let kw_json = serde_json::to_string(&keywords).unwrap_or_default();
+/// Dossiers partages par plusieurs produits ou par Windows : jamais un residu,
+/// meme si leur nom contient un mot-cle (garde reprise par les deux gardes de
+/// suppression ci-dessous).
+const SHARED_DIRS: &[&str] = &[
+    "microsoft", "google", "apple", "apple computer", "packages", "temp", "programs",
+    "mozilla", "intel", "nvidia", "nvidia corporation", "amd", "adobe", "package cache",
+    "windowsapps", "comms", "connecteddevicesplatform", "d3dscache", "crashdumps",
+    "publishers", "oracle", "java", "jetbrains", "npm", "npm-cache", "pip",
+];
+
+pub fn preview_residuals(app_name: String, publisher: String) -> Vec<String> {
+    let keywords = residual_keywords(&app_name, &publisher);
+    if keywords.is_empty() { return vec![]; }
+    let shared_json = serde_json::to_string(SHARED_DIRS).unwrap_or_else(|_| "[]".into());
+
+    let kw_json = ps_lit(&serde_json::to_string(&keywords).unwrap_or_default());
     let ps = format!(r#"
 $keywords = {} | ConvertFrom-Json
+$shared = {} | ConvertFrom-Json
 $found = @()
 
 function Match-Kw($name) {{
@@ -312,7 +342,7 @@ $fsPaths = @($env:APPDATA, $env:LOCALAPPDATA, "$env:LOCALAPPDATA\Programs", $env
 foreach ($base in $fsPaths) {{
     if (-not $base -or -not (Test-Path $base)) {{ continue }}
     Get-ChildItem $base -ErrorAction SilentlyContinue | ForEach-Object {{
-        if (Match-Kw $_.Name) {{
+        if ((Match-Kw $_.Name) -and ($shared -notcontains $_.Name.ToLower())) {{
             $fp = $_.FullName.ToLower()
             # Protection : exclut chemins système critiques
             $isSys = ($fp -like "*\windows\*") -or
@@ -350,7 +380,10 @@ foreach ($rp in $regPaths) {{
                      # Protège HKLM pour les entrées Microsoft/Windows natives
                      ($rp -like 'HKLM:*' -and $_.PSPath -like '*\Microsoft\*') -or
                      ($rp -like 'HKLM:*' -and $_.PSPath -like '*\Windows*')
-            if (-not $isSys) {{ $found += "RK:$($_.PSPath)" }}
+            if (-not $isSys) {{
+                $kp = ($_.PSPath -replace '^.*::', '') -replace '^HKEY_LOCAL_MACHINE\\', 'HKLM:\' -replace '^HKEY_CURRENT_USER\\', 'HKCU:\'
+                $found += "RK:$kp"
+            }}
         }}
     }}
 }}
@@ -373,29 +406,13 @@ foreach ($p in $sc) {{
 }}
 
 $found | ConvertTo-Json -Compress
-"#, kw_json);
+"#, kw_json, ps_lit(&shared_json));
 
-    #[cfg(target_os = "windows")]
-    {
-        let output = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
-            .creation_flags(0x08000000)
-            .output();
-        match output {
-            Ok(o) => {
-                // decode_output : chemins de raccourcis/dossiers Menu Demarrer
-                // peuvent contenir des noms accentues.
-                let text = decode_output(&o.stdout);
-                let text = text.trim();
-                if text.is_empty() || text == "null" { return vec![]; }
-                let json = if text.starts_with('"') { format!("[{}]", text) } else { text.to_string() };
-                serde_json::from_str::<Vec<String>>(&json).unwrap_or_default()
-            }
-            Err(_) => vec![],
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    vec![]
+    let Some(text) = run_ps(&ps, 120) else { return vec![] };
+    let text = text.trim();
+    if text.is_empty() || text == "null" { return vec![]; }
+    let json = if text.starts_with('"') { format!("[{}]", text) } else { text.to_string() };
+    serde_json::from_str::<Vec<String>>(&json).unwrap_or_default()
 }
 
 // ── Suppression définitive des résidus ───────────────────────────────────────
@@ -404,9 +421,10 @@ pub fn delete_residuals(paths: Vec<String>) -> ResidualCleanResult {
     if paths.is_empty() {
         return ResidualCleanResult { success: true, deleted_count: 0, failed_count: 0, message: "Rien à supprimer.".into() };
     }
-    let paths_json = serde_json::to_string(&paths).unwrap_or_default().replace('\'', "''");
+    let paths_json = ps_lit(&serde_json::to_string(&paths).unwrap_or_default());
     let ps = format!(r#"
-$items = '{}' | ConvertFrom-Json
+$items = {} | ConvertFrom-Json
+$shared = {} | ConvertFrom-Json
 $ok = 0; $fail = 0
 
 # ── Garde de sécurité : refuse de supprimer tout chemin système critique ──
@@ -443,6 +461,7 @@ function Is-SafeToDelete($item) {{
         # FS:Menu:chemin ou FS:chemin ou LN:chemin
         $raw = ($item -split ':', 2)[1]
         if ($raw -like 'Menu:*') {{ $raw = ($raw -split ':', 2)[1] }}
+        if ($shared -contains (Split-Path -Leaf $raw).ToLower()) {{ return $false }}
         # Longueur minimum : évite les chemins racine trop courts
         if ($raw.Length -lt 12) {{ return $false }}
         # Exception : dossier de groupe Menu Démarrer par-utilisateur — c'est
@@ -457,6 +476,9 @@ function Is-SafeToDelete($item) {{
     }}
     if ($prefix -eq 'RK') {{
         $path = ($item -split ':', 2)[1]
+        # Forme PSPath (« Microsoft.PowerShell.Core\Registry::HKEY_... ») : sans
+        # normalisation, aucune des cles interdites ci-dessus ne matchait jamais.
+        $path = ($path -replace '^.*::', '') -replace '^HKEY_LOCAL_MACHINE\\', 'HKLM:\' -replace '^HKEY_CURRENT_USER\\', 'HKCU:\'
         if ($path.Length -lt 20) {{ return $false }}
         foreach ($p in $sysReg) {{ if ($path -like "$p*") {{ return $false }} }}
         return $true
@@ -501,9 +523,9 @@ foreach ($item in $items) {{
     }} catch {{ $fail++ }}
 }}
 @{{ok=$ok;fail=$fail}} | ConvertTo-Json -Compress
-"#, paths_json);
+"#, paths_json, ps_lit(&serde_json::to_string(SHARED_DIRS).unwrap_or_else(|_| "[]".into())));
 
-    match run_ps(&ps) {
+    match run_ps(&ps, 300) {
         Some(t) => {
             let t = t.trim();
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(t) {
@@ -551,6 +573,8 @@ fn is_safe_residual(item: &str) -> bool {
             let raw = rest.strip_prefix("Menu:").unwrap_or(rest);
             if raw.len() < 12 { return false; }
             let raw_lower = raw.to_lowercase();
+            let leaf = raw_lower.trim_end_matches('\\').rsplit('\\').next().unwrap_or("");
+            if SHARED_DIRS.contains(&leaf) { return false; }
             // Exception : dossier de groupe Menu Démarrer par-utilisateur — miroir
             // de l'exception PS dans delete_residuals (voir commentaire là-bas).
             if raw_lower.contains(r"\appdata\roaming\microsoft\windows\start menu\programs\") {
@@ -559,13 +583,26 @@ fn is_safe_residual(item: &str) -> bool {
             !SYS_FS.iter().any(|p| raw_lower.contains(p))
         }
         "RK" => {
-            if rest.len() < 20 { return false; }
-            let rest_lower = rest.to_lowercase();
+            let rest_lower = normalize_reg_path(rest).to_lowercase();
+            if rest_lower.len() < 20 { return false; }
             !SYS_REG.iter().any(|p| rest_lower.starts_with(p))
         }
         "EX" => true,
         _ => false,
     }
+}
+
+/// « Microsoft.PowerShell.Core\Registry::HKEY_CURRENT_USER\X » -> « HKCU:\X »
+/// (forme comparee par les listes de cles interdites).
+fn normalize_reg_path(p: &str) -> String {
+    let p = p.rsplit_once("::").map_or(p, |(_, r)| r);
+    let upper = p.to_uppercase();
+    for (long, short) in [("HKEY_LOCAL_MACHINE\\", "HKLM:\\"), ("HKEY_CURRENT_USER\\", "HKCU:\\")] {
+        if upper.starts_with(long) {
+            return format!("{short}{}", &p[long.len()..]);
+        }
+    }
+    p.to_string()
 }
 
 pub fn extract_residuals(paths: Vec<String>, target: String) -> ResidualCleanResult {
@@ -614,11 +651,11 @@ pub fn extract_residuals(paths: Vec<String>, target: String) -> ResidualCleanRes
 
     let paths_json = serde_json::to_string(&paths).unwrap_or_default();
     let target_str = canonical_target.to_string_lossy().to_string();
-    let paths_json_escaped = paths_json.replace('\'', "''");
-    let target_json = serde_json::to_string(&target_str).unwrap_or_else(|_| "\"\"".to_string());
+    let paths_json_escaped = ps_lit(&paths_json);
+    let target_json = ps_lit(&target_str);
     let ps = format!(r#"
-$items = '{}' | ConvertFrom-Json
-$target = {} | ConvertFrom-Json
+$items = {} | ConvertFrom-Json
+$target = {}
 $ok = 0; $fail = 0
 
 # Export des clés registre en .reg — un fichier PAR clé.
@@ -630,7 +667,7 @@ $regIdx = 0
 foreach ($r in $regItems) {{
     $path = ($r -split ':', 2)[1]
     try {{
-        $path2 = $path -replace '^.*::', ''
+        $path2 = ($path -replace '^.*::', '') -replace '^(HKLM|HKCU):\\', '$1\'
         $regIdx++
         $regFile = Join-Path $target ("residuals_registry_{{0}}.reg" -f $regIdx)
         & reg export "$path2" "$regFile" /y 2>$null
@@ -652,7 +689,7 @@ foreach ($item in $fileItems) {{
 @{{ok=$ok;fail=$fail}} | ConvertTo-Json -Compress
 "#, paths_json_escaped, target_json);
 
-    let copy_result = run_ps(&ps);
+    let copy_result = run_ps(&ps, 600);
     let (copied, copy_fail) = copy_result
         .and_then(|t| serde_json::from_str::<serde_json::Value>(t.trim()).ok())
         .map(|v| (v["ok"].as_u64().unwrap_or(0) as usize, v["fail"].as_u64().unwrap_or(0) as usize))
@@ -675,17 +712,12 @@ foreach ($item in $fileItems) {{
     }
 }
 
-fn run_ps(script: &str) -> Option<String> {
-    #[cfg(target_os = "windows")]
-    {
-        let o = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", script])
-            .creation_flags(0x08000000)
-            .output().ok()?;
-        Some(decode_output(&o.stdout))
-    }
-    #[cfg(not(target_os = "windows"))]
-    None
+/// PowerShell avec timeout (avant : `.output()` sans borne, un desinstalleur
+/// qui attend un clic dans une fenetre invisible bloquait la file a vie).
+fn run_ps(script: &str, timeout_secs: u64) -> Option<String> {
+    crate::maintenance::commands::execute_system_command(
+        "powershell", &["-NoProfile", "-NonInteractive", "-Command", script], timeout_secs,
+    ).ok().map(|r| r.stdout)
 }
 
 #[cfg(test)]
@@ -769,6 +801,71 @@ mod uninstaller_tests {
     fn unknown_prefix_blocked() {
         assert!(!is_safe_residual("XX:whatever"));
         assert!(!is_safe_residual("no-colon-at-all"));
+    }
+
+    // Live, lecture seule (rien n'est supprime) : le script PowerShell de
+    // preview s'execute et ne propose jamais un dossier parapluie partage.
+    #[test]
+    #[ignore]
+    fn preview_residuals_live_never_lists_shared_dirs() {
+        let found = preview_residuals("Microsoft Teams".into(), "Microsoft Corporation".into());
+        for f in &found {
+            assert!(is_safe_residual(f) || f.starts_with("RK:HKLM"), "residu dangereux propose : {f}");
+            let leaf = f.trim_end_matches('\\').rsplit('\\').next().unwrap_or("").to_lowercase();
+            assert!(!SHARED_DIRS.contains(&leaf.as_str()), "dossier partage propose : {f}");
+        }
+        eprintln!("{} residu(s) : {:?}", found.len(), found);
+    }
+
+    #[test]
+    fn ps_lit_neutralises_quotes() {
+        assert_eq!(ps_lit(r#""C:\Program Files\X\unins.exe" /S"#), r#"'"C:\Program Files\X\unins.exe" /S'"#);
+        assert_eq!(ps_lit("l'app d\u{2019}installation $x"), "'l''app d\u{2019}\u{2019}installation $x'");
+    }
+
+    // Live, lecture seule : PowerShell PARSE les scripts generes sans les
+    // executer (Parser::ParseInput). Prouve l'absence d'erreur de syntaxe.
+    #[test]
+    #[ignore]
+    fn generated_scripts_parse_in_powershell() {
+        let scripts = [
+            uninstall_script("Assistant d\u{2019}installation", r#""C:\Program Files\Obsidian\Uninstall Obsidian.exe" /currentuser"#),
+            uninstall_script("7-Zip 24.08 (x64)", "MsiExec.exe /I{23170F69-40C1-2702-2408-000001000000}"),
+        ];
+        for sc in scripts {
+            let check = format!(
+                "$e=$null; [void][System.Management.Automation.Language.Parser]::ParseInput({}, [ref]$null, [ref]$e); $e.Count",
+                ps_lit(&sc)
+            );
+            let out = run_ps(&check, 30).unwrap_or_default();
+            assert_eq!(out.trim(), "0", "erreurs de syntaxe PowerShell : {out}\n{sc}");
+        }
+    }
+
+    #[test]
+    fn keywords_skip_vendor_umbrellas_and_numbers() {
+        let kw = residual_keywords("Microsoft Teams (work or school)", "Microsoft Corporation");
+        assert_eq!(kw, vec!["teams".to_string(), "work".into(), "school".into()]);
+        let kw = residual_keywords("Microsoft Visual C++ 2015-2022 Redistributable (x64)", "Microsoft Corporation");
+        assert_eq!(kw, vec!["visual".to_string()]);
+        assert!(residual_keywords("Google Chrome", "Google LLC").iter().all(|k| k != "google"));
+    }
+
+    #[test]
+    fn shared_vendor_folders_never_deletable() {
+        assert!(!is_safe_residual(r"FS:C:\Users\Momo\AppData\Roaming\Microsoft"));
+        assert!(!is_safe_residual(r"FS:C:\Users\Momo\AppData\Local\Google\"));
+        assert!(!is_safe_residual(r"FS:C:\Users\Momo\AppData\Local\Packages"));
+        assert!(is_safe_residual(r"FS:C:\Users\Momo\AppData\Local\Notepad++"));
+    }
+
+    #[test]
+    fn pspath_registry_form_is_guarded_too() {
+        // Forme produite par l'ancien preview_residuals : la garde ne la voyait pas.
+        assert!(!is_safe_residual(r"RK:Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Foo"));
+        assert!(!is_safe_residual(r"RK:Microsoft.PowerShell.Core\Registry::HKEY_CURRENT_USER\SOFTWARE\Classes\Foo"));
+        assert!(is_safe_residual(r"RK:Microsoft.PowerShell.Core\Registry::HKEY_CURRENT_USER\SOFTWARE\SomeVendor"));
+        assert_eq!(normalize_reg_path(r"Microsoft.PowerShell.Core\Registry::HKEY_CURRENT_USER\SOFTWARE\X"), r"HKCU:\SOFTWARE\X");
     }
 
     #[test]

@@ -54,11 +54,14 @@ pub fn check_winget() -> bool {
 }
 
 pub fn list_upgradable() -> Result<Vec<WingetPackage>, NiTriTeError> {
-    let output = Command::new("winget")
-        .args(["upgrade", "--include-unknown", "--accept-source-agreements"])
-        .creation_flags(0x08000000).output()?;
-
-    let text = String::from_utf8_lossy(&output.stdout).to_string();
+    // Timeout : la 1re requete du jour rafraichit les sources (msstore compris)
+    // et peut depasser la minute ; sans borne, un winget bloque gelait l'onglet.
+    let out = crate::maintenance::commands::execute_system_command(
+        "winget",
+        &["upgrade", "--include-unknown", "--accept-source-agreements", "--disable-interactivity"],
+        150,
+    )?;
+    let text = out.stdout;
     let mut packages = Vec::new();
     let mut past_separator = false;
 
@@ -138,13 +141,80 @@ pub fn install_package(
         }
     }
 
-    let status = child.wait()?;
+    let status = wait_with_watchdog(child, INSTALL_TIMEOUT)?;
+    let code = status.code().unwrap_or(-1);
+    let success = status.success() || OK_EXIT_CODES.contains(&code);
 
     Ok(InstallResult {
-        success: status.success(),
+        success,
         app_id: package_id.to_string(),
-        message: if status.success() { "Installation reussie".into() } else { format!("Code: {}", status.code().unwrap_or(-1)) },
+        message: if status.success() { "Installation reussie".into() } else { describe_exit(code) },
     })
+}
+
+/// Duree maximale d'une installation/mise a jour winget. Au-dela, l'installeur
+/// attend presque toujours une fenetre invisible (process lance sans console).
+const INSTALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+
+/// Codes de sortie winget qui ne sont PAS des echecs (verifies avec
+/// `winget error <code>`, winget 1.29) : deja a jour, deja installe,
+/// redemarrage requis pour terminer / redemarrage lance.
+pub const OK_EXIT_CODES: [i32; 4] = [
+    0x8A15002B_u32 as i32, // UPDATE_NOT_APPLICABLE
+    0x8A150061_u32 as i32, // PACKAGE_ALREADY_INSTALLED
+    0x8A150109_u32 as i32, // INSTALL_REBOOT_REQUIRED_TO_FINISH
+    0x8A15010B_u32 as i32, // INSTALL_REBOOT_INITIATED
+];
+
+/// Libelle francais d'un code de sortie winget (codes les plus courants,
+/// libelles repris de `winget error <code>`). Code inconnu : valeur hexa,
+/// que `winget error` sait expliquer.
+pub fn describe_exit(code: i32) -> String {
+    let msg = match code as u32 {
+        0 => "Reussi",
+        0x8A15002B => "Deja a jour (aucune mise a jour applicable)",
+        0x8A150061 => "Deja installe",
+        0x8A150109 => "Installe, redemarrez le PC pour terminer",
+        0x8A15010B => "Installe, le PC va redemarrer pour terminer",
+        0x8A150014 => "Paquet introuvable dans les sources winget",
+        0x8A15010A => "Redemarrage requis avant l'installation",
+        0x8A15010D => "Une autre version de l'application est deja installee",
+        0x8A150101 => "Application en cours d'execution : fermez-la puis reessayez",
+        0x8A150102 => "Une autre installation est deja en cours",
+        0x8A150107 => "Pas de connexion Internet",
+        0x8A15010C => "Installation annulee par l'utilisateur",
+        0x8A150056 => "L'installeur refuse d'etre lance en administrateur",
+        _ => return format!("Echec winget (code 0x{:08X})", code as u32),
+    };
+    format!("{msg} (code 0x{:08X})", code as u32)
+}
+
+/// Attend la fin du process ; s'il depasse `timeout`, tue toute son
+/// arborescence (`taskkill /T` : winget lance l'installeur en enfant) et
+/// renvoie une erreur au lieu de bloquer indefiniment.
+pub(crate) fn wait_with_watchdog(mut child: std::process::Child, timeout: std::time::Duration) -> Result<std::process::ExitStatus, NiTriTeError> {
+    let pid = child.id();
+    let (tx, rx) = std::sync::mpsc::channel::<()>();
+    let watchdog = std::thread::spawn(move || {
+        if rx.recv_timeout(timeout).is_err() {
+            let _ = Command::new("taskkill")
+                .args(["/F", "/T", "/PID", &pid.to_string()])
+                .creation_flags(0x08000000)
+                .status();
+            return true;
+        }
+        false
+    });
+    let status = child.wait();
+    let _ = tx.send(());
+    let killed = watchdog.join().unwrap_or(false);
+    if killed {
+        return Err(NiTriTeError::Timeout(format!(
+            "winget interrompu apres {} min (installeur probablement en attente d'une interaction)",
+            timeout.as_secs() / 60
+        )));
+    }
+    Ok(status?)
 }
 
 /// Lance une commande winget et streame stdout ligne par ligne via `upgrade-log`.
@@ -174,12 +244,10 @@ fn stream_winget_upgrade(args: &[&str], window: &tauri::Window) -> Result<(), Ni
     // reellement abouti, et les deux appelants (UpdatesPage.vue, DiagTabUpdates.vue)
     // font confiance a ce succes pour afficher un toast "termine" et vider la
     // liste des mises a jour en attente.
-    let status = child.wait()?;
-    if !status.success() {
-        return Err(NiTriTeError::System(format!(
-            "winget a échoué (code {})",
-            status.code().unwrap_or(-1)
-        )));
+    let status = wait_with_watchdog(child, INSTALL_TIMEOUT)?;
+    let code = status.code().unwrap_or(-1);
+    if !status.success() && !OK_EXIT_CODES.contains(&code) {
+        return Err(NiTriTeError::System(describe_exit(code)));
     }
     Ok(())
 }
@@ -190,15 +258,13 @@ fn stream_winget_upgrade(args: &[&str], window: &tauri::Window) -> Result<(), Ni
 /// que l'export JSON donne les identifiants exacts.
 pub fn installed_ids() -> std::collections::HashSet<String> {
     let path = std::env::temp_dir().join(format!("nitrite-winget-export-{}.json", std::process::id()));
-    let status = Command::new("winget")
-        .args(["export", "-o"])
-        .arg(&path)
-        .args(["--accept-source-agreements", "--disable-interactivity"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .creation_flags(0x08000000)
-        .status();
-    let text = if status.is_ok() { std::fs::read_to_string(&path).unwrap_or_default() } else { String::new() };
+    let path_str = path.to_string_lossy().to_string();
+    let ran = crate::maintenance::commands::execute_system_command(
+        "winget",
+        &["export", "-o", &path_str, "--accept-source-agreements", "--disable-interactivity"],
+        120,
+    );
+    let text = if ran.is_ok() { std::fs::read_to_string(&path).unwrap_or_default() } else { String::new() };
     let _ = std::fs::remove_file(&path);
     parse_export_ids(&text)
 }
@@ -225,59 +291,35 @@ pub fn upgrade_all(excluded_ids: Vec<String>, window: &tauri::Window) -> Result<
     // exclusion existe, on met donc à jour chaque paquet non-exclu individuellement.
     if excluded_ids.is_empty() {
         return stream_winget_upgrade(
-            &["upgrade", "--all", "--silent", "--accept-source-agreements", "--accept-package-agreements"],
+            &["upgrade", "--all", "--silent", "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"],
             window,
         );
     }
 
+    // Un paquet en echec ne doit pas empecher la mise a jour des suivants :
+    // on continue et on rapporte tous les echecs a la fin.
     let pkgs = list_upgradable()?;
+    let mut failures: Vec<String> = Vec::new();
     for p in pkgs {
         if p.id.is_empty() || excluded_ids.iter().any(|e| e.eq_ignore_ascii_case(&p.id)) {
             let _ = window.emit("upgrade-log", format!("Exclu : {} ({})", p.name, p.id));
             continue;
         }
         let _ = window.emit("upgrade-log", format!("Mise à jour de {} ({})…", p.name, p.id));
-        stream_winget_upgrade(
+        if let Err(e) = stream_winget_upgrade(
             &["upgrade", "--id", p.id.as_str(), "--exact", "--silent",
               "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"],
             window,
-        )?;
-    }
-    Ok(())
-}
-
-pub fn search_packages(query: &str) -> Result<Vec<WingetPackage>, NiTriTeError> {
-    let output = Command::new("winget")
-        .args(["search", query, "--accept-source-agreements"])
-        .creation_flags(0x08000000).output()?;
-
-    let text = String::from_utf8_lossy(&output.stdout);
-    let mut packages = Vec::new();
-
-    let lines: Vec<&str> = text.lines().collect();
-    let header_idx = lines.iter().position(|l| l.contains("----"));
-
-    if let Some(idx) = header_idx {
-        for line in &lines[idx + 1..] {
-            let trimmed = line.trim();
-            if trimmed.is_empty() { continue; }
-            // Colonnes winget search : Name | Id | Version | [Match] | Source.
-            // On indexe par le DÉBUT : Name/Id/Version sont toujours les 3
-            // premières, quelles que soient les colonnes de fin (Match/Source).
-            let parts = split_winget_columns(trimmed);
-            if parts.len() >= 3 {
-                packages.push(WingetPackage {
-                    name: parts[0].to_string(),
-                    id: parts[1].to_string(),
-                    version: parts[2].to_string(),
-                    available: String::new(),
-                    source: parts.get(parts.len() - 1).filter(|_| parts.len() > 3).map_or_else(|| "winget".to_string(), |s| s.to_string()),
-                });
-            }
+        ) {
+            let _ = window.emit("upgrade-log", format!("Échec : {} — {e}", p.name));
+            failures.push(format!("{} : {e}", p.name));
         }
     }
-
-    Ok(packages)
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(NiTriTeError::System(format!("{} mise(s) à jour en échec — {}", failures.len(), failures.join(" | "))))
+    }
 }
 
 #[cfg(test)]
@@ -291,6 +333,15 @@ mod tests {
         assert_eq!(ids.len(), 3);
         assert!(ids.contains("git.git"));
         assert!(ids.contains("9nksqgp7f2nh"));
+    }
+
+    #[test]
+    fn known_benign_exit_codes_are_ok() {
+        // -1978335189 = deja a jour, observe en vrai (LESSONS cycle 55).
+        assert!(OK_EXIT_CODES.contains(&-1978335189));
+        assert!(!OK_EXIT_CODES.contains(&(0x8A150014_u32 as i32)));
+        assert_eq!(describe_exit(-1978335212), "Paquet introuvable dans les sources winget (code 0x8A150014)");
+        assert!(describe_exit(-1).starts_with("Echec winget (code 0xFFFFFFFF"));
     }
 
     #[test]

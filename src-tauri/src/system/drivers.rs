@@ -175,6 +175,23 @@ mod tests {
         assert!(!check_driver_installed(&driver, ""));
     }
 
+    /// Les check_name du catalogue doivent correspondre aux DisplayName RÉELS
+    /// (relevés sur Windows 11 le 2026-11-23). « .NET Runtime 8 » ne
+    /// correspondait jamais à « Microsoft .NET Runtime - 8.0.31 (x64) ».
+    #[test]
+    fn catalog_check_names_match_real_display_names() {
+        let installed = "Microsoft .NET Runtime - 8.0.31 (x64)\nMicrosoft .NET Runtime - 10.0.12 (x64)\nMicrosoft Visual C++ v14 Redistributable (x64) - 14.51.36247";
+        let find = |id: &str| RECOMMENDED_DRIVERS.iter().find(|d| d.id == id).cloned().expect("entrée du catalogue");
+        for id in ["dotnet-8", "dotnet-10", "vcredist-2015-2022"] {
+            let mut d = find(id);
+            d.check_registry = None;
+            assert!(check_driver_installed(&d, installed), "{id} non détecté");
+        }
+        let mut d9 = find("dotnet-9");
+        d9.check_registry = None;
+        assert!(!check_driver_installed(&d9, installed), "dotnet-9 ne doit pas matcher 8.x ni 10.x");
+    }
+
     #[test]
     fn empty_check_name_does_not_false_positive() {
         // check_name vide ne doit PAS marquer le driver installé (contains("")=true)

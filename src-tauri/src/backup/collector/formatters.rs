@@ -1,5 +1,34 @@
 //! Utilitaires de formatage pour les données de sauvegarde
 
+/// Nom de fichier sûr (ASCII, sans accents ni caractères interdits Windows)
+/// pour un élément du lot de sauvegarde.
+pub fn safe_filename(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for c in name.chars() {
+        let m = match c {
+            'à'|'â'|'ä'|'á' => 'a', 'é'|'è'|'ê'|'ë' => 'e', 'î'|'ï'|'í' => 'i',
+            'ô'|'ö'|'ó' => 'o', 'ù'|'û'|'ü'|'ú' => 'u', 'ç' => 'c',
+            'À'|'Â'|'Ä'|'Á' => 'a', 'É'|'È'|'Ê'|'Ë' => 'e', 'Ç' => 'c',
+            c if c.is_ascii_alphanumeric() => c.to_ascii_lowercase(),
+            _ => '-',
+        };
+        out.push(m);
+    }
+    while out.contains("--") { out = out.replace("--", "-"); }
+    let trimmed = out.trim_matches('-').to_string();
+    if trimmed.is_empty() { "element".to_string() } else { trimmed }
+}
+
+/// Transforme une clé snake_case en libellé lisible (« cpu_name » → « Cpu name »).
+pub fn prettify_key(k: &str) -> String {
+    let spaced = k.replace('_', " ");
+    let mut chars = spaced.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => spaced,
+    }
+}
+
 pub fn format_size(bytes: u64) -> String {
     if bytes >= 1_073_741_824 {
         format!("{:.1} GB", bytes as f64 / 1_073_741_824.0)

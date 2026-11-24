@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { confirm, message } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@/utils/invoke";
+import { invokeRaw } from "@/utils/invoke";
 import NButton from "@/components/ui/NButton.vue";
 import NModal from "@/components/ui/NModal.vue";
 import { HardDrive, Terminal, Activity, Trash2, CheckCircle, XCircle, AlertTriangle } from "lucide-vue-next";
@@ -23,10 +23,17 @@ const cleanDiskIndex = ref("");
 const showCleanConfirm = ref(false);
 const cleanConfirmText = ref("");
 
+// Boutons rapides qui MODIFIENT les partitions (lettre, extension, partition
+// active) : ils partaient en un clic, sans voir le disque vise.
+const MUTATING = /\b(assign|remove|extend|active)\b/i;
+
 async function run(cmd: string, label?: string) {
+  if (MUTATING.test(cmd) && !(await confirm(`Modifier les partitions : ${label || cmd} ?\n\n${cmd}`, { title: "Nitrite", kind: "warning" }))) return;
   isLoading.value = true;
   try {
-    const r = await invoke<RepairResult>("winpe_run_command", { command: cmd });
+    // Sans plafond : robocopy / winsat / format durent bien plus que les 30 s
+    // par defaut d'invoke, qui affichait un echec pendant que ca tournait.
+    const r = await invokeRaw<RepairResult>("winpe_run_command", { command: cmd });
     output.value = r.output;
     lastSuccess.value = r.success;
     emit("result", { ...r, command: label || cmd });
@@ -103,7 +110,7 @@ async function cleanDisk() {
   showCleanConfirm.value = false;
   isLoading.value = true;
   try {
-    const r = await invoke<RepairResult>("disk_wipe", { diskIndex, method: "quick" });
+    const r = await invokeRaw<RepairResult>("disk_wipe", { diskIndex, method: "quick" });
     output.value = r.output;
     lastSuccess.value = r.success;
     emit("result", { ...r, command: `Clean disk ${diskIndex}` });

@@ -19,6 +19,9 @@ fn safe_commands() -> HashSet<&'static str> {
         "nslookup", "hostname", "ver", "wmic", "driverquery", "whoami",
         "powercfg", "Get-Process", "Get-Service", "Get-NetAdapter",
         "Get-ComputerInfo", "Get-Volume",
+        // Remplacant de `wmic`, retire de Windows 11 24H2/25H2 (lecture seule :
+        // seules Set-/Invoke-CimMethod modifient).
+        "Get-CimInstance",
         // `cleanmgr` et `msinfo32` ONT ETE RETIRES : ce sont des outils
         // graphiques, ils n'ecrivent rien sur stdout (donc rien a donner a
         // l'agent) et `cmd /C` attend leur fermeture par l'utilisateur. Pire,
@@ -118,8 +121,23 @@ pub fn is_safe(command: &str) -> Result<(), NiTriTeError> {
         return Err(NiTriTeError::CommandDenied(format!("Commande non autorisee: {}", first_word)));
     }
 
+    // Une cmdlet passe par PowerShell (voir execute_safe), ou `(...)`, `{...}`,
+    // `$var`, `@(...)` et les guillemets evaluent du code dans un argument :
+    // `Get-Process (Stop-Computer)` eteindrait le PC. Arguments limites aux
+    // caracteres d'un nom ou d'un parametre.
+    if is_cmdlet(&first_word)
+        && !command.chars().all(|c| c.is_ascii_alphanumeric() || " -_.*:,".contains(c))
+    {
+        return Err(NiTriTeError::CommandDenied("Caracteres interdits dans une cmdlet".into()));
+    }
+
     // Validation des arguments pour les commandes sensibles
     validate_command_args(&first_word, &parts[1..])
+}
+
+/// Les cmdlets de la liste (`Get-*`) n'existent pas dans cmd.exe.
+fn is_cmdlet(first_word_lower: &str) -> bool {
+    first_word_lower.starts_with("get-")
 }
 
 pub fn execute_safe(command: &str) -> Result<SafeCommandResult, NiTriTeError> {
@@ -132,7 +150,14 @@ pub fn execute_safe(command: &str) -> Result<SafeCommandResult, NiTriTeError> {
     // depassement et decode deja la sortie OEM (systeminfo, driverquery,
     // tasklist : « Nom d'hôte », « Mode de démarrage »... alimentent aussi le
     // contexte de l'agent IA, pas seulement l'interface).
-    let result = execute_system_command("cmd", &["/C", command], 60)?;
+    // `cmd /C Get-Process` repondait « n'est pas reconnu » : les cmdlets de la
+    // liste blanche n'avaient jamais fonctionne.
+    let first = command.split_whitespace().next().unwrap_or("").to_lowercase();
+    let result = if is_cmdlet(&first) {
+        execute_system_command("powershell", &["-NoProfile", "-NonInteractive", "-Command", command], 60)?
+    } else {
+        execute_system_command("cmd", &["/C", command], 60)?
+    };
 
     Ok(SafeCommandResult {
         command: command.to_string(),
@@ -158,6 +183,18 @@ mod tests {
     }
 
     // ── Whitelist / Blacklist ──────────────────────────────────────────────────
+
+    #[test]
+    fn cmdlet_arguments_cannot_evaluate_code() {
+        assert!(is_safe("Get-Process -Name explorer").is_ok());
+        assert!(is_safe("Get-CimInstance Win32_BIOS").is_ok());
+        assert!(is_safe("Get-Process (Stop-Computer)").is_err());
+        assert!(is_safe("Get-Service {Remove-Item C:}").is_err());
+        assert!(is_safe("Get-Volume $env:x").is_err());
+        assert!(is_safe("Get-Process @(1)").is_err());
+        assert!(is_safe("Get-Process 'x'").is_err());
+        assert!(is_cmdlet("get-process") && !is_cmdlet("ipconfig"));
+    }
 
     #[test]
     fn allows_safe_ipconfig() {

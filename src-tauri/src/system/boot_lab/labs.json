@@ -1,0 +1,37 @@
+{
+  "home-server": {
+    "name": "Mini serveur maison · VM",
+    "description": "Choisis un serveur de fichiers sur ton réseau et une VM Nextcloud pour synchroniser tes dossiers.",
+    "items": ["vm-ucs","vm-nextcloud"],
+    "steps": [
+      "Si tu as choisi UCS, termine la configuration du domaine dans la console. Pour Nextcloud, ouvre son assistant de configuration au premier démarrage.",
+      "Une fois la VM mise à jour, utilise un réseau en pont si tes autres PC doivent accéder au serveur sur ton réseau privé.",
+      "Dans Univention Management Console, crée un partage et un utilisateur. Depuis Windows, ouvre le partage dans l’Explorateur avec l’adresse de la VM.",
+      "Vérifie l’accès avec un compte ordinaire, puis prends un instantané avant de tester d’autres services."
+    ]
+  },
+  "web-lab": {
+    "name": "Labo web · VM",
+    "description": "Pars d’Ubuntu Server et prépare un serveur web PHP ou un dépôt Git sur un réseau de test.",
+    "items": ["vm-ubuntu-osboxes"],
+    "steps": [
+      "Connecte-toi à la console Ubuntu, change le mot de passe initial et lance les mises à jour.",
+      "Pour un labo PHP, lance sudo apt install apache2 mariadb-server php libapache2-mod-php git. La commande nécessite Internet.",
+      "Utilise un réseau NAT avec redirection du port 80 vers un port de l’hôte, ou un réseau privé hôte seul pour accéder au serveur depuis ton PC.",
+      "Ouvre l’adresse du serveur dans ton navigateur. Pour un dépôt Git web, suis ensuite le guide d’installation Gitea en lien ci-dessous.",
+      "Prends un instantané avant d’ajouter ton code ou de changer la configuration du serveur."
+    ],
+    "reference": "https://docs.gitea.com/installation/install-from-binary"
+  },
+  "smart-home": {
+    "name": "Domotique · VM",
+    "description": "Prépare Home Assistant pour détecter tes appareils connectés sur ton réseau local.",
+    "items": ["vm-home-assistant"],
+    "steps": [
+      "Active UEFI et attache le disque Home Assistant au contrôleur SATA. Réserve 4 Go de RAM et 2 vCPU pour cette trousse.",
+      "Utilise un réseau en pont pour que la VM et les appareils à détecter soient sur le même réseau privé.",
+      "Après le démarrage, ouvre http://homeassistant.local:8123 ou l’adresse IP affichée dans la console. Termine l’assistant et crée ton compte.",
+      "Prends un instantané avant d’ajouter tes intégrations."
+    ]
+  }
+}

@@ -3,7 +3,7 @@ defineOptions({ name: "UninstallerPage" });
 import { ref, computed, onMounted, defineAsyncComponent } from "vue";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { csvCell } from "@/composables/useExportData";
-import { invoke } from "@/utils/invoke";
+import { invoke, invokeRaw } from "@/utils/invoke";
 import type { CommandResult } from "@/types/diagnostic";
 import DiagBanner from "@/components/ui/DiagBanner.vue";
 import NButton from "@/components/ui/NButton.vue";
@@ -61,21 +61,15 @@ function toggleRestore() {
 }
 
 async function doCreateRestorePoint() {
+  // Commande Rust partagée (contourne le quota « 1 point / 24 h » et vérifie le
+  // vrai code de sortie). Avant : Checkpoint-Computer direct, dont le refus
+  // pour quota n'est qu'un avertissement (exit 0) → « créé » affiché à tort,
+  // et un timeout de 30 s plus court que la création réelle.
   try {
-    // -ErrorAction Stop : Windows ne cree qu'un point de restauration "MODIFY_SETTINGS"
-    // toutes les 24h (throttle documente) — sans ça l'echec sort en exit 0 (faux succès)
-    // et sans verifier .success le toast affichait "créé" meme sur un echec reel.
-    const r = await invoke<CommandResult>("run_system_command", {
-      cmd: "powershell",
-      args: ["-Command", "Checkpoint-Computer -Description 'NitritePreUninstall' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop"],
-    });
-    if (r.success) {
-      notify.success("Point de restauration créé", "NitritePreUninstall");
-    } else {
-      notify.warning("Point de restauration", (r.stderr || r.stdout || "Échec — un point a peut-être déjà été créé dans les dernières 24h").slice(0, 160));
-    }
-  } catch {
-    notify.warning("Point de restauration", "Impossible de créer (droits admin requis ?)");
+    await invokeRaw("create_restore_point_cmd", { description: "NitritePreUninstall" });
+    notify.success("Point de restauration créé", "NitritePreUninstall");
+  } catch (e: unknown) {
+    notify.warning("Point de restauration non créé", String(e).slice(0, 160));
   }
 }
 
@@ -324,7 +318,9 @@ async function startUninstall() {
     job.status = "running";
     currentStep.value = `(${i + 1}/${jobs.value.length}) Désinstallation de ${job.app.name}...`;
     try {
-      const result = await invoke<{ success: boolean; message: string; residuals_found: string[] }>("uninstall_app_clean", {
+      // invokeRaw : une désinstallation dure souvent plus de 30 s ; le timeout
+      // par défaut marquait « échec » une désinstallation encore en cours.
+      const result = await invokeRaw<{ success: boolean; message: string; residuals_found: string[] }>("uninstall_app_clean", {
         appName: job.app.name,
         uninstallString: job.app.uninstall_string,
         publisher: job.app.publisher,
@@ -369,7 +365,7 @@ async function deleteJobResiduals(job: UninstallJob) {
   const id = appId(job.app);
   handlingResiduals.value[id] = true;
   try {
-    const r = await invoke<ResidualCleanResult>("delete_residuals", { paths: job.residuals });
+    const r = await invokeRaw<ResidualCleanResult>("delete_residuals", { paths: job.residuals });
     if (r.success) notify.success("Résidus supprimés", r.message);
     else notify.error("Suppression partielle", r.message);
     job.residualsHandled = true;
@@ -381,7 +377,7 @@ async function extractJobResiduals(job: UninstallJob) {
   const id = appId(job.app);
   handlingResiduals.value[id] = true;
   try {
-    const r = await invoke<ResidualCleanResult>("extract_residuals", {
+    const r = await invokeRaw<ResidualCleanResult>("extract_residuals", {
       paths: job.residuals,
       target: extractTarget.value,
     });

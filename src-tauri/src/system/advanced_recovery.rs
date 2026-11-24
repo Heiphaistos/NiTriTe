@@ -1,6 +1,5 @@
 use serde::Serialize;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::process::Command;
 use std::time::Instant;
 use tauri::Emitter;
 
@@ -8,8 +7,6 @@ use tauri::Emitter;
 use std::fs::OpenOptions;
 #[cfg(target_os = "windows")]
 use std::os::windows::fs::OpenOptionsExt;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 const CHUNK: usize = 65_536; // 64 KB — taille standard secteur logique aligné
 
@@ -86,6 +83,54 @@ fn get_disk_size_ps(disk_index: u32) -> Option<u64> {
     run_ps_opt(&ps)?.trim().parse::<u64>().ok().filter(|&v| v > 0)
 }
 
+/// Règles sur la cible d'une image disque (testables sans disque).
+fn image_target_verdict(src_disk: u32, target_disk: u32, fs: &str, free: u64, total: u64) -> Result<(), String> {
+    if src_disk == target_disk {
+        return Err(format!(
+            "Destination refusée : le fichier image serait écrit sur le disque {} lui-même. Choisissez un autre disque (disque USB externe par exemple).",
+            src_disk
+        ));
+    }
+    if fs.eq_ignore_ascii_case("FAT32") && total > 4_294_967_295 {
+        return Err("Destination refusée : un volume FAT32 limite un fichier à 4 Go. Utilisez un volume NTFS ou exFAT.".into());
+    }
+    if free < total {
+        return Err(format!(
+            "Espace insuffisant sur la destination : {:.1} GB libres pour une image de {:.1} GB.",
+            free as f64 / 1_073_741_824.0, total as f64 / 1_073_741_824.0
+        ));
+    }
+    Ok(())
+}
+
+/// Vérifie disque, système de fichiers et espace libre de la destination.
+/// Chemin réseau (sans lettre) : non vérifiable, accepté. Lettre présente
+/// mais vérification impossible : refus (fail-closed).
+fn check_image_target(disk_index: u32, output_path: &str, total: u64) -> Result<(), String> {
+    let b = output_path.as_bytes();
+    if b.len() < 2 || b[1] != b':' {
+        return Ok(());
+    }
+    if !b[0].is_ascii_alphabetic() {
+        return Err("Chemin de destination invalide.".into());
+    }
+    let letter = (b[0] as char).to_ascii_uppercase();
+    let ps = format!(
+        "try {{ $p = Get-Partition -DriveLetter '{letter}' -ErrorAction Stop; $v = Get-Volume -DriveLetter '{letter}' -ErrorAction Stop; \
+         @{{ disk = [int]$p.DiskNumber; fs = [string]$v.FileSystem; free = [string]$v.SizeRemaining }} | ConvertTo-Json -Compress }} catch {{ '' }}"
+    );
+    let v: serde_json::Value = run_ps_opt(&ps)
+        .and_then(|t| serde_json::from_str(t.trim()).ok())
+        .ok_or_else(|| format!("Destination refusée : impossible de vérifier le lecteur {}: (admin requis).", letter))?;
+    image_target_verdict(
+        disk_index,
+        v["disk"].as_u64().unwrap_or(u64::from(u32::MAX)) as u32,
+        v["fs"].as_str().unwrap_or(""),
+        v["free"].as_str().and_then(|s| s.parse().ok()).unwrap_or(0),
+        total,
+    )
+}
+
 pub fn create_disk_image(
     disk_index: u32,
     output_path: String,
@@ -121,6 +166,17 @@ pub fn create_disk_image(
             Err(e) => return fail(&format!("Ouverture disque {} impossible: {} (admin requis)", disk_path, e)),
         };
 
+        // Garde-fous avant d'écrire des centaines de Go (fail-closed) :
+        // - image écrite SUR le disque qu'on image → le fichier grossit sur la
+        //   source elle-même jusqu'à saturer le disque ;
+        // - FAT32 plafonne un fichier à 4 Go ; espace libre insuffisant.
+        if let Err(msg) = check_image_target(disk_index, &output_path, total_bytes) {
+            return fail(&msg);
+        }
+        if let Some(parent) = std::path::Path::new(&output_path).parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+
         let mut dst = match std::fs::File::create(&output_path) {
             Ok(f) => f,
             Err(e) => return fail(&format!("Création fichier image impossible: {}", e)),
@@ -132,6 +188,7 @@ pub fn create_disk_image(
         let mut bad_sectors: u32 = 0;
         let global_start = Instant::now();
         let mut last_emit = Instant::now();
+        let mut write_error: Option<String> = None;
 
         // Borne sur total_bytes (connu à l'avance) : sans elle, la seule sortie
         // de boucle est `Ok(0)` renvoyé par `src.read()`. Sur un disque
@@ -147,13 +204,15 @@ pub fn create_disk_image(
             match src.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
-                    if dst.write_all(&buf[..n]).is_err() { break; }
+                    if let Err(e) = dst.write_all(&buf[..n]) { write_error = Some(e.to_string()); break; }
                     bytes_done += n as u64;
                 }
                 Err(_) => {
                     bad_sectors += 1;
-                    let _ = dst.write_all(&zero_buf); // secteur défectueux → zéros
-                    bytes_done += CHUNK as u64;
+                    // Secteur défectueux → zéros (sans dépasser la taille du disque).
+                    let pad = (CHUNK as u64).min(total_bytes - bytes_done) as usize;
+                    if let Err(e) = dst.write_all(&zero_buf[..pad]) { write_error = Some(e.to_string()); break; }
+                    bytes_done += pad as u64;
                     let _ = src.seek(SeekFrom::Start(bytes_done)); // sauter le secteur
                 }
             }
@@ -175,6 +234,32 @@ pub fn create_disk_image(
 
         let elapsed = global_start.elapsed().as_secs_f64().max(0.001);
         let speed_mbs = (bytes_done as f64 / 1_048_576.0) / elapsed;
+
+        // Faux succès corrigé : une écriture en échec (cible pleine, clé FAT32
+        // à 4 Go, disque USB débranché) sortait de la boucle puis renvoyait
+        // `success: true` avec une image tronquée. Idem si la source s'arrête
+        // avant sa taille annoncée.
+        let flush_err = dst.sync_all().err().map(|e| e.to_string());
+        if let Some(e) = write_error.or(flush_err) {
+            return DiskImageResult {
+                success: false,
+                message: format!(
+                    "Écriture de l'image interrompue après {:.2} GB : {} — l'image {} est incomplète, ne pas l'utiliser.",
+                    bytes_done as f64 / 1_073_741_824.0, e, output_path
+                ),
+                output_path, bad_sectors, bytes_copied: bytes_done, speed_mbs,
+            };
+        }
+        if bytes_done < total_bytes {
+            return DiskImageResult {
+                success: false,
+                message: format!(
+                    "Lecture du disque arrêtée à {:.2} GB sur {:.2} GB — image incomplète.",
+                    bytes_done as f64 / 1_073_741_824.0, total_bytes as f64 / 1_073_741_824.0
+                ),
+                output_path, bad_sectors, bytes_copied: bytes_done, speed_mbs,
+            };
+        }
 
         let _ = window.emit("disk-image-progress", ImageProgress {
             bytes_done, total_bytes, percent: 100.0, speed_mbs, bad_sectors, eta_secs: 0,
@@ -568,26 +653,29 @@ fn fmt_size(bytes: u64) -> String {
     }
 }
 
+/// PowerShell avec délai maximal (15 min : le scan MFT profond d'un gros
+/// volume est long, mais un Get-Disk figé sur un disque mourant ne doit plus
+/// bloquer le thread indéfiniment). Sortie décodée UTF-8 puis OEM FR.
 fn run_ps_opt(script: &str) -> Option<String> {
-    #[cfg(target_os = "windows")]
-    {
-        let o = Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", script])
-            .creation_flags(0x08000000)
-            .output()
-            .ok()?;
-        // decode_output plutot que from_utf8_lossy : les appelants actuels forcent
-        // $OutputEncoding=UTF8 dans leur script, mais un futur appelant qui l'oublie
-        // ne doit pas retomber dans le mojibake OEM FR.
-        Some(crate::maintenance::commands::decode_output(&o.stdout))
-    }
-    #[cfg(not(target_os = "windows"))]
-    None
+    crate::maintenance::commands::execute_system_command(
+        "powershell", &["-NoProfile", "-NonInteractive", "-Command", script], 900,
+    ).ok().map(|o| o.stdout)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn image_target_rules() {
+        const TB2: u64 = 2_000_398_934_016;
+        assert!(image_target_verdict(1, 1, "NTFS", u64::MAX, TB2).is_err(), "même disque refusé");
+        assert!(image_target_verdict(1, 2, "FAT32", u64::MAX, TB2).is_err(), "FAT32 > 4 Go refusé");
+        assert!(image_target_verdict(1, 2, "NTFS", TB2 - 1, TB2).is_err(), "espace insuffisant");
+        assert!(image_target_verdict(1, 2, "exFAT", TB2, TB2).is_ok());
+        assert!(check_image_target(0, r"\\nas\images\disk.img", TB2).is_ok(), "chemin réseau non vérifiable");
+        assert!(check_image_target(0, "1:\\x.img", TB2).is_err());
+    }
 
     // ── esc ───────────────────────────────────────────────────────────────────
 

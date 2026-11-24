@@ -1,3 +1,4 @@
+use crate::maintenance::commands::TimedOutput;
 use serde::Serialize;
 use wmi::WMIConnection;
 #[cfg(target_os = "windows")]
@@ -216,8 +217,8 @@ try {
 "#;
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps])
-                .creation_flags(0x08000000).output().map_err(|e| e.to_string())?;
-            let stdout = String::from_utf8_lossy(&out.stdout);
+                .creation_flags(0x08000000).output_within(90).map_err(|e| e.to_string())?;
+            let stdout = crate::maintenance::commands::decode_output(&out.stdout);
             let trimmed = stdout.trim();
             if trimmed.is_empty() || trimmed == "[]" { return Ok(vec![]); }
             let items: Vec<serde_json::Value> = serde_json::from_str(trimmed)
@@ -299,7 +300,7 @@ pub async fn get_installed_software() -> Result<Vec<InstalledSoftware>, String> 
                      }},InstallLocation,EstimatedSize |\
                      Sort-Object DisplayName | ConvertTo-Json -Compress"
                 ])
-                .creation_flags(0x08000000).output().map_err(|e| e.to_string())?;
+                .creation_flags(0x08000000).output_within(90).map_err(|e| e.to_string())?;
             let stdout = crate::maintenance::commands::decode_output(&out.stdout);
             if stdout.trim().is_empty() { return Ok(vec![]); }
             let items: Vec<serde_json::Value> = serde_json::from_str(stdout.trim())

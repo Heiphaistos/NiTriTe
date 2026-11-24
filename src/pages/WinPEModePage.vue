@@ -72,6 +72,7 @@
 
     <!-- Contenu onglets -->
     <WinPERepairTab v-if="activeTab === 'repair'" :drives="drives" :sfc-windows-dir="sfcWindowsDir" @result="onResult" />
+    <WinPEAccountsTab v-else-if="activeTab === 'accounts'" :windows-dir="sfcWindowsDir" @result="onResult" />
     <WinPENetworkTab v-else-if="activeTab === 'network'" @result="onResult" />
     <WinPEDiskTab v-else-if="activeTab === 'disk'" @result="onResult" />
     <WinPESystemTab v-else-if="activeTab === 'system'" @result="onResult" />
@@ -104,12 +105,13 @@ import { ref, onMounted } from "vue";
 import { invoke } from "@/utils/invoke";
 import {
   HardDrive, CheckCircle, XCircle, ScrollText, MonitorCheck,
-  Wrench, Wifi, Database as DiskIcon, Monitor, Archive, Download,
+  Wrench, Wifi, Database as DiskIcon, Monitor, Archive, Download, Users,
 } from "lucide-vue-next";
 import NButton from "@/components/ui/NButton.vue";
 import NBadge from "@/components/ui/NBadge.vue";
 import WinPEToolsPanel from "@/components/winpe/WinPEToolsPanel.vue";
 import WinPERepairTab from "@/components/winpe/WinPERepairTab.vue";
+import WinPEAccountsTab from "@/components/winpe/WinPEAccountsTab.vue";
 import WinPENetworkTab from "@/components/winpe/WinPENetworkTab.vue";
 import WinPEDiskTab from "@/components/winpe/WinPEDiskTab.vue";
 import WinPESystemTab from "@/components/winpe/WinPESystemTab.vue";
@@ -130,6 +132,7 @@ const activeTab = ref("repair");
 
 const tabs = [
   { id: "repair",   label: "Réparation",  icon: Wrench },
+  { id: "accounts", label: "Comptes",     icon: Users },
   { id: "network",  label: "Réseau",      icon: Wifi },
   { id: "disk",     label: "Disques",     icon: DiskIcon },
   { id: "system",   label: "Système",     icon: Monitor },

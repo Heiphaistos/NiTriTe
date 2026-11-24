@@ -51,10 +51,6 @@ function isValidIp(ip: string): boolean {
   return v6.test(ip);
 }
 
-async function autoBackup() {
-  try { await invoke<string>("backup_hosts"); } catch { /* silencieux */ }
-}
-
 async function addEntry() {
   if (!newIp.value.trim() || !newHostname.value.trim()) {
     notify.warning("Champs requis", "IP et hostname sont obligatoires.");
@@ -64,7 +60,7 @@ async function addEntry() {
     notify.warning("IP invalide", "Entrez une adresse IPv4 (ex: 127.0.0.1) ou IPv6 valide.");
     return;
   }
-  await autoBackup();
+  // Sauvegarde hosts.bak faite côté Rust avant chaque écriture (refus si impossible)
   adding.value = true;
   try {
     const msg = await invoke<string>("add_hosts_entry", {
@@ -82,9 +78,8 @@ async function addEntry() {
 }
 
 async function deleteEntry(line: number, hostname: string) {
-  await autoBackup();
   try {
-    await invoke<string>("delete_hosts_entry", { lineNumber: line });
+    await invoke<string>("delete_hosts_entry", { lineNumber: line, expectedHostname: hostname });
     notify.success("Supprimé", hostname);
     await loadEntries();
   } catch (e: unknown) {
@@ -92,10 +87,9 @@ async function deleteEntry(line: number, hostname: string) {
   }
 }
 
-async function toggleEntry(line: number, enable: boolean) {
-  await autoBackup();
+async function toggleEntry(line: number, enable: boolean, hostname: string) {
   try {
-    await invoke<string>("toggle_hosts_entry", { lineNumber: line, enable });
+    await invoke<string>("toggle_hosts_entry", { lineNumber: line, enable, expectedHostname: hostname });
     notify.success(enable ? "Activé" : "Désactivé");
     await loadEntries();
   } catch (e: unknown) {
@@ -184,7 +178,7 @@ onMounted(loadEntries);
             {{ e.active ? 'Actif' : 'Inactif' }}
           </NBadge>
           <div class="entry-actions">
-            <button class="icon-btn" @click="toggleEntry(e.line_number, !e.active)" :title="e.active ? 'Désactiver' : 'Activer'">
+            <button class="icon-btn" @click="toggleEntry(e.line_number, !e.active, e.hostname)" :title="e.active ? 'Désactiver' : 'Activer'">
               <EyeOff v-if="e.active" :size="13" />
               <Eye v-else :size="13" />
             </button>

@@ -1,12 +1,12 @@
 [
   {
     "id": "vcredist-2015-2022",
-    "name": "Visual C++ Redistributable 2015-2022",
+    "name": "Visual C++ Redistributable v14 (2015-2022 et suivants)",
     "description": "Runtime requis par la plupart des applications et jeux modernes",
     "category": "Runtime",
     "url": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
     "check_registry": "HKLM\\SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\X64",
-    "check_name": "Microsoft Visual C++ 2015-2022"
+    "check_name": "Microsoft Visual C++ v14 Redistributable"
   },
   {
     "id": "vcredist-2013",
@@ -38,11 +38,11 @@
   {
     "id": "dotnet-8",
     "name": ".NET 8 Runtime",
-    "description": "Runtime .NET 8 LTS pour applications modernes",
+    "description": "Runtime .NET 8 LTS (support jusqu'en novembre 2026)",
     "category": "Runtime",
     "url": "https://dotnet.microsoft.com/fr-fr/download/dotnet/8.0",
     "check_registry": null,
-    "check_name": ".NET Runtime 8"
+    "check_name": ".NET Runtime - 8."
   },
   {
     "id": "dotnet-framework-48",
@@ -67,7 +67,7 @@
     "name": "NVIDIA GeForce Drivers",
     "description": "Pilotes officiels pour cartes graphiques NVIDIA",
     "category": "GPU",
-    "url": "https://www.nvidia.fr/Download/index.aspx",
+    "url": "https://www.nvidia.com/fr-fr/drivers/",
     "check_registry": null,
     "check_name": "NVIDIA Graphics Driver"
   },
@@ -175,7 +175,7 @@
     "name": "XNA Framework 4.0",
     "description": "Framework requis par certains jeux independants",
     "category": "Runtime",
-    "url": "https://www.microsoft.com/fr-fr/download/details.aspx?id=20914",
+    "url": "https://www.microsoft.com/en-us/download/details.aspx?id=20914",
     "check_registry": null,
     "check_name": "Microsoft XNA Framework"
   },
@@ -202,18 +202,18 @@
     "name": ".NET Framework 3.5",
     "description": "Framework legacy requis par certains logiciels anciens",
     "category": "Runtime",
-    "url": "https://dotnet.microsoft.com/fr-fr/download/dotnet-framework/net35",
+    "url": "https://dotnet.microsoft.com/fr-fr/download/dotnet-framework/net35-sp1",
     "check_registry": "HKLM\\SOFTWARE\\Microsoft\\NET Framework Setup\\NDP\\v3.5",
     "check_name": ".NET Framework 3.5"
   },
   {
     "id": "dotnet-6",
     "name": ".NET 6 Runtime",
-    "description": "Runtime .NET 6 LTS (maintenance jusqu'en 2024)",
+    "description": "Runtime .NET 6 (fin de support : novembre 2024, à remplacer par .NET 8 ou 10)",
     "category": "Runtime",
     "url": "https://dotnet.microsoft.com/fr-fr/download/dotnet/6.0",
     "check_registry": null,
-    "check_name": ".NET Runtime 6"
+    "check_name": ".NET Runtime - 6."
   },
   {
     "id": "intel-rst",
@@ -256,7 +256,7 @@
     "name": "ASMedia USB 3.x Controller",
     "description": "Pilote controleur USB 3.x ASMedia (ASM1042/1074/2142)",
     "category": "USB",
-    "url": "https://www.asmedia.com.tw/product/USBcontroller",
+    "url": "https://www.asmedia.com.tw/",
     "check_registry": null,
     "check_name": "ASMedia USB"
   },
@@ -265,7 +265,7 @@
     "name": "Renesas USB 3.0 Controller",
     "description": "Pilote controleur USB 3.0 Renesas/NEC (anciennes cartes mere)",
     "category": "USB",
-    "url": "https://www.driverscloud.com/fr/services/GetInformations/73840-1096895/usb-30-driver-renesas-electronics",
+    "url": "https://www.renesas.com/en/support",
     "check_registry": null,
     "check_name": "Renesas USB"
   },
@@ -274,7 +274,7 @@
     "name": "VIA USB Controller Driver",
     "description": "Pilote controleur USB VIA Technologies",
     "category": "USB",
-    "url": "https://www.via-labs.com/product_list.php?mfm=2",
+    "url": "https://www.via-labs.com/",
     "check_registry": null,
     "check_name": "VIA USB"
   },
@@ -290,11 +290,20 @@
   {
     "id": "dotnet-9",
     "name": ".NET 9 Runtime",
-    "description": "Runtime .NET 9 (derniere version stable)",
+    "description": "Runtime .NET 9 STS (support jusqu'en novembre 2026)",
     "category": "Runtime",
     "url": "https://dotnet.microsoft.com/fr-fr/download/dotnet/9.0",
     "check_registry": null,
-    "check_name": ".NET Runtime 9"
+    "check_name": ".NET Runtime - 9."
+  },
+  {
+    "id": "dotnet-10",
+    "name": ".NET 10 Runtime",
+    "description": "Runtime .NET 10 LTS (version actuelle, support jusqu'en novembre 2028)",
+    "category": "Runtime",
+    "url": "https://dotnet.microsoft.com/fr-fr/download/dotnet/10.0",
+    "check_registry": null,
+    "check_name": ".NET Runtime - 10."
   },
   {
     "id": "windows-app-runtime",
@@ -310,7 +319,7 @@
     "name": "DirectPlay (legacy)",
     "description": "Composant DirectPlay requis par certains vieux jeux multijoueur",
     "category": "Runtime",
-    "url": "https://learn.microsoft.com/fr-fr/windows/win32/directplay/directplay",
+    "url": "ms-settings:optionalfeatures",
     "check_registry": null,
     "check_name": "DirectPlay"
   },
@@ -337,7 +346,7 @@
     "name": "MediaTek / Ralink WiFi Driver",
     "description": "Pilotes WiFi MediaTek/Ralink (nombreux portables et dongles USB)",
     "category": "WiFi",
-    "url": "https://www.mediatek.com/products/broadbandWifi",
+    "url": "https://www.mediatek.com/",
     "check_registry": null,
     "check_name": "MediaTek Wi-Fi"
   },

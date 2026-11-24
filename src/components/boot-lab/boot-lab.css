@@ -1,0 +1,33 @@
+/* Port de TokaISO 7.9 (MIT, Cédrick Roy) : styles partagés du labo PXE + VM (préfixe .bl-). */
+.bl-panel { display: flex; flex-direction: column; gap: 14px; }
+.bl-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.bl-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+.bl-muted { font-size: 12px; color: var(--text-muted); }
+.bl-fields { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.bl-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); min-width: 140px; }
+.bl-fields input, .bl-fields select, .bl-panel textarea {
+  background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 7px 10px; font-family: inherit; font-size: 13px;
+}
+.bl-fields input:focus, .bl-fields select:focus { outline: none; border-color: var(--accent-primary); }
+.bl-check { flex-direction: row !important; align-items: center; gap: 6px !important; min-width: 0 !important; }
+.bl-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-secondary);
+}
+.bl-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.bl-row-name { font-weight: 600; font-size: 13px; color: var(--text-primary); overflow-wrap: anywhere; }
+.bl-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.bl-list { display: flex; flex-direction: column; gap: 8px; }
+.bl-pre {
+  background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 10px; font-family: var(--font-mono, monospace); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere;
+  color: var(--text-primary); margin: 0;
+}
+.bl-log { max-height: 260px; overflow: auto; }
+.bl-log table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.bl-log td, .bl-log th { padding: 4px 8px; border-bottom: 1px solid var(--border); text-align: left; color: var(--text-secondary); }
+.bl-banner { display: flex; gap: 10px; align-items: flex-start; }
+.bl-steps { margin: 0; padding-left: 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+.bl-ok { color: var(--success, #22c55e); }
+.bl-ko { color: var(--danger, #ef4444); }

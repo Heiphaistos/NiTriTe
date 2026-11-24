@@ -50,6 +50,7 @@ interface HardwareGroup {
   clocks:       SensorReading[];
   voltages:     SensorReading[];
   powers:       SensorReading[];
+  margins:      SensorReading[];
   others:       SensorReading[];
 }
 
@@ -70,7 +71,7 @@ const groups = computed<HardwareGroup[]>(() => {
     if (!map.has(key)) {
       map.set(key, {
         hardware: s.hardware, hardware_type: s.hardware_type,
-        source: s.source, temps: [], fans: [], loads: [], clocks: [], voltages: [], powers: [], others: [],
+        source: s.source, temps: [], fans: [], loads: [], clocks: [], voltages: [], powers: [], margins: [], others: [],
       });
     }
     const g = map.get(key)!;
@@ -81,6 +82,8 @@ const groups = computed<HardwareGroup[]>(() => {
       case "Clock":       g.clocks.push(s); break;
       case "Voltage":     g.voltages.push(s); break;
       case "Power":       g.powers.push(s); break;
+      // « Distance to TjMax » : marge avant throttling, PAS une température.
+      case "TjMaxMargin": g.margins.push(s); break;
       default:            g.others.push(s); break;
     }
   }
@@ -89,6 +92,12 @@ const groups = computed<HardwareGroup[]>(() => {
 
 const hasLHM    = computed(() => sensors.value.some(s => s.source === "LibreHardwareMonitor"));
 const hasSensors = computed(() => sensors.value.length > 0);
+
+// Zones ACPI / compteurs « Thermal Zone » : valeur du firmware, souvent figée
+// ou mesurée loin du cœur (cf. sensors.rs::ACPI_HARDWARE).
+function isApproximate(g: HardwareGroup): boolean {
+  return g.source === "ACPI" || g.source === "WMI-Thermal";
+}
 
 // Hardware type → icon
 function hwIcon(hwType: string) {
@@ -236,6 +245,22 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); });
             </div>
           </div>
 
+          <p v-if="isApproximate(group)" class="approx-note">
+            <AlertCircle :size="12" /> Valeur fournie par le firmware (zone thermique ACPI) : souvent figée ou mesurée loin du processeur. Indicative seulement, ce n'est pas la température réelle des cœurs.
+          </p>
+
+          <!-- Marge avant TjMax (LHM « Distance to TjMax ») -->
+          <div v-if="group.margins.length" class="sensor-section">
+            <div class="sensor-section-label"><Gauge :size="13" /> Marge avant throttling (TjMax)</div>
+            <p class="section-hint muted">Degrés restants avant la limite thermique du processeur : plus la valeur est haute, plus il est loin de la surchauffe.</p>
+            <div class="info-rows">
+              <div v-for="s in group.margins" :key="s.name" class="info-row">
+                <span>{{ s.name }}</span>
+                <span class="mono">{{ formatVal(s.value, s.unit) }} °C</span>
+              </div>
+            </div>
+          </div>
+
           <!-- Charges / Load -->
           <div v-if="group.loads.length" class="sensor-section">
             <div class="sensor-section-label"><Activity :size="13" /> Charge</div>
@@ -370,4 +395,6 @@ h1 { font-size: 22px; font-weight: 700; }
 
 .muted { color: var(--text-muted); }
 .update-footer { font-size: 11px; text-align: center; padding: 8px 0; }
+.approx-note { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 11px; color: var(--warning); }
+.section-hint { margin: 0; font-size: 11px; }
 </style>

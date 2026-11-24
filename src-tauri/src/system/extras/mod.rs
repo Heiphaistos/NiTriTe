@@ -1,6 +1,4 @@
 /// extras/mod.rs — Re-exports de tous les sous-modules extras
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 pub mod hash_dns_ports;
 pub mod disk_files;
@@ -26,12 +24,17 @@ pub(super) fn parse_json_arr(s: &str) -> Vec<serde_json::Value> {
 /// libellés netsh/docker) arrivaient en mojibake avec `from_utf8_lossy`.
 /// Le fast path UTF-8 laisse les sorties JSON/ASCII inchangées.
 pub(super) fn ps(script: &str) -> Result<String, String> {
-    let out = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| e.to_string())?;
-    Ok(crate::maintenance::commands::decode_output(&out.stdout).trim().to_string())
+    ps_timeout(script, 180)
+}
+
+/// `ps()` avec un délai maximal : un WMI ou un pilote figé ne bloque plus le
+/// thread indéfiniment (le sondage des températures restait sinon suspendu et
+/// la bannière d'alerte gardait une valeur périmée).
+pub(super) fn ps_timeout(script: &str, timeout_secs: u64) -> Result<String, String> {
+    let out = crate::maintenance::commands::execute_system_command(
+        "powershell", &["-NoProfile", "-NonInteractive", "-Command", script], timeout_secs,
+    ).map_err(|e| e.to_string())?;
+    Ok(out.stdout.trim().to_string())
 }
 
 /// Comme `ps()` mais tient compte du code de sortie : `Err` si le script sort
@@ -40,16 +43,15 @@ pub(super) fn ps(script: &str) -> Result<String, String> {
 /// doivent sortir `exit 1` en cas d'échec (try/catch ou test $LASTEXITCODE).
 /// Décode stdout/stderr via `decode_output` (messages d'erreur PS en OEM FR).
 pub(super) fn ps_ok(script: &str) -> Result<String, String> {
-    let out = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| e.to_string())?;
-    let stdout = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
-    if out.status.success() {
+    // Délai maximal : un script figé (WMI, service) bloquait sinon la commande sans fin.
+    let out = crate::maintenance::commands::execute_system_command(
+        "powershell", &["-NoProfile", "-NonInteractive", "-Command", script], 600,
+    ).map_err(|e| e.to_string())?;
+    let stdout = out.stdout.trim().to_string();
+    if out.success {
         Ok(stdout)
     } else {
-        let stderr = crate::maintenance::commands::decode_output(&out.stderr).trim().to_string();
+        let stderr = out.stderr.trim().to_string();
         Err(match (stdout.is_empty(), stderr.is_empty()) {
             (false, _) => stdout,
             (true, false) => stderr,
@@ -65,13 +67,13 @@ pub(super) fn ps_ok(script: &str) -> Result<String, String> {
 /// de commande suivants (silencieusement $null, jamais d'erreur) — seule une invocation
 /// de scriptblock reelle (`& { }`) les reçoit. Confirmé en testant les deux formes cote a
 /// cote sur une machine reelle : nu -> $args[0] est $null ; enveloppé -> $args[0] correct.
-pub(super) fn ps_with_args(script: &str, extra_args: &[&str]) -> Result<String, String> {
+/// Délai maximal `timeout_secs` (processus tué au-delà) ; renvoie stdout ET
+/// stderr, pour qu'un appelant puisse remonter l'erreur réelle au lieu d'un
+/// résultat vide présenté comme un succès.
+pub(super) fn ps_with_args(script: &str, extra_args: &[&str], timeout_secs: u64) -> Result<crate::maintenance::commands::CommandResult, String> {
     let wrapped = format!("& {{ {} }}", script);
-    let mut cmd = std::process::Command::new("powershell");
-    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &wrapped]);
-    for arg in extra_args {
-        cmd.arg(arg);
-    }
-    let out = cmd.creation_flags(0x08000000).output().map_err(|e| e.to_string())?;
-    Ok(crate::maintenance::commands::decode_output(&out.stdout).trim().to_string())
+    let mut args = vec!["-NoProfile", "-NonInteractive", "-Command", wrapped.as_str()];
+    args.extend_from_slice(extra_args);
+    crate::maintenance::commands::execute_system_command("powershell", &args, timeout_secs)
+        .map_err(|e| e.to_string())
 }

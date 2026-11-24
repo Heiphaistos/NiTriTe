@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { invoke } from "@/utils/invoke";
+import { invoke, invokeRaw } from "@/utils/invoke";
 import NButton from "@/components/ui/NButton.vue";
 import NSpinner from "@/components/ui/NSpinner.vue";
 import NBadge from "@/components/ui/NBadge.vue";
@@ -17,11 +17,13 @@ interface DiskSmartInfo {
   disk_index: number; label: string; health: string;
   temperature?: number; power_on_hours?: number; serial: string;
   size_gb: number; media_type: string; wear_level?: number; reallocated_sectors?: number;
+  bus_type: string; is_removable: boolean;
 }
 interface PartitionDetail {
   disk_index: number; part_index: number; disk_label: string;
   letter: string; label: string; size_gb: number; free_gb: number;
   file_system: string; part_type: string; is_system: boolean; is_boot: boolean; health: string;
+  disk_unique_id: string;
 }
 
 const smart = ref<DiskSmartInfo[]>([]);
@@ -54,6 +56,20 @@ const diskGroups = computed(() => {
   return Array.from(map.entries()).map(([idx, g]) => ({ idx, label: g.label, parts: g.parts }));
 });
 
+/** Identifiant stable du disque, renvoyé au backend qui le revérifie avant
+ *  d'agir (les numéros de disque changent au branchement d'un disque USB). */
+function diskId(idx: number): string {
+  return partitions.value.find(p => p.disk_index === idx)?.disk_unique_id ?? "";
+}
+/** « Clé USB » vs « Disque USB » : BusType vaut USB pour les deux, seul
+ *  is_removable (Win32_DiskDrive « Removable Media ») les distingue. */
+function diskKind(idx: number): string {
+  const d = smart.value.find(x => x.disk_index === idx);
+  if (!d) return "";
+  if (d.bus_type === "USB") return d.is_removable ? "Clé USB / carte" : "Disque externe USB";
+  return d.bus_type;
+}
+
 // ── Load ───────────────────────────────────────────────────────────────────────
 async function loadAll() {
   loading.value = true;
@@ -83,7 +99,7 @@ function openDelete(p: PartitionDetail) {
   targetPart.value = p; confirmTxt.value = ""; modalDelete.value = true;
 }
 function openInit(idx: number, label: string) {
-  targetPart.value = { disk_index: idx, part_index: 0, disk_label: label, letter: "", label: "", size_gb: 0, free_gb: 0, file_system: "", part_type: "", is_system: false, is_boot: false, health: "" };
+  targetPart.value = { disk_index: idx, part_index: 0, disk_label: label, letter: "", label: "", size_gb: 0, free_gb: 0, file_system: "", part_type: "", is_system: false, is_boot: false, health: "", disk_unique_id: diskId(idx) };
   initStyle.value = "GPT"; confirmTxt.value = ""; modalInit.value = true;
 }
 
@@ -94,7 +110,9 @@ async function doFormat() {
   if (!targetPart.value || confirmTxt.value !== "FORMATER") return;
   opLoading.value = true;
   try {
-    await invoke("format_partition_cmd", { letter: targetPart.value.letter, fs: fmtFs.value, label: fmtLabel.value });
+    // invokeRaw : invoke() coupe à 30 s côté interface alors que le formatage
+    // continue — l'UI affichait une erreur et permettait de relancer.
+    await invokeRaw("format_partition_cmd", { letter: targetPart.value.letter, fs: fmtFs.value, label: fmtLabel.value, expectedDiskId: targetPart.value.disk_unique_id });
     notify.success("Formatage terminé", `${targetPart.value.letter} formaté en ${fmtFs.value}`);
     modalFormat.value = false; await loadAll();
   } catch (e: unknown) { notify.error("Erreur formatage", String(e)); }
@@ -105,7 +123,7 @@ async function doAssignLetter() {
   if (!targetPart.value || !newLetter.value) return;
   opLoading.value = true;
   try {
-    await invoke("assign_drive_letter_cmd", { diskIndex: targetPart.value.disk_index, partIndex: targetPart.value.part_index, letter: newLetter.value });
+    await invokeRaw("assign_drive_letter_cmd", { diskIndex: targetPart.value.disk_index, partIndex: targetPart.value.part_index, letter: newLetter.value, expectedDiskId: targetPart.value.disk_unique_id });
     notify.success("Lettre assignée", `${newLetter.value.toUpperCase()}: attribuée`);
     modalLetter.value = false; await loadAll();
   } catch (e: unknown) { notify.error("Erreur", String(e)); }
@@ -116,7 +134,7 @@ async function doCreate() {
   if (!targetPart.value) return;
   opLoading.value = true;
   try {
-    await invoke("create_partition_cmd", { diskIndex: targetPart.value.disk_index, sizeMb: newSizeMb.value ?? null });
+    await invokeRaw("create_partition_cmd", { diskIndex: targetPart.value.disk_index, sizeMb: newSizeMb.value ?? null, expectedDiskId: targetPart.value.disk_unique_id });
     notify.success("Partition créée", "NTFS — lettre assignée automatiquement");
     modalCreate.value = false; await loadAll();
   } catch (e: unknown) { notify.error("Erreur création", String(e)); }
@@ -127,7 +145,7 @@ async function doDelete() {
   if (!targetPart.value || confirmTxt.value !== "SUPPRIMER") return;
   opLoading.value = true;
   try {
-    await invoke("delete_partition_cmd", { diskIndex: targetPart.value.disk_index, partIndex: targetPart.value.part_index });
+    await invokeRaw("delete_partition_cmd", { diskIndex: targetPart.value.disk_index, partIndex: targetPart.value.part_index, expectedDiskId: targetPart.value.disk_unique_id });
     notify.success("Partition supprimée", `Disque ${targetPart.value.disk_index} — partition ${targetPart.value.part_index}`);
     modalDelete.value = false; await loadAll();
   } catch (e: unknown) { notify.error("Erreur suppression", String(e)); }
@@ -138,7 +156,7 @@ async function doInit() {
   if (!targetPart.value || confirmTxt.value !== "INITIALISER") return;
   opLoading.value = true;
   try {
-    await invoke("initialize_disk_cmd", { diskIndex: targetPart.value.disk_index, style: initStyle.value });
+    await invokeRaw("initialize_disk_cmd", { diskIndex: targetPart.value.disk_index, style: initStyle.value, expectedDiskId: targetPart.value.disk_unique_id });
     notify.success("Disque initialisé", `Disque ${targetPart.value.disk_index} — ${initStyle.value}`);
     modalInit.value = false; await loadAll();
   } catch (e: unknown) { notify.error("Erreur init", String(e)); }
@@ -166,10 +184,11 @@ async function doResize() {
   if (!targetPart.value || resizeSizeMb.value <= 0) return;
   opLoading.value = true;
   try {
-    await invoke("resize_partition_cmd", {
+    await invokeRaw("resize_partition_cmd", {
       diskIndex: targetPart.value.disk_index,
       partIndex: targetPart.value.part_index,
       newSizeMb: resizeSizeMb.value,
+      expectedDiskId: targetPart.value.disk_unique_id,
     });
     notify.success("Partition redimensionnée", `${targetPart.value.letter} → ${resizeSizeMb.value} Mo`);
     modalResize.value = false; await loadAll();
@@ -203,7 +222,7 @@ async function doMbrOp() {
       const res = await invoke<string>("backup_mbr_cmd", { diskIndex: mbrDiskIndex.value, outputPath: mbrOutputPath.value });
       notify.success("MBR sauvegardé", res);
     } else {
-      const res = await invoke<string>("restore_mbr_cmd", { diskIndex: mbrDiskIndex.value, mbrPath: mbrRestorePath.value });
+      const res = await invokeRaw<string>("restore_mbr_cmd", { diskIndex: mbrDiskIndex.value, mbrPath: mbrRestorePath.value, expectedDiskId: diskId(mbrDiskIndex.value) });
       notify.success("MBR restauré", res);
     }
     modalMbr.value = false;
@@ -297,7 +316,7 @@ function typeColor(t: string) {
           <div class="smart-stats">
             <div class="smart-stat">
               <span class="stat-label"><HardDrive :size="11" /> Type</span>
-              <span class="stat-val">{{ d.media_type || 'HDD' }}</span>
+              <span class="stat-val">{{ d.media_type || 'HDD' }}{{ d.bus_type ? ` · ${d.bus_type === 'USB' ? (d.is_removable ? 'Clé USB' : 'USB externe') : d.bus_type}` : '' }}</span>
             </div>
             <div class="smart-stat">
               <span class="stat-label"><Zap :size="11" /> Capacité</span>
@@ -330,7 +349,7 @@ function typeColor(t: string) {
         <div v-for="group in diskGroups" :key="group.idx" class="disk-group">
           <div class="disk-group-header">
             <HardDrive :size="14" />
-            <span>Disque {{ group.idx }} — {{ group.label }}</span>
+            <span>Disque {{ group.idx }} — {{ group.label }}<template v-if="diskKind(group.idx)"> · {{ diskKind(group.idx) }}</template></span>
             <div class="disk-header-actions">
               <NButton variant="ghost" size="sm" @click="openMbr(group.idx, 'backup')" title="Sauvegarder MBR">
                 <Download :size="11" /> MBR ↓

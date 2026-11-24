@@ -19,7 +19,7 @@ export interface CpuCacheInfo {
   l1_instruction_kb: number; l1_data_kb: number;
   l2_kb: number; l3_kb: number; l4_kb: number;
 }
-export interface FolderEntry { label: string; path: string; size_mb: number; size_gb?: number; file_count: number; }
+export interface FolderEntry { label: string; path: string; size_mb: number; size_gb?: number; file_count: number; partial?: boolean; }
 export interface RamInfo { total_gb: number; used_gb: number; usage_percent: number; modules?: { memory_type?: string }[] }
 
 export interface SysGpu { name?: string; adapter_ram_mb?: number; driver_version?: string }
@@ -66,7 +66,7 @@ export interface AppConfig {
   ai_backend: string; llamacpp_server_path: string; llamacpp_model_path: string; llamacpp_port: number
   monitor_interval_ms: number; show_animations: boolean; compact_mode: boolean
   notifications_enabled: boolean; process_count: number; font_size: string; export_format: string
-  auto_save?: boolean; disk_cache_enabled?: boolean; gpu_acceleration?: boolean; background_tasks?: boolean
+  auto_save?: boolean; zero_trace?: boolean; disk_cache_enabled?: boolean; gpu_acceleration?: boolean; background_tasks?: boolean
   max_history_entries?: number; auto_refresh_dashboard?: boolean; dashboard_refresh_ms?: number
   notif_sounds?: boolean; notif_desktop?: boolean; notif_errors?: boolean; notif_success?: boolean
   notif_position?: string
@@ -267,7 +267,7 @@ export interface SystemMonitorPayload {
   disk_temps?: { name: string; temp_c: number }[]
   network_down_kbs?: number; network_up_kbs?: number
   net_download_kbs?: number; net_upload_kbs?: number
-  cpu_name?: string; cpu_temp_c?: number; cpu_freq_mhz?: number
+  cpu_name?: string; cpu_temp_c?: number; cpu_temp_source?: string | null; cpu_freq_mhz?: number
   cpu_per_core?: (number | { id?: number; usage: number })[]
   cpu_cores?: (number | { id?: number; usage: number })[]
   gpu_data?: { name: string; usage_percent: number; vram_used_mb: number; vram_total_mb: number; temperature_c: number }[]

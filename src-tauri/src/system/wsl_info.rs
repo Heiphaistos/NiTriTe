@@ -34,10 +34,9 @@ fn get_wsl_info_blocking() -> WslInfo {
     // Check if wsl.exe exists
     #[cfg(target_os = "windows")]
     {
-        let check = Command::new("wsl")
-            .args(["--status"])
-            .creation_flags(0x08000000)
-            .output();
+        // Delai borne : un service WSL fige (frequent) bloquait ce thread a vie.
+        use crate::maintenance::commands::execute_system_command;
+        let check = execute_system_command("wsl", &["--status"], 20);
 
         if check.is_err() {
             return WslInfo {
@@ -82,15 +81,19 @@ try {
     } | Where-Object { $_ })
 
     # WSL version
+    # Libelles localises : sortie FR reelle (wsl 2.7, WSL_UTF8=1) = « Version WSL : »,
+    # « Version du noyau : », « Version par défaut : 2 ». Les motifs anglais
+    # seuls laissaient versions vides et version par defaut figee a 2.
     $verRaw = & wsl --version 2>&1 | Select-Object -First 3
-    $wslVer = ($verRaw | Where-Object { $_ -match 'WSL version' } | Select-Object -First 1) -replace '.*:\s*',''
-    $kernelVer = ($verRaw | Where-Object { $_ -match 'Kernel version' } | Select-Object -First 1) -replace '.*:\s*',''
+    $wslVer = ($verRaw | Where-Object { "$_" -match '^\s*(WSL version|Version WSL)\s*:' } | Select-Object -First 1) -replace '.*:\s*',''
+    $kernelVer = ($verRaw | Where-Object { "$_" -match '^\s*(Kernel version|Version du noyau)\s*:' } | Select-Object -First 1) -replace '.*:\s*',''
 
-    # Default WSL version
+    # Default WSL version. -join : `-match` sur un TABLEAU filtre sans remplir
+    # $Matches (qui gardait alors la derniere distro trouvee plus haut).
     $defVer = 2
     try {
-        $defRaw = & wsl --status 2>&1
-        if ($defRaw -match 'Default Version:\s*(\d+)') { $defVer = [int]$Matches[1] }
+        $defRaw = (& wsl --status 2>&1) -join "`n"
+        if ($defRaw -match '(Default Version|Version par d.faut)\s*:\s*(\d+)') { $defVer = [int]$Matches[2] }
     } catch {}
 
     @{
@@ -105,15 +108,10 @@ try {
     @{ installed=$false; defaultVersion=0; distros=@(); kernelVersion=''; wslVersion=''; error=$_.Exception.Message } | ConvertTo-Json -Compress
 }
 "#;
-        let o = Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", ps])
-            .creation_flags(0x08000000)
-            .output();
+        let o = execute_system_command("powershell", &["-NoProfile", "-NonInteractive", "-Command", ps], 45);
         if let Ok(o) = o {
-            // decode_output : le champ state ("En cours d'exécution") survit à la
-            // capture wsl.exe (WSL_UTF8 dans le script) mais pas forcément à
-            // l'écriture finale ConvertTo-Json de PowerShell lui-même vers Rust.
-            let t = crate::maintenance::commands::decode_output(&o.stdout);
+            // execute_system_command decode deja la sortie OEM (decode_output).
+            let t = o.stdout;
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(t.trim()) {
                 let distros = v["distros"].as_array().map(|arr| {
                     arr.iter().map(|d| WslDistro {
@@ -171,8 +169,8 @@ fn wsl_run_command_blocking(distro: String, command: String) -> Result<String, S
             .creation_flags(0x08000000)
             .output()
             .map_err(|e| e.to_string())?;
-        let stdout = String::from_utf8_lossy(&o.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+        let stdout = crate::maintenance::commands::decode_output(&o.stdout).to_string();
+        let stderr = crate::maintenance::commands::decode_output(&o.stderr).to_string();
         if o.status.success() {
             return Ok(stdout);
         }
@@ -180,6 +178,40 @@ fn wsl_run_command_blocking(distro: String, command: String) -> Result<String, S
     }
     #[cfg(not(target_os = "windows"))]
     Err("Non disponible".to_string())
+}
+
+/// Export (`--export`) et conversion WSL 2 (`--set-version`) : plusieurs
+/// minutes. Passes avant par `run_system_command`, tue a 60 s : l'export
+/// laissait une archive .tar tronquee et la conversion etait coupee en route.
+#[tauri::command]
+pub async fn wsl_long_action(action: String, distro: String, path: Option<String>) -> Result<String, String> {
+    if distro.trim().is_empty() || distro.starts_with('-') {
+        return Err("Distribution invalide".into());
+    }
+    let args: Vec<String> = match (action.as_str(), path) {
+        ("export", Some(p)) if !p.trim().is_empty() && !p.starts_with('-') => vec!["--export".into(), distro, p],
+        ("convert", _) => vec!["--set-version".into(), distro, "2".into()],
+        _ => return Err("Action WSL invalide".into()),
+    };
+    tokio::task::spawn_blocking(move || {
+        #[cfg(target_os = "windows")]
+        {
+            // ponytail: pas de delai, une distro de 50 Go s'exporte en dizaines de minutes.
+            let o = Command::new("wsl")
+                .args(&args)
+                .env("WSL_UTF8", "1")
+                .creation_flags(0x08000000)
+                .output()
+                .map_err(|e| e.to_string())?;
+            let out = crate::maintenance::commands::decode_output(&o.stdout).trim().to_string();
+            let err = crate::maintenance::commands::decode_output(&o.stderr).trim().to_string();
+            if o.status.success() { Ok(out) } else { Err(if err.is_empty() { out } else { err }) }
+        }
+        #[cfg(not(target_os = "windows"))]
+        { let _ = args; Err("Non disponible".to_string()) }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // Anti-freeze : wsl.exe est bloquant — jamais inline sur le thread de commande.
@@ -200,7 +232,7 @@ fn wsl_set_default_version_blocking(version: u32) -> Result<String, String> {
             .creation_flags(0x08000000)
             .output()
             .map_err(|e| e.to_string())?;
-        let out = String::from_utf8_lossy(&o.stdout).to_string();
+        let out = crate::maintenance::commands::decode_output(&o.stdout).to_string();
         if o.status.success() {
             return Ok(format!("Version WSL par défaut : {}", v));
         }

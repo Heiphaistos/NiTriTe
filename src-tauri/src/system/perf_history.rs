@@ -1,7 +1,4 @@
 use serde::Serialize;
-use std::process::Command;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct PerfPoint {
@@ -110,15 +107,13 @@ $peakRam = if($points.Count) {{ [long]($points | Measure-Object -Property ramUse
         interval = interval
     );
 
+    // Durée prévue + 10 s de marge WMI par échantillon : `.output()` brut
+    // (version d'origine) attendait sans fin si WMI se figeait.
+    let timeout = (n as u64) * (interval as u64 + 10) + 30;
     tokio::task::spawn_blocking(move || {
         #[cfg(target_os = "windows")]
         {
-            let o = Command::new("powershell")
-                .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
-                .creation_flags(0x08000000)
-                .output();
-            if let Ok(o) = o {
-                let t = String::from_utf8_lossy(&o.stdout);
+            if let Ok(t) = crate::utils::ps::ps_with_timeout(&ps, timeout) {
                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(t.trim()) {
                     let points = v["points"].as_array().map(|arr| {
                         arr.iter().map(|p| PerfPoint {
@@ -185,12 +180,7 @@ $results = foreach ($p in (Get-Process -EA SilentlyContinue)) {{
     tokio::task::spawn_blocking(move || {
         #[cfg(target_os = "windows")]
         {
-            let o = Command::new("powershell")
-                .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
-                .creation_flags(0x08000000)
-                .output();
-            if let Ok(o) = o {
-                let t = String::from_utf8_lossy(&o.stdout);
+            if let Ok(t) = crate::utils::ps::ps_with_timeout(&ps, 30) {
                 let t = t.trim();
                 let arr_t = if t.starts_with('{') { format!("[{}]", t) } else { t.to_string() };
                 if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&arr_t) {

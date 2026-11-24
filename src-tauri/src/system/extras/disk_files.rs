@@ -1,6 +1,59 @@
 use serde::Serialize;
+use std::collections::{BinaryHeap, HashMap};
+use std::cmp::Reverse;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "windows")]
-use super::{parse_json_arr, ps};
+use super::{parse_json_arr, ps, ps_ok};
+
+// ─── Parcours commun (visualiseur, gros fichiers, doublons) ──────────────────
+//
+// Parcours natif (walkdir) au lieu de `Get-ChildItem -Recurse` via ps() :
+// 1. ps() coupe à 180 s — mesuré le 2026-11-23 : Get-ChildItem -Recurse sur
+//    C:\ (1,5 million de fichiers) prend 3 min 57 s, donc le scan par défaut
+//    (C:\) et tout disque externe de 1-2 To échouaient toujours en timeout ;
+// 2. Windows PowerShell 5.1 suit les jonctions/liens symboliques pendant
+//    -Recurse (pas d'option -FollowSymlink avant PS 6) : boucles et doublons
+//    fantômes ;
+// 3. aucun moyen d'annuler. `follow_links(false)` : walkdir ne descend pas
+//    dans un point de réanalyse « name surrogate » (lien symbolique OU
+//    jonction — `FileType::is_symlink()` de std les couvre tous les deux).
+
+static SCAN_CANCEL: AtomicBool = AtomicBool::new(false);
+const CANCELLED: &str = "Analyse annulée.";
+
+/// Annule l'analyse disque en cours (visualiseur, gros fichiers, doublons).
+#[tauri::command]
+pub fn cancel_disk_scan() {
+    SCAN_CANCEL.store(true, Ordering::SeqCst);
+}
+
+fn cancelled() -> bool {
+    SCAN_CANCEL.load(Ordering::Relaxed)
+}
+
+fn walk(root: &Path) -> impl Iterator<Item = walkdir::DirEntry> {
+    walkdir::WalkDir::new(root).follow_links(false).into_iter().filter_map(|e| e.ok())
+}
+
+fn file_len(e: &walkdir::DirEntry) -> u64 {
+    e.metadata().map(|m| m.len()).unwrap_or(0)
+}
+
+fn check_root(path: &str) -> Result<&Path, String> {
+    let p = Path::new(path.trim());
+    if path.trim().is_empty() || !p.is_dir() {
+        return Err(format!("Dossier introuvable : {}", path));
+    }
+    Ok(p)
+}
+
+/// Date locale « AAAA-MM-JJ HH:MM » (même rendu que l'ancien script PS).
+fn local_stamp(t: std::time::SystemTime) -> String {
+    use chrono::{Datelike, Timelike};
+    let d: chrono::DateTime<chrono::Local> = t.into();
+    format!("{:04}-{:02}-{:02} {:02}:{:02}", d.year(), d.month(), d.day(), d.hour(), d.minute())
+}
 
 // ─── Disk Space Visualizer ────────────────────────────────────────────────────
 
@@ -21,40 +74,50 @@ pub async fn get_disk_tree(path: String, max_depth: u32) -> Result<DiskNode, Str
 }
 
 fn get_disk_tree_sync(path: String, max_depth: u32) -> Result<DiskNode, String> {
-    let p = std::path::Path::new(&path);
-    Ok(disk_build_node(p, 0, max_depth.min(4)))
+    SCAN_CANCEL.store(false, Ordering::SeqCst);
+    let p = check_root(&path)?;
+    disk_build_node(p, true, 0, max_depth.min(4))
 }
 
-fn disk_dir_size(p: &std::path::Path) -> u64 {
-    std::fs::read_dir(p).ok().map(|rd| {
-        rd.filter_map(|e| e.ok()).map(|e| {
-            if e.path().is_dir() { disk_dir_size(&e.path()) }
-            else { e.metadata().map(|m| m.len()).unwrap_or(0) }
-        }).sum()
-    }).unwrap_or(0)
+fn disk_dir_size(p: &Path) -> Result<u64, String> {
+    let mut total = 0u64;
+    for e in walk(p) {
+        if cancelled() { return Err(CANCELLED.into()); }
+        if e.file_type().is_file() { total += file_len(&e); }
+    }
+    Ok(total)
 }
 
-fn disk_build_node(p: &std::path::Path, depth: u32, max: u32) -> DiskNode {
+fn disk_build_node(p: &Path, is_dir: bool, depth: u32, max: u32) -> Result<DiskNode, String> {
+    if cancelled() { return Err(CANCELLED.into()); }
     let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| p.to_string_lossy().to_string());
-    let is_dir = p.is_dir();
+    let path = p.to_string_lossy().to_string();
     if !is_dir {
-        let size = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
-        return DiskNode { name, path: p.to_string_lossy().to_string(), size_bytes: size, is_dir: false, children: vec![] };
+        let size = std::fs::symlink_metadata(p).map(|m| m.len()).unwrap_or(0);
+        return Ok(DiskNode { name, path, size_bytes: size, is_dir: false, children: vec![] });
     }
     if depth >= max {
-        let size = disk_dir_size(p);
-        return DiskNode { name, path: p.to_string_lossy().to_string(), size_bytes: size, is_dir: true, children: vec![] };
+        let size = disk_dir_size(p)?;
+        return Ok(DiskNode { name, path, size_bytes: size, is_dir: true, children: vec![] });
     }
-    let mut children: Vec<DiskNode> = std::fs::read_dir(p).ok().map(|rd| {
-        rd.filter_map(|e| e.ok()).map(|e| disk_build_node(&e.path(), depth + 1, max)).collect()
-    }).unwrap_or_default();
+    let mut children = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(p) {
+        for e in rd.filter_map(|e| e.ok()) {
+            // file_type() ne suit pas les points de réanalyse : un lien ou une
+            // jonction n'est ni compté ni parcouru (pas de boucle, pas de
+            // double comptage d'un dossier pointé ailleurs).
+            let Ok(ft) = e.file_type() else { continue };
+            if ft.is_symlink() { continue; }
+            children.push(disk_build_node(&e.path(), ft.is_dir(), depth + 1, max)?);
+        }
+    }
     // Somme sur TOUS les enfants AVANT la troncature d'affichage : sinon la
     // taille du dossier n'inclurait que ses 20 plus gros enfants (sous-estimation
     // qui se propage à chaque niveau de l'arbre).
     let size: u64 = children.iter().map(|c| c.size_bytes).sum();
-    children.sort_by_key(|a| std::cmp::Reverse(a.size_bytes));
+    children.sort_by_key(|a| Reverse(a.size_bytes));
     children.truncate(20);
-    DiskNode { name, path: p.to_string_lossy().to_string(), size_bytes: size, is_dir: true, children }
+    Ok(DiskNode { name, path, size_bytes: size, is_dir: true, children })
 }
 
 // ─── Big Files Finder ─────────────────────────────────────────────────────────
@@ -76,53 +139,51 @@ pub async fn get_big_files(path: String, count: u32, excluded_folders: Option<Ve
         .map_err(|e| e.to_string())?
 }
 
+/// Normalise un dossier d'exclusion : minuscules, `\`, sans `\` final.
+fn norm_excl(p: &str) -> String {
+    p.trim().to_lowercase().replace('/', "\\").trim_end_matches('\\').to_string()
+}
+
+/// `path` est-il le dossier exclu ou un de ses descendants ? Comparaison à la
+/// frontière d'un composant : « C:\Temp » n'exclut pas « C:\Temporaire ».
+fn is_excluded(path: &Path, exclusions: &[String]) -> bool {
+    let p = path.to_string_lossy().to_lowercase();
+    exclusions.iter().any(|ex| {
+        !ex.is_empty() && p.starts_with(ex.as_str()) && matches!(p.as_bytes().get(ex.len()), None | Some(b'\\'))
+    })
+}
+
 fn get_big_files_blocking(path: String, count: u32, excluded_folders: Option<Vec<String>>) -> Result<Vec<BigFile>, String> {
-    let n = count.min(200);
-    let exclusions = excluded_folders.unwrap_or_default();
-    let exclude_filter = if exclusions.is_empty() {
-        String::new()
-    } else {
-        let patterns: Vec<String> = exclusions.iter()
-            .map(|p| {
-                // Échapper les métacaractères wildcard PowerShell (`[ ] * ?`) AVANT
-                // le doublage des apostrophes : un dossier « C:\Temp[1] » ferait
-                // sinon matcher -notlike sur une classe de caractères au lieu du
-                // littéral, excluant les mauvais fichiers. Le `*` final reste un
-                // vrai joker (préfixe).
-                let esc = p
-                    .replace('`', "``")
-                    .replace('[', "`[")
-                    .replace(']', "`]")
-                    .replace('*', "`*")
-                    .replace('?', "`?")
-                    .replace('\'', "''");
-                format!("$_.FullName -notlike '{}*'", esc)
-            })
-            .collect();
-        format!("| Where-Object {{ {} }}", patterns.join(" -and "))
-    };
-    let script = format!(r#"
-Get-ChildItem -Path '{path}' -Recurse -File -ErrorAction SilentlyContinue {exclude_filter}|
-    Sort-Object Length -Descending | Select-Object -First {n} |
-    ForEach-Object {{
-        [PSCustomObject]@{{
-            name=$_.Name
-            path=$_.FullName
-            size=$_.Length
-            ext=$_.Extension
-            modified=$_.LastWriteTime.ToString('yyyy-MM-dd HH:mm')
-        }}
-    }} | ConvertTo-Json -Compress
-"#, path = path.replace('\'', "''"), n = n, exclude_filter = exclude_filter);
-    let out = ps(&script)?;
-    if out.is_empty() { return Ok(vec![]); }
-    let arr: Vec<serde_json::Value> = parse_json_arr(&out);
-    Ok(arr.iter().map(|v| BigFile {
-        name: v["name"].as_str().unwrap_or("").to_string(),
-        path: v["path"].as_str().unwrap_or("").to_string(),
-        size_bytes: v["size"].as_u64().unwrap_or(0),
-        extension: v["ext"].as_str().unwrap_or("").to_string(),
-        modified: v["modified"].as_str().unwrap_or("").to_string(),
+    SCAN_CANCEL.store(false, Ordering::SeqCst);
+    let root = check_root(&path)?;
+    let n = count.clamp(1, 200) as usize;
+    let exclusions: Vec<String> = excluded_folders.unwrap_or_default().iter().map(|p| norm_excl(p)).collect();
+    // Tas min borné à n : mémoire constante même sur des millions de fichiers.
+    let mut heap: BinaryHeap<Reverse<(u64, PathBuf)>> = BinaryHeap::with_capacity(n + 1);
+    let walker = walkdir::WalkDir::new(root).follow_links(false).into_iter()
+        .filter_entry(|e| !is_excluded(e.path(), &exclusions));
+    for e in walker.filter_map(|e| e.ok()) {
+        if cancelled() { return Err(CANCELLED.into()); }
+        if !e.file_type().is_file() { continue; }
+        let len = file_len(&e);
+        if heap.len() < n {
+            heap.push(Reverse((len, e.into_path())));
+        } else if heap.peek().is_some_and(|Reverse((min, _))| len > *min) {
+            heap.pop();
+            heap.push(Reverse((len, e.into_path())));
+        }
+    }
+    let mut top: Vec<(u64, PathBuf)> = heap.into_iter().map(|Reverse(x)| x).collect();
+    top.sort_by_key(|(len, _)| Reverse(*len));
+    Ok(top.into_iter().map(|(len, p)| {
+        let modified = std::fs::symlink_metadata(&p).and_then(|m| m.modified()).map(local_stamp).unwrap_or_default();
+        BigFile {
+            name: p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
+            extension: p.extension().map(|s| format!(".{}", s.to_string_lossy())).unwrap_or_default(),
+            path: p.to_string_lossy().to_string(),
+            size_bytes: len,
+            modified,
+        }
     }).collect())
 }
 
@@ -145,69 +206,90 @@ pub async fn find_duplicates(path: String, min_size_kb: u64, mode: Option<String
         .map_err(|e| e.to_string())?
 }
 
+/// SHA-256 (hex majuscule) du fichier, ou de ses `limit` premiers octets.
+/// `None` si illisible (fichier verrouillé, droits) : le fichier est ignoré.
+fn hash_prefix(p: &Path, limit: Option<u64>) -> Result<Option<String>, String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let Ok(f) = std::fs::File::open(p) else { return Ok(None) };
+    let mut r: Box<dyn Read> = match limit { Some(l) => Box::new(f.take(l)), None => Box::new(f) };
+    let mut h = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        if cancelled() { return Err(CANCELLED.into()); }
+        match r.read(&mut buf) {
+            Ok(0) => break,
+            Ok(k) => h.update(&buf[..k]),
+            Err(_) => return Ok(None),
+        }
+    }
+    Ok(Some(h.finalize().iter().map(|b| format!("{b:02X}")).collect()))
+}
+
+/// Regroupe `paths` par empreinte ; ne garde que les groupes d'au moins 2.
+fn group_by_hash(paths: Vec<PathBuf>, limit: Option<u64>) -> Result<Vec<(String, Vec<PathBuf>)>, String> {
+    let mut by: HashMap<String, Vec<PathBuf>> = HashMap::new();
+    for p in paths {
+        if let Some(h) = hash_prefix(&p, limit)? { by.entry(h).or_default().push(p); }
+    }
+    Ok(by.into_iter().filter(|(_, v)| v.len() > 1).collect())
+}
+
 fn find_duplicates_sync(path: String, min_size_kb: u64, mode: String) -> Result<Vec<DuplicateGroup>, String> {
-    let min_bytes = (min_size_kb * 1024).max(1024);
-    let safe_path = path.replace('\'', "''");
-    let script = if mode == "name" {
-        format!(r#"
-$files = Get-ChildItem -Path '{safe_path}' -Recurse -File -ErrorAction SilentlyContinue |
-    Where-Object {{ $_.Length -ge {min} }}
-$groups = $files | Group-Object Name | Where-Object {{ $_.Count -gt 1 }}
-$dupes = @()
-foreach ($g in $groups) {{
-    # Mode nom : les fichiers homonymes peuvent avoir des tailles DIFFÉRENTES.
-    # On trie par taille décroissante (le plus gros = "original" gardé, index 0)
-    # et on calcule le gaspillage réel = somme totale - plus gros fichier, au
-    # lieu de size*(count-1) qui suppose des tailles identiques.
-    $sorted = $g.Group | Sort-Object Length -Descending
-    $total = ($g.Group | Measure-Object Length -Sum).Sum
-    $keep = $sorted[0].Length
-    $dupes += [PSCustomObject]@{{
-        hash=$g.Name
-        size=$keep
-        count=$g.Count
-        wasted=($total - $keep)
-        files=($sorted | ForEach-Object {{ $_.FullName }}) -join '|'
-    }}
-}}
-$dupes | ConvertTo-Json -Compress
-"#, safe_path = safe_path, min = min_bytes)
+    SCAN_CANCEL.store(false, Ordering::SeqCst);
+    let root = check_root(&path)?;
+    let min_bytes = min_size_kb.saturating_mul(1024).max(1024);
+    let mut files: Vec<(PathBuf, u64)> = Vec::new();
+    for e in walk(root) {
+        if cancelled() { return Err(CANCELLED.into()); }
+        if !e.file_type().is_file() { continue; }
+        let len = file_len(&e);
+        if len >= min_bytes { files.push((e.into_path(), len)); }
+    }
+    let as_str = |p: &PathBuf| p.to_string_lossy().to_string();
+    let mut groups: Vec<DuplicateGroup> = Vec::new();
+    if mode == "name" {
+        // Mode nom : les homonymes peuvent avoir des tailles DIFFÉRENTES. Le plus
+        // gros (index 0) est « l'original » gardé ; gaspillage = total - plus gros.
+        let mut by: HashMap<String, Vec<(PathBuf, u64)>> = HashMap::new();
+        for (p, len) in files {
+            let key = p.file_name().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
+            by.entry(key).or_default().push((p, len));
+        }
+        for (_, mut v) in by.into_iter().filter(|(_, v)| v.len() > 1) {
+            v.sort_by_key(|(_, len)| Reverse(*len));
+            let keep = v[0].1;
+            let total: u64 = v.iter().map(|(_, l)| *l).sum();
+            groups.push(DuplicateGroup {
+                hash: v[0].0.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
+                size_bytes: keep,
+                count: v.len() as u32,
+                wasted_bytes: total - keep,
+                files: v.iter().map(|(p, _)| as_str(p)).collect(),
+            });
+        }
     } else {
-        format!(r#"
-$files = Get-ChildItem -Path '{safe_path}' -Recurse -File -ErrorAction SilentlyContinue |
-    Where-Object {{ $_.Length -ge {min} }}
-$groups = $files | Group-Object Length | Where-Object {{ $_.Count -gt 1 }}
-$dupes = @()
-foreach ($g in $groups) {{
-    $hashed = $g.Group | ForEach-Object {{
-        [PSCustomObject]@{{ path=$_.FullName; hash=(Get-FileHash $_.FullName -Algorithm MD5).Hash; size=$_.Length }}
-    }}
-    $hashGroups = $hashed | Group-Object hash | Where-Object {{ $_.Count -gt 1 }}
-    foreach ($hg in $hashGroups) {{
-        $dupes += [PSCustomObject]@{{
-            hash=$hg.Name
-            size=$hg.Group[0].size
-            count=$hg.Count
-            files=($hg.Group | ForEach-Object {{ $_.path }}) -join '|'
-        }}
-    }}
-}}
-$dupes | ConvertTo-Json -Compress
-"#, safe_path = safe_path, min = min_bytes)
-    };
-    let out = ps(&script)?;
-    if out.is_empty() { return Ok(vec![]); }
-    let arr: Vec<serde_json::Value> = parse_json_arr(&out);
-    let mut groups: Vec<DuplicateGroup> = arr.iter().map(|v| {
-        let size = v["size"].as_u64().unwrap_or(0);
-        let count = v["count"].as_u64().unwrap_or(2) as u32;
-        let files: Vec<String> = v["files"].as_str().unwrap_or("").split('|').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect();
-        // Mode hash : tailles identiques → size*(count-1) exact. Mode nom : PS
-        // fournit le gaspillage réel via "wasted" (tailles hétérogènes).
-        let wasted_bytes = v["wasted"].as_u64().unwrap_or_else(|| size * (count as u64 - 1));
-        DuplicateGroup { hash: v["hash"].as_str().unwrap_or("").to_string(), size_bytes: size, count, wasted_bytes, files }
-    }).collect();
-    groups.sort_by_key(|a| std::cmp::Reverse(a.wasted_bytes));
+        // Mode contenu : même taille, puis même empreinte des 64 premiers Ko,
+        // puis même empreinte complète. Seuls les vrais candidats sont lus en entier.
+        let mut by_size: HashMap<u64, Vec<PathBuf>> = HashMap::new();
+        for (p, len) in files { by_size.entry(len).or_default().push(p); }
+        for (size, paths) in by_size.into_iter().filter(|(_, v)| v.len() > 1) {
+            let candidates = if size > 65_536 {
+                group_by_hash(paths, Some(65_536))?.into_iter().flat_map(|(_, v)| v).collect()
+            } else { paths };
+            for (hash, mut v) in group_by_hash(candidates, None)? {
+                v.sort();
+                groups.push(DuplicateGroup {
+                    hash,
+                    size_bytes: size,
+                    count: v.len() as u32,
+                    wasted_bytes: size * (v.len() as u64 - 1),
+                    files: v.iter().map(as_str).collect(),
+                });
+            }
+        }
+    }
+    groups.sort_by_key(|a| Reverse(a.wasted_bytes));
     Ok(groups)
 }
 
@@ -274,15 +356,25 @@ fn trash_file_blocking(path: String) -> Result<(), String> {
     // Microsoft.VisualBasic.FileIO (contrairement à std::fs, utilisé par
     // delete_file_blocking) — le garde de sécurité ci-dessus reste valide car
     // canonicalize() résout déjà tout `..` avant la comparaison.
+    //
+    // ps_ok + try/catch/exit 1 : ps() renvoyait Ok même quand DeleteFile levait
+    // (fichier verrouillé, accès refusé) — l'UI affichait « Envoyé à la
+    // corbeille » et retirait le fichier de la liste alors qu'il était
+    // toujours là (faux succès). Vérification finale : le fichier a disparu.
     let safe = path.replace('\'', "''");
     let script = format!(r#"
-Add-Type -AssemblyName Microsoft.VisualBasic
-[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile(
-    '{safe}',
-    [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs,
-    [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin
-)"#);
-    ps(&script)?;
+try {{
+  Add-Type -AssemblyName Microsoft.VisualBasic
+  [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile(
+      '{safe}',
+      [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs,
+      [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin
+  )
+}} catch {{ Write-Output $_.Exception.Message; exit 1 }}"#);
+    ps_ok(&script)?;
+    if std::path::Path::new(&path).exists() {
+        return Err(format!("Le fichier est toujours présent : {}", path));
+    }
     Ok(())
 }
 
@@ -422,6 +514,80 @@ $after  = (Get-ChildItem '{safe}' -Recurse -ErrorAction SilentlyContinue | Measu
 mod tests {
     use super::*;
     use std::path::Path;
+
+    // ── Scanners natifs (gros fichiers, doublons, visualiseur) ───────────────
+    // Un seul test pour les trois : SCAN_CANCEL est global, des tests
+    // parallèles se réinitialiseraient mutuellement le drapeau.
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("nitrite_scan_{}_{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("sub")).unwrap();
+        d
+    }
+
+    /// Mesure manuelle (lecture seule) : `cargo test --lib big_files_on_c_drive -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn big_files_on_c_drive_completes_without_timeout() {
+        // Pas de borne de durée : le parcours dépend du disque (≈ 3-4 min en
+        // debug pour 1,5 M de fichiers). Ce qui compte : il va au bout, là où
+        // l'ancien ps() coupait à 180 s.
+        let t = std::time::Instant::now();
+        let top = get_big_files_blocking(r"C:\".into(), 20, Some(vec![r"C:\Windows".into()])).unwrap();
+        println!("C:\\ : {} fichiers en {:?}, plus gros = {:?}", top.len(), t.elapsed(), top.first().map(|f| &f.path));
+        assert_eq!(top.len(), 20);
+    }
+
+    #[test]
+    fn exclusion_matches_component_boundary_only() {
+        let ex = vec![norm_excl(r"C:\Temp\")];
+        assert!(is_excluded(Path::new(r"C:\Temp"), &ex));
+        assert!(is_excluded(Path::new(r"c:\temp\a.iso"), &ex));
+        assert!(!is_excluded(Path::new(r"C:\Temporaire\a.iso"), &ex));
+    }
+
+    #[test]
+    fn native_scanners_find_sizes_duplicates_and_skip_junction_loops() {
+        let d = scratch("all");
+        let big = vec![7u8; 200_000];
+        std::fs::write(d.join("a.bin"), &big).unwrap();
+        std::fs::write(d.join("sub").join("b.bin"), &big).unwrap(); // doublon exact
+        let mut other = big.clone();
+        other[150_000] = 8; // même taille, même début, contenu différent
+        std::fs::write(d.join("sub").join("c.bin"), &other).unwrap();
+        std::fs::write(d.join("small.txt"), b"x").unwrap();
+        // Jonction qui reboucle sur le dossier racine : ne doit pas être suivie.
+        #[cfg(target_os = "windows")]
+        {
+            let link = d.join("sub").join("boucle");
+            let st = std::process::Command::new("cmd")
+                .args(["/c", "mklink", "/J", &link.to_string_lossy(), &d.to_string_lossy()])
+                .output().unwrap();
+            assert!(st.status.success(), "mklink /J a échoué");
+        }
+        let root = d.to_string_lossy().to_string();
+
+        let top = get_big_files_blocking(root.clone(), 2, None).unwrap();
+        assert_eq!(top.len(), 2);
+        assert!(top.iter().all(|f| f.size_bytes == 200_000));
+        assert!(top.iter().all(|f| !f.path.contains("boucle")));
+
+        let groups = find_duplicates_sync(root.clone(), 1, "hash".into()).unwrap();
+        assert_eq!(groups.len(), 1, "seuls a.bin et b.bin sont identiques");
+        assert_eq!(groups[0].count, 2);
+        assert_eq!(groups[0].wasted_bytes, 200_000);
+
+        let tree = get_disk_tree_sync(root.clone(), 3).unwrap();
+        assert_eq!(tree.size_bytes, 600_001, "la jonction ne doit pas être comptée");
+
+        SCAN_CANCEL.store(true, Ordering::SeqCst);
+        assert!(disk_dir_size(&d).is_err(), "annulation prise en compte");
+        SCAN_CANCEL.store(false, Ordering::SeqCst);
+
+        assert!(get_big_files_blocking(d.join("absent").to_string_lossy().to_string(), 5, None).is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
 
     // ── is_system_path_blocked ────────────────────────────────────────────────
 

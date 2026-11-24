@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { invoke, invokeRaw } from "@/utils/invoke";
+import { confirm } from "@tauri-apps/plugin-dialog";
 import NButton from "@/components/ui/NButton.vue";
 import NModal from "@/components/ui/NModal.vue";
 import { Wrench, Search, Shield, KeyRound, Trash2, AlertTriangle, Lock } from "lucide-vue-next";
@@ -45,9 +46,17 @@ const loading = ref({
   bitlockerCheck: false, bitlockerUnlock: false,
 });
 
+const REPAIR_LABELS: Record<string, string> = {
+  mbr: "réécrire le MBR (bootrec /fixmbr)",
+  boot: "réécrire le secteur de démarrage (bootrec /fixboot)",
+  bcd: "reconstruire le magasin BCD (bootrec /rebuildbcd)",
+};
+
 async function runRepair(type: string) {
   const key = type as keyof typeof loading.value;
   if (loading.value[key]) return;
+  // Ces trois actions reecrivent le demarrage du disque : jamais en un clic.
+  if (REPAIR_LABELS[type] && !(await confirm(`Confirmer : ${REPAIR_LABELS[type]} ?`, { title: "Réparation démarrage", kind: "warning" }))) return;
   loading.value[key] = true;
   try {
     let res: RepairResult;
@@ -91,11 +100,18 @@ async function loadOfflineUsers() {
   loading.value.listUsers = true;
   try {
     offlineUsers.value = await invoke<OfflineUser[]>("list_offline_users", { windowsDir: sfcDir.value });
-  } catch { /* silent */ }
+    if (!offlineUsers.value.length) emit("result", { success: false, output: "Aucun compte trouvé dans cette installation.", command: "comptes hors ligne" });
+  } catch (e) { emit("result", { success: false, output: String(e), command: "comptes hors ligne" }); }
   finally { loading.value.listUsers = false; }
 }
 
+/** Les trois actions de compte modifient l'installation : confirmation nommee. */
+function confirmAccount(action: string): Promise<boolean> {
+  return confirm(`${action} pour le compte « ${selectedUser.value} » de ${sfcDir.value} ?`, { title: "Comptes hors ligne", kind: "warning" });
+}
+
 async function runResetPassword() {
+  if (!(await confirmAccount("Définir un nouveau mot de passe"))) return;
   loading.value.resetPwd = true;
   try {
     const res = await invoke<RepairResult>("reset_user_password", { windowsDir: sfcDir.value, username: selectedUser.value, newPassword: newPassword.value });
@@ -105,6 +121,7 @@ async function runResetPassword() {
 }
 
 async function runClearPassword() {
+  if (!(await confirmAccount("Supprimer le mot de passe"))) return;
   loading.value.clearPwd = true;
   try {
     const res = await invoke<RepairResult>("clear_offline_password", { windowsDir: sfcDir.value, username: selectedUser.value });
@@ -114,6 +131,7 @@ async function runClearPassword() {
 }
 
 async function runEnableAccount() {
+  if (!(await confirmAccount("Activer le compte"))) return;
   loading.value.enableAccount = true;
   try {
     const res = await invoke<RepairResult>("enable_offline_account", { windowsDir: sfcDir.value, username: selectedUser.value });
@@ -126,7 +144,7 @@ async function checkBitlocker() {
   loading.value.bitlockerCheck = true;
   try {
     bitlockerStatus.value = await invoke<BitLockerStatus>("get_bitlocker_status", { drive: bitlockerDrive.value });
-  } catch { /* silent */ }
+  } catch (e) { emit("result", { success: false, output: String(e), command: "état BitLocker" }); }
   finally { loading.value.bitlockerCheck = false; }
 }
 
@@ -151,7 +169,9 @@ async function runWipe() {
   showWipeConfirm.value = false;
   loading.value.wipe = true;
   try {
-    const res = await invoke<RepairResult>("disk_wipe", { diskIndex: wipeDiskIndex.value, method: wipeMethod.value });
+    // Sans plafond : un « clean all » dure des heures ; les 30 s par defaut
+    // d'invoke annoncaient un echec pendant que l'effacement continuait.
+    const res = await invokeRaw<RepairResult>("disk_wipe", { diskIndex: wipeDiskIndex.value, method: wipeMethod.value });
     emit("result", res);
   } catch (e) { emit("result", { success: false, output: String(e), command: "wipe disk" }); }
   finally { loading.value.wipe = false; }

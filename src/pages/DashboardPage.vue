@@ -84,6 +84,8 @@ async function killProcess(pid: number, name: string) {
 const cpuCores = ref<CoreUsage[]>([]), gpuData = ref<GpuInfo[]>([]), diskTemps = ref<DiskTemp[]>([]);
 const diskReadKbs = ref(0), diskWriteKbs = ref(0), networkDownKbs = ref(0), networkUpKbs = ref(0);
 const paused = ref(false), cpuTemp = ref(0);
+// Zone ACPI = valeur firmware souvent figée : affichée comme indicative, jamais d'alerte.
+const cpuTempAcpi = ref(false);
 const cpuHistory = ref<number[]>([]), ramHistory = ref<number[]>([]);
 const netHistory = ref<number[]>([]), diskHistory = ref<number[]>([]);
 const MAX_HISTORY = 60;
@@ -139,7 +141,8 @@ const suggestions = computed<Suggestion[]>(() => {
     list.push({ id: 'cpu-crit', icon: Cpu, title: "CPU surchargé", description: `${cpuUsage.value}% — identifiez et terminez les processus gourmands`, route: "/diagnostic", level: 'critical' });
   if (healthScore.value < 50)
     list.push({ id: 'health-low', icon: Stethoscope, title: "Santé système faible", description: `Score ${healthScore.value}/100 — lancez un diagnostic complet`, route: "/diagnostic", level: 'warning' });
-  if (cpuTemp.value > 85)
+  if (cpuTempAcpi.value) { /* pas d'alerte sur une zone ACPI */ }
+  else if (cpuTemp.value > 85)
     list.push({ id: 'temp-high', icon: Thermometer, title: "Température CPU critique", description: `${cpuTemp.value}°C — vérifiez le refroidissement et la pâte thermique`, route: "/temperatures", level: 'critical' });
   else if (cpuTemp.value > 75)
     list.push({ id: 'temp-warn', icon: Thermometer, title: "Température CPU élevée", description: `${cpuTemp.value}°C — nettoyez les ventilateurs si possible`, route: "/temperatures", level: 'warning' });
@@ -174,10 +177,10 @@ function applyMonitorData(raw: SystemMonitorPayload) {
   cpuCores.value = (raw.cpu_per_core ?? raw.cpu_cores ?? []).map((u: number | CoreUsage, i: number) =>
     typeof u === "number" ? { id: i, usage: u } : u);
   if (Array.isArray(raw.gpu_data) && raw.gpu_data.length > 0) gpuData.value = raw.gpu_data;
-  if (Array.isArray(raw.disk_temps) && raw.disk_temps.length > 0) diskTemps.value = raw.disk_temps;
-  else if (!Array.isArray(raw.disk_temps)) diskTemps.value = [];
+  diskTemps.value = Array.isArray(raw.disk_temps) ? raw.disk_temps : [];
   diskReadKbs.value = raw.disk_read_kbs ?? 0; diskWriteKbs.value = raw.disk_write_kbs ?? 0;
   cpuTemp.value = raw.cpu_temp_c ?? 0;
+  cpuTempAcpi.value = raw.cpu_temp_source === 'acpi';
   if ((raw.cpu_freq_mhz ?? 0) > 0) cpuFreqMhz.value = raw.cpu_freq_mhz!;
   if ((raw.process_count ?? 0) > 0) totalProcesses.value = raw.process_count!;
   networkDownKbs.value = raw.network_down_kbs ?? raw.net_download_kbs ?? 0;
@@ -510,13 +513,13 @@ onUnmounted(() => {
     <NCard v-if="isLive && !paused && (cpuTemp > 0 || gpuData.some(g => g.temperature_c > 0) || diskTemps.length > 0)">
       <template #header>
         <div class="card-header-row"><Thermometer :size="16" /><span>Températures</span>
-          <Flame v-if="cpuTemp > 80 || gpuData.some(g => g.temperature_c > 85) || diskTemps.some(d => d.temp_c > 55)"
+          <Flame v-if="(!cpuTempAcpi && cpuTemp > 80) || gpuData.some(g => g.temperature_c > 85) || diskTemps.some(d => d.temp_c > 55)"
             :size="14" style="color:var(--danger);margin-left:4px" />
         </div>
       </template>
       <div class="temps-grid">
         <div v-if="cpuTemp > 0" class="temp-item">
-          <Cpu :size="14" /><span class="temp-label">CPU</span>
+          <Cpu :size="14" /><span class="temp-label" :title="cpuTempAcpi ? 'Zone thermique ACPI (valeur du firmware, souvent figée) : installez LibreHardwareMonitor pour la vraie température CPU' : undefined">{{ cpuTempAcpi ? 'Zone ACPI' : 'CPU' }}</span>
           <div class="temp-bar-track" style="flex:1"><div class="temp-bar-fill" :style="{ width: `${Math.min((cpuTemp/100)*100,100)}%`, background: tempColor(cpuTemp) }" /></div>
           <span class="temp-value" :style="{ color: tempColor(cpuTemp) }">{{ cpuTemp }}°C</span>
         </div>

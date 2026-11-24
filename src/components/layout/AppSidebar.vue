@@ -1,20 +1,12 @@
 <script setup lang="ts">
-import { ref, reactive, watch, computed, inject, type Component } from "vue";
+import { ref, reactive, watch, computed, inject } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useLocalStorage } from "@vueuse/core";
 import { navigationSections } from "@/data/navigation";
 import logoUrl from "@/assets/nitrite-logo.jpg";
 import type { SidebarPosition, SidebarMode, SidebarWidth } from "@/stores/layoutStore";
-import {
-  LayoutDashboard, Stethoscope, Activity, Zap, LayoutGrid, Wrench,
-  Download, Package, HardDrive, RefreshCw, Cpu, Scan, Save, Shield, ShieldCheck,
-  Wifi, Terminal, FileCode, Bot, BookOpen, FileText, ScrollText,
-  BarChart3, Settings, ChevronLeft, ChevronRight, ChevronDown, Search,
-  Palette, Trash2, Gauge, Server, Globe, Bug, TerminalSquare,
-  Bluetooth, Sparkles, Copy, Database, Star, StarOff, User,
-  Thermometer, PieChart, Files, FileSearch, Hash, Container, Radio, Network, Code2,
-  Rocket, ClipboardList, ListChecks,
-} from "lucide-vue-next";
+import { Settings, ChevronLeft, ChevronRight, ChevronDown, Search, Star, StarOff } from "lucide-vue-next";
+import { getNavIcon } from "@/data/navIcons";
 
 const props = withDefaults(defineProps<{
   collapsed: boolean;
@@ -81,26 +73,7 @@ const sidebarWidthPx = computed(() => {
   return 240;
 });
 
-const iconMap: Record<string, Component> = {
-  "layout-dashboard": LayoutDashboard,
-  stethoscope: Stethoscope, activity: Activity, zap: Zap,
-  "layout-grid": LayoutGrid, wrench: Wrench, download: Download,
-  package: Package, "hard-drive": HardDrive, "refresh-cw": RefreshCw,
-  cpu: Cpu, scan: Scan, save: Save, shield: Shield, wifi: Wifi,
-  terminal: Terminal, "file-code": FileCode, bot: Bot,
-  "book-open": BookOpen, "file-text": FileText, "scroll-text": ScrollText,
-  "bar-chart-3": BarChart3, settings: Settings, palette: Palette,
-  "trash-2": Trash2, gauge: Gauge, server: Server, globe: Globe,
-  bug: Bug, "terminal-square": TerminalSquare, bluetooth: Bluetooth,
-  sparkles: Sparkles, copy: Copy, database: Database, "shield-check": ShieldCheck,
-  user: User,
-  thermometer: Thermometer, "pie-chart": PieChart, files: Files,
-  "file-search": FileSearch, hash: Hash, container: Container,
-  radio: Radio, network: Network, "code-2": Code2,
-  rocket: Rocket, "clipboard-list": ClipboardList, "list-checks": ListChecks,
-};
-
-function getIcon(name: string) { return iconMap[name] ?? LayoutDashboard; }
+const getIcon = getNavIcon;
 function isActive(itemRoute: string) { return route.path === itemRoute; }
 function sectionHasActive(section: typeof navigationSections[0]) {
   return section.items.some(item => item.route === route.path);

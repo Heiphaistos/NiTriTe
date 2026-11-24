@@ -1,8 +1,6 @@
 use serde::Serialize;
-use std::process::Command;
+use std::hint::black_box;
 use std::time::Instant;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct BenchResult {
@@ -39,7 +37,9 @@ pub async fn run_cpu_bench() -> BenchResult {
             }
             iterations += 50_000;
         }
-        let _ = acc; // black-box: prevent optimizer from eliminating the benchmark loop
+        // `let _ = acc` n'empêche RIEN : en opt-level=3 LLVM supprime la boucle
+        // (mesuré : 683 milliards d'« itérations » en 0,5 s). black_box oui.
+        black_box(acc);
 
         let elapsed_ms = start.elapsed().as_millis().max(1) as u64;
         let mops = iterations as f64 / (elapsed_ms as f64 / 1000.0) / 1_000_000.0;
@@ -87,6 +87,7 @@ pub async fn run_ram_bench() -> BenchResult {
                 u64::from_le_bytes(chunk.try_into().unwrap_or([0u8; 8]))
             );
         }
+        black_box(checksum); // sinon la boucle de lecture peut être supprimée
         let read_ms = rs.elapsed().as_millis().max(1) as u64;
         let read_gbps = (SIZE as f64 / 1e9) / (read_ms as f64 / 1000.0);
 
@@ -149,6 +150,8 @@ pub async fn run_disk_bench(drive: Option<String>) -> BenchResult {
         let ps = format!(
             r#"
 $tmp = "{drive}\__nitrite_bench_{rand}.tmp"
+# Restes d'un test précédent interrompu (app fermée, timeout) : 256 Mo chacun.
+Remove-Item "{drive}\__nitrite_bench_*.tmp" -Force -EA SilentlyContinue
 try {{
     $size = 256MB
     $data = New-Object byte[] $size
@@ -198,15 +201,23 @@ try {{
         #[cfg(target_os = "windows")]
         {
             let start = Instant::now();
-            let o = Command::new("powershell")
-                .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
-                .creation_flags(0x08000000)
-                .output();
+            // Timeout 120 s (disque lent / USB) ; si PowerShell est tué, son
+            // `finally` ne s'exécute pas : le fichier de 256 Mo est donc aussi
+            // supprimé ici, quoi qu'il arrive.
+            let o = crate::utils::ps::ps_with_timeout(&ps, 120);
+            let _ = std::fs::remove_file(format!("{d}\\__nitrite_bench_{rand_suffix}.tmp"));
             let dur = start.elapsed().as_millis() as u64;
 
-            if let Ok(o) = o {
-                let t = String::from_utf8_lossy(&o.stdout);
+            if let Ok(t) = o {
                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(t.trim()) {
+                    if let Some(err) = v["error"].as_str() {
+                        return BenchResult {
+                            name: "Stockage".to_string(),
+                            duration_ms: dur,
+                            details: format!("Échec du test disque : {err}"),
+                            ..Default::default()
+                        };
+                    }
                     let w = v["wMBps"].as_f64().unwrap_or(0.0);
                     let r = v["rMBps"].as_f64().unwrap_or(0.0);
                     let iops = v["iops"].as_f64().unwrap_or(0.0);
@@ -232,7 +243,8 @@ try {{
         }
 
         BenchResult {
-            name: "Disque".to_string(),
+            name: "Stockage".to_string(),
+            details: "Échec du test disque (délai dépassé ou PowerShell indisponible)".to_string(),
             ..Default::default()
         }
     })
@@ -263,7 +275,7 @@ pub async fn run_cpu_mt_bench() -> BenchResult {
                         }
                         iterations += 50_000;
                     }
-                    let _ = acc;
+                    black_box(acc);
                     iterations
                 })
             })
@@ -324,7 +336,7 @@ pub async fn run_crypto_bench() -> BenchResult {
                 blocks += 1;
             }
         }
-        let _ = state;
+        black_box(state);
 
         let elapsed_ms = start.elapsed().as_millis().max(1) as u64;
         // 64 bytes per block (4×u64), compute MB/s

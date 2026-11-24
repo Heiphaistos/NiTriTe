@@ -359,7 +359,12 @@ async function loadReports() {
 
 async function openReportFolder() {
   try {
-    await invoke("run_system_command", { cmd: "explorer", args: ["%USERPROFILE%\\Documents\\NiTriTe"] });
+    // list_reports lit le dossier `backups` de l'app, pas Documents\NiTriTe
+    // (et Command::new ne développe pas %USERPROFILE%) : ouvrir le dossier
+    // réel des rapports listés.
+    const first = reports.value[0]?.path;
+    if (!first) { notifications.info("Rapports", "Aucun rapport pour l'instant."); return; }
+    await invoke("open_path", { path: first.replace(/[\\/][^\\/]+$/, "") });
   } catch (e: unknown) {
     if (!isTauriContext()) { notifications.info("Mode dev", "Ouverture dossier simulee"); }
     else { notifications.error("Ouverture dossier", (e instanceof Error ? e.message : String(e)).slice(0, 120)); }

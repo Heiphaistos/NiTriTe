@@ -1036,7 +1036,7 @@
     "category": "Bureautique",
     "winget_id": "TheDocumentFoundation.LibreOffice",
     "choco_id": null,
-    "url": "https://www.libreoffice.org/download/download/",
+    "url": "https://www.libreoffice.org/download/download-libreoffice/",
     "icon": "file-text"
   },
   {
@@ -1266,7 +1266,7 @@
     "category": "Multimedia",
     "winget_id": "CodecGuide.K-LiteCodecPack.Standard",
     "choco_id": null,
-    "url": "https://files3.codecguide.com/K-Lite_Codec_Pack_1805_Standard.exe",
+    "url": "https://codecguide.com/download_kl.htm",
     "icon": "play"
   },
   {
@@ -1574,7 +1574,7 @@
     "name": "Python",
     "description": "Langage de programmation polyvalent",
     "category": "Developpement",
-    "winget_id": "Python.Python.3.12",
+    "winget_id": "Python.Python.3.14",
     "choco_id": null,
     "url": "https://www.python.org/ftp/python/3.11.6/python-3.11.6-amd64.exe",
     "icon": "code"
@@ -1614,9 +1614,9 @@
     "name": "Sublime Text",
     "description": "Éditeur de texte sophistiqué pour développeurs",
     "category": "Developpement",
-    "winget_id": "SublimeHQ.SublimeText",
+    "winget_id": "SublimeHQ.SublimeText.4",
     "choco_id": null,
-    "url": "https://download.sublimetext.com/sublime_text_build_4152_x64_setup.exe",
+    "url": "https://www.sublimetext.com/download",
     "icon": "code"
   },
   {
@@ -2276,7 +2276,7 @@
     "category": "Communication",
     "winget_id": null,
     "choco_id": null,
-    "url": "https://meet.google.com/download",
+    "url": "https://meet.google.com/",
     "icon": "message-circle"
   },
   {
@@ -2696,7 +2696,7 @@
     "category": "Desinstallateurs Antivirus",
     "winget_id": null,
     "choco_id": null,
-    "url": "https://support.malwarebytes.com/hc/en-us/articles/360038524414",
+    "url": "https://support.malwarebytes.com/",
     "icon": "shield"
   },
   {
@@ -3204,7 +3204,7 @@
     "name": "Snapchat",
     "description": "Application Snapchat pour Windows",
     "category": "Reseaux Sociaux",
-    "winget_id": "9WZDNCRFJ0J7",
+    "winget_id": "9PF9RTKMMQ69",
     "choco_id": null,
     "url": null,
     "icon": "wifi"
@@ -3214,9 +3214,9 @@
     "name": "X (Twitter)",
     "description": "Application X/Twitter pour Windows",
     "category": "Reseaux Sociaux",
-    "winget_id": "9WZDNCRFJ140",
+    "winget_id": null,
     "choco_id": null,
-    "url": null,
+    "url": "https://x.com",
     "icon": "wifi"
   },
   {
@@ -3494,9 +3494,9 @@
     "name": "YouTube Music",
     "description": "YouTube Music - Streaming musical",
     "category": "Streaming Video",
-    "winget_id": "9NBLGGH5W6HK",
+    "winget_id": null,
     "choco_id": null,
-    "url": null,
+    "url": "https://music.youtube.com",
     "icon": "package"
   },
   {
@@ -3646,7 +3646,7 @@
     "category": "Streaming Video",
     "winget_id": null,
     "choco_id": null,
-    "url": "https://www.telestream.net/wirecast/download.htm",
+    "url": "https://www.telestream.net/",
     "icon": "package"
   },
   {
@@ -3744,7 +3744,7 @@
     "name": "TIDAL",
     "description": "Service de streaming audio haute fidélité",
     "category": "Streaming Audio",
-    "winget_id": "9NBLGGH6JNLR",
+    "winget_id": "9NNCB5BS59PH",
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -3924,7 +3924,7 @@
     "name": "Dopamine",
     "description": "Lecteur audio élégant pour Windows",
     "category": "Streaming Audio",
-    "winget_id": "Digimezzo.Dopamine",
+    "winget_id": "Digimezzo.Dopamine.3",
     "choco_id": null,
     "url": "https://github.com/digimezzo/dopamine/releases",
     "icon": "package"
@@ -3934,7 +3934,7 @@
     "name": "ChatGPT",
     "description": "Application ChatGPT officielle",
     "category": "IA & Assistants",
-    "winget_id": "9NT1R1C2HH7J",
+    "winget_id": "9PLM9XGG6VKS",
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -4054,7 +4054,7 @@
     "name": "Perplexity",
     "description": "Moteur de recherche IA conversationnel",
     "category": "IA & Assistants",
-    "winget_id": "Perplexity.Perplexity",
+    "winget_id": "9P9XG917PWCJ",
     "choco_id": null,
     "url": "https://www.perplexity.ai/",
     "icon": "package"
@@ -4096,7 +4096,7 @@
     "category": "IA & Assistants",
     "winget_id": null,
     "choco_id": null,
-    "url": "https://otter.ai/download",
+    "url": "https://otter.ai/",
     "icon": "package"
   },
   {
@@ -4504,7 +4504,7 @@
     "name": "Canon Print",
     "description": "Application Canon pour imprimantes Canon",
     "category": "Imprimantes & Scan",
-    "winget_id": "9WZDNCRDP2J6",
+    "winget_id": "9PMK584KQVC2",
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -4554,7 +4554,7 @@
     "name": "doPDF",
     "description": "Imprimante PDF virtuelle gratuite",
     "category": "Imprimantes & Scan",
-    "winget_id": "Softland.doPDF",
+    "winget_id": "Softland.doPDF.11",
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -4694,7 +4694,7 @@
     "name": "NovaPDF",
     "description": "Créateur PDF avec OCR",
     "category": "Imprimantes & Scan",
-    "winget_id": "Softland.novaPDF",
+    "winget_id": "Softland.novaPDF.11",
     "choco_id": null,
     "url": "https://www.novapdf.com/download.html",
     "icon": "package"
@@ -4836,7 +4836,7 @@
     "category": "Services Apple",
     "winget_id": null,
     "choco_id": null,
-    "url": "https://www.5kplayer.com/download/5kplayer.exe",
+    "url": "https://www.5kplayer.com/",
     "icon": "package"
   },
   {
@@ -4984,7 +4984,7 @@
     "name": "SketchUp",
     "description": "Modélisation 3D pour l'architecture",
     "category": "Suites Professionnelles",
-    "winget_id": "Trimble.SketchUp",
+    "winget_id": "Trimble.SketchUp.2026",
     "choco_id": null,
     "url": null,
     "icon": "package"
@@ -5924,7 +5924,7 @@
     "name": "Bluebeam Revu",
     "description": "PDF pour professionnels AEC",
     "category": "PDF et Documents",
-    "winget_id": "Bluebeam.Revu",
+    "winget_id": "Bluebeam.Revu.21",
     "choco_id": null,
     "url": "https://www.bluebeam.com/download/",
     "icon": "package"
@@ -5994,7 +5994,7 @@
     "name": "PDFelement",
     "description": "Éditeur PDF tout-en-un Wondershare",
     "category": "PDF et Documents",
-    "winget_id": "Wondershare.PDFelement",
+    "winget_id": "Wondershare.PDFelement.13",
     "choco_id": null,
     "url": "https://pdf.wondershare.com/pdfelement/",
     "icon": "package"
@@ -6134,7 +6134,7 @@
     "name": "PowerArchiver",
     "description": "Archiveur professionnel complet",
     "category": "Compression",
-    "winget_id": "ConeXware.PowerArchiver",
+    "winget_id": "ConeXware.PowerArchiver.2022",
     "choco_id": null,
     "url": "https://www.powerarchiver.com/download/",
     "icon": "package"
@@ -6276,7 +6276,7 @@
     "category": "Outils Essentiels",
     "winget_id": null,
     "choco_id": null,
-    "url": "https://github.com/mirinsoft/sharpapp/releases/latest",
+    "url": "https://github.com/search?type=repositories&q=SharpApp",
     "icon": "star"
   },
   {
@@ -6986,7 +6986,7 @@
     "category": "Désinstallateurs Propres",
     "winget_id": null,
     "choco_id": null,
-    "url": "https://www.martau.com/uninstaller.html",
+    "url": "https://www.martau.com/",
     "icon": "trash-2"
   },
   {
@@ -7044,7 +7044,7 @@
     "name": "FurMark",
     "description": "Test de stabilité GPU intensif. Détecte les overclocks instables et problèmes de refroidissement.",
     "category": "Benchmarks et Tests",
-    "winget_id": "Geeks3D.FurMark",
+    "winget_id": "Geeks3D.FurMark.2",
     "choco_id": "furmark",
     "url": null,
     "icon": "gauge"
@@ -7212,9 +7212,29 @@
   {
     "id": "dotnet-desktop-8",
     "name": ".NET Desktop Runtime 8",
-    "description": "Runtime .NET pour applications de bureau",
+    "description": "Runtime .NET 8 (support terminé le 10/11/2026) — seulement pour les anciennes applications qui l'exigent",
     "category": "Utilitaires Systeme",
     "winget_id": "Microsoft.DotNet.DesktopRuntime.8",
+    "choco_id": null,
+    "url": null,
+    "icon": "settings"
+  },
+  {
+    "id": "dotnet-desktop-10",
+    "name": ".NET Desktop Runtime 10",
+    "description": "Runtime .NET 10 (LTS, supporté jusqu'en novembre 2028) pour applications de bureau",
+    "category": "Utilitaires Systeme",
+    "winget_id": "Microsoft.DotNet.DesktopRuntime.10",
+    "choco_id": null,
+    "url": null,
+    "icon": "settings"
+  },
+  {
+    "id": "vcredist-2015-x86",
+    "name": "Visual C++ 2015-2022 (x86)",
+    "description": "Runtime Visual C++ 32 bits, requis par de nombreux jeux et logiciels 32 bits",
+    "category": "Utilitaires Systeme",
+    "winget_id": "Microsoft.VCRedist.2015+.x86",
     "choco_id": null,
     "url": null,
     "icon": "settings"

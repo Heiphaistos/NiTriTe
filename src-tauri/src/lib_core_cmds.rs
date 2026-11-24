@@ -201,8 +201,8 @@ const TERMINAL_READONLY_COMMANDS: &[&str] = &[
     "ipconfig /all",
     "ping -n 4 8.8.8.8",
     "tasklist /fo table",
-    "wmic logicaldisk get caption,freespace,size",
-    "wmic /namespace:\\\\root\\wmi PATH MSAcpi_ThermalZoneTemperature get CurrentTemperature",
+    r#"powershell -NoProfile -Command "Get-CimInstance Win32_LogicalDisk | Format-Table DeviceID,FreeSpace,Size""#,
+    r#"powershell -NoProfile -Command "Get-CimInstance -Namespace root/wmi MSAcpi_ThermalZoneTemperature | Format-Table InstanceName,CurrentTemperature""#,
     "net statistics workstation | findstr /i statistics",
     "netstat -ano | findstr LISTENING",
     "set",
@@ -377,11 +377,15 @@ async fn get_startup_programs() -> Result<Vec<maintenance::cleanup::StartupEntry
 }
 
 #[tauri::command]
-async fn run_system_command(cmd: String, args: Vec<String>) -> Result<maintenance::commands::CommandResult, NiTriTeError> {
+async fn run_system_command(cmd: String, args: Vec<String>, timeout_secs: Option<u64>) -> Result<maintenance::commands::CommandResult, NiTriTeError> {
     validate_ui_command(&cmd, &args)?;
+    // 60 s par défaut ; les opérations longues (scan Defender : plusieurs
+    // minutes à plusieurs heures) passent `timeoutSecs`, sinon elles étaient
+    // tuées à 60 s et signalées en erreur. Borné à 12 h, jamais illimité.
+    let timeout = timeout_secs.unwrap_or(60).clamp(1, 12 * 3600);
     tokio::task::spawn_blocking(move || {
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-        maintenance::commands::execute_system_command(&cmd, &args_refs, 60)
+        maintenance::commands::execute_system_command(&cmd, &args_refs, timeout)
     })
     .await
     .map_err(|e| NiTriTeError::System(e.to_string()))?
@@ -466,11 +470,17 @@ fn is_own_temp_entry(name: &str) -> bool {
 // === Nettoyage sortie ===
 
 #[tauri::command]
-async fn cleanup_on_exit(app: tauri::AppHandle) -> Result<(), NiTriTeError> {
+async fn cleanup_on_exit(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<(), NiTriTeError> {
+    // 0. Aucun processus enfant ne survit : llama-server gardait le modele
+    //    (plusieurs Go) en memoire apres la fermeture.
+    ai::llamacpp::stop_server(&state.llamacpp_process).await;
+
     tokio::task::spawn_blocking(move || {
-        // 1. Logs applicatif (.logs/ à la racine du projet — dev uniquement)
+        // 1. Logs applicatif (.logs/ a cote de l'exe, la ou logging.rs ecrit).
+        //    Surtout pas `current_dir()` : lance depuis un terminal ouvert dans
+        //    un autre projet, NiTriTe effacait le `.logs` de CE projet.
         let logs_candidates = [
-            std::env::current_dir().ok().map(|d| d.join(".logs")),
+            Some(crate::utils::paths::app_root_dir().join(".logs")),
             std::env::var("APPDATA").ok().map(|a| std::path::PathBuf::from(a).join("com.nitrite.tool").join("logs")),
         ];
         for candidate in logs_candidates.iter().flatten() {
@@ -508,13 +518,14 @@ async fn cleanup_on_exit(app: tauri::AppHandle) -> Result<(), NiTriTeError> {
             }
         }
 
-        // 6. WebView2 data (cookies, cache) du dossier EBWebView
-        if let Ok(appdata) = std::env::var("APPDATA") {
-            let webview_cache = std::path::PathBuf::from(&appdata).join("com.nitrite.tool");
-            for sub in &["logs", "tmp", "cache"] {
-                let p = webview_cache.join(sub);
-                if p.exists() { let _ = std::fs::remove_dir_all(&p); }
-            }
+        // 6. Mode zero-trace : les donnees WebView2 (EBWebView dans
+        //    %LOCALAPPDATA%\com.nitrite.tool) sont VERROUILLEES tant que la
+        //    fenetre est ouverte — impossible de les supprimer depuis le
+        //    processus en cours (c'est le defaut qui laissait une trace et
+        //    risquait de corrompre le profil). On delegue donc leur suppression
+        //    a un nettoyeur DETACHE qui attend la fin de nitrite.exe puis efface.
+        if crate::utils::config::AppConfig::load().zero_trace {
+            spawn_detached_trace_cleaner();
         }
     })
     .await
@@ -524,6 +535,45 @@ async fn cleanup_on_exit(app: tauri::AppHandle) -> Result<(), NiTriTeError> {
     app.exit(0);
     Ok(())
 }
+
+/// Lance un script de nettoyage DETACHE (hors de l'arbre de processus de NiTriTe,
+/// donc il survit a la fermeture) qui attend la disparition de nitrite.exe puis
+/// efface les traces laissees sur le PC du client : donnees WebView2, dossiers
+/// %LOCALAPPDATA%/%APPDATA%\com.nitrite.tool, et se supprime lui-meme.
+/// Ne touche PAS aux livrables volontaires (sauvegardes, telechargements).
+#[cfg(target_os = "windows")]
+fn spawn_detached_trace_cleaner() {
+    use std::os::windows::process::CommandExt;
+    // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW : aucune
+    // console, groupe de processus independant -> ne meurt pas avec l'app.
+    const DETACHED: u32 = 0x0000_0008 | 0x0000_0200 | 0x0800_0000;
+
+    let pid = std::process::id();
+    // Nom de script unique pour ne pas collisionner entre deux instances.
+    let script = std::env::temp_dir().join(format!("nitrite_cleanup_{pid}.cmd"));
+    // %~f0 = le script lui-meme (auto-suppression finale). On attend la fin du
+    // PID exact (pas juste le nom) pour ne pas effacer sous une 2e instance.
+    let body = format!(
+        "@echo off\r\n\
+         :wait\r\n\
+         tasklist /FI \"PID eq {pid}\" | find \"{pid}\" >nul && (ping -n 2 127.0.0.1 >nul & goto wait)\r\n\
+         rmdir /s /q \"%LOCALAPPDATA%\\com.nitrite.tool\" 2>nul\r\n\
+         rmdir /s /q \"%APPDATA%\\com.nitrite.tool\" 2>nul\r\n\
+         rmdir /s /q \"%LOCALAPPDATA%\\Nitrite\" 2>nul\r\n\
+         del /f /q \"%TEMP%\\nitrite*\" 2>nul\r\n\
+         del \"%~f0\" 2>nul\r\n"
+    );
+    if std::fs::write(&script, body).is_err() {
+        return;
+    }
+    let _ = std::process::Command::new("cmd")
+        .args(["/c", &script.to_string_lossy()])
+        .creation_flags(DETACHED)
+        .spawn();
+}
+
+#[cfg(not(target_os = "windows"))]
+fn spawn_detached_trace_cleaner() {}
 
 // === Backup ===
 
@@ -549,8 +599,9 @@ mod tests {
     fn terminal_asks_confirmation_for_anything_but_the_readonly_quick_commands() {
         assert!(!terminal_needs_confirmation("ipconfig /all"));
         assert!(!terminal_needs_confirmation(
-            "wmic /namespace:\\\\root\\wmi PATH MSAcpi_ThermalZoneTemperature get CurrentTemperature"
+            r#"powershell -NoProfile -Command "Get-CimInstance -Namespace root/wmi MSAcpi_ThermalZoneTemperature | Format-Table InstanceName,CurrentTemperature""#
         ));
+        assert!(terminal_needs_confirmation("wmic logicaldisk get caption,freespace,size"));
         assert!(terminal_needs_confirmation("ipconfig /all & del /q C:\\x"));
         assert!(terminal_needs_confirmation("powershell -EncodedCommand AAAA"));
         assert!(terminal_needs_confirmation(""));

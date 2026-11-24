@@ -88,7 +88,7 @@ $result | ConvertTo-Json -Compress
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             let text = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
             if text.is_empty() { return Ok(serde_json::Value::Null); }
@@ -153,7 +153,7 @@ $result | ConvertTo-Json -Compress -Depth 4
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             let text = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
             if text.is_empty() { return Ok(serde_json::Value::Null); }
@@ -192,7 +192,7 @@ try {
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             let text = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
             if text.is_empty() { return Ok(serde_json::Value::Null); }
@@ -266,7 +266,7 @@ if ($result.Count -eq 0) { Write-Output '[]' } else { $result | ConvertTo-Json -
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             let text = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
             if text.is_empty() || text == "[]" { return Ok(serde_json::json!([])); }
@@ -301,7 +301,7 @@ async fn run_slmgr(arg: String) -> Result<String, String> {
                 .args(["-NoProfile", "-NonInteractive", "-Command",
                     &format!("[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $r = cscript.exe //Nologo $env:SystemRoot\\System32\\slmgr.vbs {} 2>&1; $r -join \"`n\"", safe_arg)])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             Ok(crate::maintenance::commands::decode_output(&out.stdout).trim().to_string())
         }
@@ -356,7 +356,7 @@ if ($result.Count -eq 0) { Write-Output '[]' } else { $result | ConvertTo-Json -
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             let text = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
             if text.is_empty() || text == "[]" { return Ok(serde_json::json!([])); }
@@ -384,8 +384,8 @@ try {
             name = [string]$p.Name
             cpu_percent = 0.0
             memory_mb = [double]($p.WorkingSet64 / 1MB)
-            disk_io_read_kb = try { [double]($p.ReadTransferCount / 1KB) } catch { 0.0 }
-            disk_io_write_kb = try { [double]($p.WriteTransferCount / 1KB) } catch { 0.0 }
+            disk_io_read_kb = $(try { [double]($p.ReadTransferCount / 1KB) } catch { 0.0 })
+            disk_io_write_kb = $(try { [double]($p.WriteTransferCount / 1KB) } catch { 0.0 })
         }
     }
     # GPU usage via Get-Counter (meilleures infos si dispo)
@@ -415,7 +415,7 @@ try {
             let out = std::process::Command::new("powershell")
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps.as_str()])
                 .creation_flags(0x08000000)
-                .output()
+                .output_within(90)
                 .map_err(|e| e.to_string())?;
             let text = crate::maintenance::commands::decode_output(&out.stdout).trim().to_string();
             if text.is_empty() || text == "[]" { return Ok(serde_json::json!([])); }

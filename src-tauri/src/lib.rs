@@ -409,6 +409,7 @@ pub fn run() {
             system::wsl_info::get_wsl_info,
             system::wsl_info::wsl_run_command,
             system::wsl_info::wsl_set_default_version,
+            system::wsl_info::wsl_long_action,
             // Bluetooth
             system::bluetooth::get_bluetooth_info,
             system::bluetooth::toggle_bluetooth,
@@ -496,6 +497,7 @@ pub fn run() {
             system::extras::get_local_ports,
             system::extras::get_disk_tree,
             system::extras::get_big_files,
+            system::extras::cancel_disk_scan,
             system::extras::trash_file,
             system::extras::find_duplicates,
             system::extras::get_temperatures,
@@ -540,11 +542,79 @@ pub fn run() {
             system::winpe::clear_offline_password,
             system::winpe::enable_offline_account,
             system::winpe::winpe_run_command,
+            // ═══ SAM editor ═══
+            system::sam_editor::sam_list_users,
+            system::sam_editor::sam_clear_password,
+            system::sam_editor::sam_set_enabled,
+            system::sam_editor::sam_unlock,
+            system::sam_editor::sam_set_admin,
+            system::sam_editor::sam_delete_user,
+            system::sam_editor::sam_create_user,
+            // ═══ fin SAM editor ═══
             // ═══ Capteurs complets (sensors.rs) ═══
             system::sensors::get_all_sensors,
             // ═══ Scanner DLL (dll_scanner.rs) ═══
             system::dll_scanner::scan_dlls,
             system::dll_scanner::delete_dll,
+            // ═══ TokaISO : catalogue + telechargeur (system/iso_catalog) ═══
+            system::iso_catalog::iso_catalog_action,
+            // ═══ fin iso_catalog ═══
+            // ═══ TokaISO : atelier USB Ventoy (system/usb_workshop) ═══
+            system::usb_workshop::commands::usb_ws_list,
+            system::usb_workshop::commands::usb_ws_images,
+            system::usb_workshop::commands::usb_ws_writers,
+            system::usb_workshop::commands::usb_ws_set_writer,
+            system::usb_workshop::commands::usb_ws_open_writer,
+            system::usb_workshop::commands::usb_ws_media_preview,
+            system::usb_workshop::commands::usb_ws_media_run,
+            system::usb_workshop::commands::usb_ws_save_text,
+            system::usb_workshop::commands::usb_ws_health,
+            system::usb_workshop::commands::usb_ws_boot_images,
+            system::usb_workshop::commands::usb_ws_boot_persistence,
+            system::usb_workshop::commands::usb_ws_boot_list,
+            system::usb_workshop::commands::usb_ws_boot_create,
+            system::usb_workshop::commands::usb_ws_boot_control,
+            system::usb_workshop::themes::usb_ws_design_gallery,
+            system::usb_workshop::themes::usb_ws_design_preview,
+            system::usb_workshop::themes::usb_ws_design_download,
+            system::usb_workshop::themes::usb_ws_design_import,
+            system::usb_workshop::themes::usb_ws_design_menu,
+            system::usb_workshop::themes::usb_ws_design_plan,
+            system::usb_workshop::themes::usb_ws_design_apply,
+            system::usb_workshop::templates::usb_ws_template_preview,
+            system::usb_workshop::templates::usb_ws_template_export,
+            system::usb_workshop::templates::usb_ws_template_apply,
+            system::usb_workshop::profiles::usb_ws_profile_list,
+            system::usb_workshop::profiles::usb_ws_profile_save,
+            system::usb_workshop::profiles::usb_ws_profile_remove,
+            system::usb_workshop::profiles::usb_ws_profile_preview,
+            system::usb_workshop::profiles::usb_ws_profile_apply,
+            // ═══ fin usb_workshop ═══
+            // ═══ TokaISO : labo PXE + VM (system/boot_lab) ═══
+            system::boot_lab::commands::boot_lab_pxe_interfaces,
+            system::boot_lab::commands::boot_lab_pxe_status,
+            system::boot_lab::commands::boot_lab_pxe_export,
+            system::boot_lab::commands::boot_lab_pxe_start,
+            system::boot_lab::commands::boot_lab_pxe_stop,
+            system::boot_lab::commands::boot_lab_pxe_diagnose,
+            system::boot_lab::commands::boot_lab_pxe_test,
+            system::boot_lab::commands::boot_lab_vm_list,
+            system::boot_lab::commands::boot_lab_vm_import,
+            system::boot_lab::commands::boot_lab_vm_install_iso,
+            system::boot_lab::commands::boot_lab_vm_action,
+            system::boot_lab::commands::boot_lab_vm_test_history,
+            system::boot_lab::commands::boot_lab_iso_test,
+            system::boot_lab::commands::boot_lab_network_test,
+            system::boot_lab::commands::boot_lab_drive_report,
+            system::boot_lab::commands::boot_lab_disk_check,
+            system::boot_lab::commands::boot_lab_plans,
+            system::boot_lab::commands::boot_lab_plan_save,
+            system::boot_lab::commands::boot_lab_plan_delete,
+            system::boot_lab::commands::boot_lab_lab_plan,
+            system::boot_lab::commands::boot_lab_labs,
+            system::boot_lab::commands::boot_lab_profile,
+            system::boot_lab::commands::boot_lab_kit_export,
+            // ═══ fin boot_lab ═══
             // ═══ Logging structuré v26.57 ═══
             logging::log_entry,
             logging::get_recent_logs,
@@ -552,7 +622,19 @@ pub fn run() {
             logging::get_log_stats,
             logging::list_log_archives,
             logging::get_log_file_path,
+            // ═══ Activation Windows (system/activation) ═══
+            system::activation::activation_status,
+            system::activation::activation_kms,
+            system::activation::activation_hwid,
+            system::activation::activation_stop_kms,
+            // ═══ fin activation ═══
         ])
-        .run(tauri::generate_context!())
-        .expect("Erreur lors du lancement de NiTriTe");
+        .build(tauri::generate_context!())
+        .expect("Erreur lors du lancement de NiTriTe")
+        .run(|_app, event| {
+            // Arret propre du serveur KMS local (si demarre) a la fermeture.
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                system::activation::shutdown_kms_server();
+            }
+        });
 }
