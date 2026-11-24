@@ -622,7 +622,19 @@ pub fn run() {
             logging::get_log_stats,
             logging::list_log_archives,
             logging::get_log_file_path,
+            // ═══ Activation Windows (system/activation) ═══
+            system::activation::activation_status,
+            system::activation::activation_kms,
+            system::activation::activation_hwid,
+            system::activation::activation_stop_kms,
+            // ═══ fin activation ═══
         ])
-        .run(tauri::generate_context!())
-        .expect("Erreur lors du lancement de NiTriTe");
+        .build(tauri::generate_context!())
+        .expect("Erreur lors du lancement de NiTriTe")
+        .run(|_app, event| {
+            // Arret propre du serveur KMS local (si demarre) a la fermeture.
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                system::activation::shutdown_kms_server();
+            }
+        });
 }

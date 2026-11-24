@@ -646,6 +646,15 @@ const SEARCH_INDEX: SearchEntry[] = [
     type: "page",
     keywords: ["virus", "antivirus", "scan", "malware", "menace", "securite", "ransomware", "infection", "defender", "detection"],
   },
+  {
+    id: "activation",
+    label: "Activation Windows",
+    description: "Activer Windows : KMS local hors ligne (180 j) ou HWID permanent",
+    route: "/activation",
+    section: "Maintenance",
+    type: "page",
+    keywords: ["activation", "activer", "licence", "windows", "kms", "hwid", "slmgr", "gvlk", "office"],
+  },
 
   // ─── RÉSEAU & TERMINAL ───────────────────────────────────────────────────────
   {

@@ -56,6 +56,12 @@ const router = createRouter({
       meta: { title: "OS & USB Tools" },
     },
     {
+      path: "/activation",
+      name: "activation",
+      component: () => import("@/pages/ActivationPage.vue"),
+      meta: { title: "Activation Windows" },
+    },
+    {
       path: "/usb-workshop",
       name: "usb-workshop",
       component: () => import("@/pages/UsbWorkshopPage.vue"),

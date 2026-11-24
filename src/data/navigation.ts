@@ -57,6 +57,7 @@ export const navigationSections: NavSection[] = [
       { id: "restore-points", label: "Points de restauration", icon: "shield-check", route: "/restore-points" },
       { id: "bsod-analyzer",  label: "Analyse BSOD",       icon: "bug",          route: "/bsod-analyzer" },
       { id: "boot-manager",   label: "Boot Manager",       icon: "server",       route: "/boot-manager" },
+      { id: "activation",     label: "Activation Windows", icon: "key",          route: "/activation" },
     ],
   },
   {
