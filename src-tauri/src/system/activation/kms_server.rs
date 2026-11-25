@@ -48,6 +48,8 @@ const PT_REQUEST: u8 = 0;
 const PT_RESPONSE: u8 = 2;
 const PT_BIND: u8 = 11;
 const PT_BIND_ACK: u8 = 12;
+const PT_ALTER_CONTEXT: u8 = 14;
+const PT_ALTER_CONTEXT_RESP: u8 = 15;
 
 // ── Petites aides little-endian ─────────────────────────────────────────────
 
@@ -94,32 +96,88 @@ fn parse_rpc_header(b: &[u8]) -> Option<RpcHead> {
     })
 }
 
-/// Construit un bind_ack acceptant la syntaxe NDR, adresse secondaire "1688".
-fn build_bind_ack(call_id: u32, assoc_group: u32) -> Vec<u8> {
-    let mut body = Vec::new();
-    push_u16(&mut body, 5840); // max_xmit_frag
-    push_u16(&mut body, 5840); // max_recv_frag
-    push_u32(&mut body, if assoc_group == 0 { 0x0105 } else { assoc_group });
+/// Un élément `p_cont_elem_t` offert par le client dans un bind/alter_context.
+struct CtxItem {
+    interface_uuid: [u8; 16],
+    transfer_syntax: [u8; 16],
+}
+
+/// Analyse la liste des contextes présentés (RPC_BIND_REQUEST, après le header de
+/// 16 octets) : MaxXmitFrag(2) MaxRecvFrag(2) AssocGroup(4) NumCtxItems(4) puis
+/// NumCtxItems éléments de 44 octets [ContextId(2) NumTransItems(2) InterfaceUUID(16)
+/// VerMajor(2) VerMinor(2) TransferSyntax(16) SyntaxVersion(4)].
+fn parse_bind_ctx_items(body: &[u8]) -> Vec<CtxItem> {
+    let Some(num) = u32le(body, 8) else { return Vec::new() };
+    let mut out = Vec::new();
+    let mut off = 12usize;
+    for _ in 0..num.min(16) {
+        let Some(interface_uuid) = body.get(off + 4..off + 20).and_then(|s| s.try_into().ok()) else { break };
+        let Some(transfer_syntax) = body.get(off + 24..off + 40).and_then(|s| s.try_into().ok()) else { break };
+        out.push(CtxItem { interface_uuid, transfer_syntax });
+        off += 44;
+    }
+    out
+}
+
+/// Construit un bind_ack / alter_context_resp. Le runtime RPC de Windows (depuis
+/// Vista, systématiquement sur Windows 11) propose PLUSIEURS contextes de
+/// présentation dans un même bind : NDR64, NDR32, et souvent une syntaxe pseudo
+/// « Bind Time Feature Negotiation ». La réponse DOIT contenir EXACTEMENT un
+/// résultat par contexte offert (`NumResults == NumCtxItems`) : en renvoyer un seul
+/// par défaut (l'ancien comportement) laisse le client associer le contexte accepté
+/// au MAUVAIS id (souvent NDR64, offert en premier), et tout l'échange qui suit est
+/// alors décodé dans le mauvais format NDR (champs sur 8 octets au lieu de 4) — ce
+/// qui produit exactement les erreurs « données invalides » observées. On n'accepte
+/// donc QUE NDR32 sur l'interface KMS ; NDR64 et tout le reste sont refusés (on ne
+/// sait répondre qu'au format NDR32, 32 bits).
+fn build_bind_ack(ptype: u8, call_id: u32, assoc_group: u32, body: &[u8]) -> Vec<u8> {
+    const ACCEPT: u16 = 0;
+    const NACK: u16 = 2;
+    const REASON_ABSTRACT_UNSUPPORTED: u16 = 1;
+    const REASON_SYNTAX_UNSUPPORTED: u16 = 2;
+
+    let items = parse_bind_ctx_items(body);
+    let mut results: Vec<(u16, u16, [u8; 16], u32)> = items
+        .iter()
+        .map(|item| {
+            if item.interface_uuid != KMS_IFACE_UUID {
+                (NACK, REASON_ABSTRACT_UNSUPPORTED, [0u8; 16], 0u32)
+            } else if item.transfer_syntax == NDR_SYNTAX_UUID {
+                (ACCEPT, ACCEPT, NDR_SYNTAX_UUID, 2u32)
+            } else {
+                (NACK, REASON_SYNTAX_UNSUPPORTED, [0u8; 16], 0u32)
+            }
+        })
+        .collect();
+    if results.is_empty() {
+        // Paquet non parsable : un seul résultat de refus plutôt que planter.
+        results.push((NACK, REASON_ABSTRACT_UNSUPPORTED, [0u8; 16], 0u32));
+    }
+
+    let mut rbody = Vec::new();
+    push_u16(&mut rbody, 5840); // max_xmit_frag
+    push_u16(&mut rbody, 5840); // max_recv_frag
+    push_u32(&mut rbody, if assoc_group == 0 { 0x0105 } else { assoc_group });
     // sec_addr : "1688\0"
     let port = b"1688\0";
-    push_u16(&mut body, port.len() as u16);
-    body.extend_from_slice(port);
+    push_u16(&mut rbody, port.len() as u16);
+    rbody.extend_from_slice(port);
     // Alignement sur 4 octets (le padding compte depuis le début du PDU = header 16 + body).
-    while (16 + body.len()) % 4 != 0 {
-        body.push(0);
+    while (16 + rbody.len()) % 4 != 0 {
+        rbody.push(0);
     }
-    // p_result_list : 1 résultat, acceptance (0,0), syntaxe NDR v2.
-    body.push(1); // n_results
-    body.push(0); // reserved
-    push_u16(&mut body, 0); // reserved2
-    push_u16(&mut body, 0); // result = acceptance
-    push_u16(&mut body, 0); // reason
-    body.extend_from_slice(&NDR_SYNTAX_UUID);
-    push_u32(&mut body, 2); // NDR version 2.0
+    push_u32(&mut rbody, results.len() as u32); // NumResults (DWORD)
+    for (accept, reason, syntax, version) in &results {
+        push_u16(&mut rbody, *accept);
+        push_u16(&mut rbody, *reason);
+        rbody.extend_from_slice(syntax);
+        push_u32(&mut rbody, *version);
+    }
 
-    let frag_len = (16 + body.len()) as u16;
-    let mut pkt = rpc_header(PT_BIND_ACK, call_id, frag_len);
-    pkt.extend_from_slice(&body);
+    let frag_len = (16 + rbody.len()) as u16;
+    let resp_ptype = if ptype == PT_ALTER_CONTEXT { PT_ALTER_CONTEXT_RESP } else { PT_BIND_ACK };
+    let mut pkt = rpc_header(resp_ptype, call_id, frag_len);
+    pkt.extend_from_slice(&rbody);
     pkt
 }
 
@@ -214,9 +272,12 @@ fn decode_kms_request(stub: &[u8]) -> Option<KmsRequest> {
     }
 }
 
-/// ePID (KMS PID) bien formé en UTF-16LE terminé par un nul.
+/// ePID (KMS PID) bien formé en UTF-16LE terminé par un nul. Structure (groupes de
+/// chiffres) vérifiée contre un `slmgr /dlv` réel (`03612-03308-000-000000-00-1036-
+/// 26100.0000-0112026`) : build.revision mis à jour vers un build Windows 11 réel
+/// (26100) au lieu d'un ancien build Windows 8.1/Server 2012 R2 (9600).
 fn make_epid() -> Vec<u8> {
-    let s = "03612-00206-471-000000-03-1036-9600.0000-2512025";
+    let s = "03612-00206-471-000000-03-1036-26100.0000-2512025";
     let mut out = Vec::with_capacity(s.len() * 2 + 2);
     for c in s.encode_utf16() {
         out.extend_from_slice(&c.to_le_bytes());
@@ -372,12 +433,10 @@ fn handle_connection(mut stream: TcpStream) {
         };
         let Some(head) = parse_rpc_header(&pkt) else { return };
         match head.ptype {
-            PT_BIND => {
+            PT_BIND | PT_ALTER_CONTEXT => {
                 // assoc_group à l'offset 16+4 (après max_xmit/recv frag).
                 let assoc = u32le(&pkt, 20).unwrap_or(0);
-                // Vérifie que c'est bien l'interface KMS (sinon on répond quand même, inoffensif).
-                let _is_kms = pkt.windows(16).any(|w| w == KMS_IFACE_UUID);
-                let resp = build_bind_ack(head.call_id, assoc);
+                let resp = build_bind_ack(head.ptype, head.call_id, assoc, &pkt[16..]);
                 if stream.write_all(&resp).is_err() {
                     return;
                 }
@@ -447,16 +506,73 @@ impl Drop for KmsServer {
 mod tests {
     use super::*;
 
+    /// Construit un corps de bind réaliste (comme le runtime RPC de Windows 11) :
+    /// 3 contextes — NDR64, NDR32, Bind Time Feature Negotiation — tous sur
+    /// l'interface KMS, dans cet ordre.
+    fn build_test_bind_body(ndr64_first: bool) -> Vec<u8> {
+        const NDR64_SYNTAX: [u8; 16] = [
+            0x33, 0x05, 0x71, 0x71, 0xba, 0xbe, 0x37, 0x49, 0x83, 0x19, 0xb5, 0xdb, 0xef, 0x9c, 0xcc, 0x36,
+        ];
+        const BTFN_SYNTAX: [u8; 16] = [
+            0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        let mut syntaxes = vec![NDR_SYNTAX_UUID, BTFN_SYNTAX];
+        if ndr64_first { syntaxes.insert(0, NDR64_SYNTAX); } else { syntaxes.push(NDR64_SYNTAX); }
+
+        let mut body = Vec::new();
+        push_u16(&mut body, 5840); // max_xmit_frag
+        push_u16(&mut body, 5840); // max_recv_frag
+        push_u32(&mut body, 0); // assoc_group
+        push_u32(&mut body, syntaxes.len() as u32); // NumCtxItems
+        for (i, syntax) in syntaxes.iter().enumerate() {
+            push_u16(&mut body, i as u16); // ContextId
+            push_u16(&mut body, 1); // NumTransItems
+            body.extend_from_slice(&KMS_IFACE_UUID);
+            push_u16(&mut body, 1); // InterfaceVerMajor
+            push_u16(&mut body, 0); // InterfaceVerMinor
+            body.extend_from_slice(syntax);
+            push_u32(&mut body, if *syntax == NDR64_SYNTAX { 1 } else { 2 }); // SyntaxVersion
+        }
+        body
+    }
+
     #[test]
-    fn bind_ack_bien_forme() {
-        let p = build_bind_ack(7, 0);
+    fn bind_ack_un_resultat_par_contexte_offert() {
+        // Le client offre NDR64 en premier (comportement réel de Windows 11) : si on ne
+        // répond qu'un seul résultat, le client associe l'acceptation au contexte 0
+        // (NDR64) et décode tout le reste au mauvais format — c'est le bug réel trouvé.
+        let body = build_test_bind_body(true);
+        let p = build_bind_ack(PT_BIND, 7, 0, &body);
         let h = parse_rpc_header(&p).unwrap();
         assert_eq!(h.ptype, PT_BIND_ACK);
         assert_eq!(h.call_id, 7);
-        // frag_length (offset 8) doit égaler la taille réelle du paquet.
-        assert_eq!(u16le(&p, 8).unwrap() as usize, p.len());
-        // acceptance présente + syntaxe NDR.
-        assert!(p.windows(16).any(|w| w == NDR_SYNTAX_UUID));
+        assert_eq!(u16le(&p, 8).unwrap() as usize, p.len(), "frag_length == taille réelle");
+
+        // NumResults doit valoir 3 (un par contexte offert), pas 1.
+        let sec_addr_len = u16le(&p, 16 + 8).unwrap() as usize;
+        let mut off = 16 + 8 + 2 + sec_addr_len;
+        while (off) % 4 != 0 { off += 1; }
+        let num_results = u32le(&p, off).unwrap();
+        assert_eq!(num_results, 3, "un résultat par contexte offert, pas un seul");
+
+        // Résultat 0 (NDR64, offert en premier) : refusé.
+        let r0 = off + 4;
+        assert_eq!(u16le(&p, r0).unwrap(), 2, "NDR64 doit être refusé (AckResult=NACK)");
+        // Résultat 1 (NDR32) : accepté, avec la bonne syntaxe échoée.
+        let r1 = r0 + 24;
+        assert_eq!(u16le(&p, r1).unwrap(), 0, "NDR32 doit être accepté");
+        assert_eq!(&p[r1 + 4..r1 + 20], &NDR_SYNTAX_UUID, "syntaxe NDR32 échoée dans le résultat accepté");
+        // Résultat 2 (BTFN) : refusé.
+        let r2 = r1 + 24;
+        assert_eq!(u16le(&p, r2).unwrap(), 2, "BTFN doit être refusé");
+    }
+
+    #[test]
+    fn bind_ack_paquet_non_parsable_un_seul_refus() {
+        let p = build_bind_ack(PT_BIND, 7, 0, &[]);
+        assert_eq!(parse_rpc_header(&p).unwrap().ptype, PT_BIND_ACK);
+        // Ne doit pas paniquer, et produire un seul résultat de refus propre.
+        assert!(p.len() > 16);
     }
 
     #[test]
