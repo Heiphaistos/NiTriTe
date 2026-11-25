@@ -1,19 +1,18 @@
 //! activation — Réactivation Windows pour maintenance technicien.
 //!
-//! Voie unique retenue : HWID permanent, délégué à MAS (logiciel/MAS/MAS_AIO.cmd,
+//! Voie unique : HWID permanent, délégué à MAS (logiciel/MAS/MAS_AIO.cmd,
 //! mode `/HWID`), en un clic (mode non-interactif de MAS, fermeture auto).
 //!
 //! Fonction de maintenance légitime : remettre en règle un Windows après réparation /
 //! réinstallation par le propriétaire de l'outil.
 //!
-//! Le serveur KMS natif (`kms_server`, `crypto`) reste dans le dépôt mais n'est plus
-//! câblé à l'UI : l'activation finale contre un vrai Windows 11 était encore refusée
-//! (0x8007000D) malgré un framing RPC et des primitives crypto prouvés corrects —
-//! HWID via MAS est la méthode fiable et activée.
+//! Le serveur KMS natif a été entièrement retiré du projet le 2026-11-26 : il a
+//! désactivé un Windows déjà licencié sur une vraie machine (pose de la GVLK suivie
+//! d'un `/ato` qui échouait). Ne pas le réintroduire — `slmgr::install_product_key`/
+//! `set_kms_server`/`activate_online` ont été supprimés avec lui pour qu'aucun code
+//! ne puisse reposer une clé générique sur une machine réelle.
 
-pub mod crypto;
 pub mod gvlk;
-pub mod kms_server;
 pub mod slmgr;
 
 use serde::Serialize;

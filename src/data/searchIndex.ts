@@ -649,7 +649,7 @@ const SEARCH_INDEX: SearchEntry[] = [
   {
     id: "activation",
     label: "Activation Windows",
-    description: "Activer Windows : KMS local hors ligne (180 j) ou HWID permanent",
+    description: "Activer Windows en un clic : HWID permanent (via MAS)",
     route: "/activation",
     section: "Maintenance",
     type: "page",

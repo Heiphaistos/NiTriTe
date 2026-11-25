@@ -120,26 +120,6 @@ pub fn query_license_status() -> Result<LicenseStatus, NiTriTeError> {
     Err(NiTriTeError::System("Disponible sous Windows uniquement.".into()))
 }
 
-/// Pose une clé produit (`slmgr /ipk <clé>`). La clé passe en argument séparé.
-pub fn install_product_key(key: &str) -> Result<CommandResult, NiTriTeError> {
-    run_slmgr(&["/ipk", key], 60)
-}
-
-/// Définit le serveur KMS (`slmgr /skms <host:port>`).
-pub fn set_kms_server(host_port: &str) -> Result<CommandResult, NiTriTeError> {
-    run_slmgr(&["/skms", host_port], 30)
-}
-
-/// Retire le serveur KMS configuré (`slmgr /ckms`) — remet la découverte DNS par défaut.
-pub fn clear_kms_server() -> Result<CommandResult, NiTriTeError> {
-    run_slmgr(&["/ckms"], 30)
-}
-
-/// Lance l'activation en ligne contre le KMS configuré (`slmgr /ato`).
-pub fn activate_online() -> Result<CommandResult, NiTriTeError> {
-    run_slmgr(&["/ato"], 90)
-}
-
 /// Texte brut de `slmgr /dlv` (diagnostic détaillé, localisé) pour affichage.
 pub fn detailed_license_info() -> Result<CommandResult, NiTriTeError> {
     run_slmgr(&["/dlv"], 40)
@@ -148,23 +128,6 @@ pub fn detailed_license_info() -> Result<CommandResult, NiTriTeError> {
 /// Texte brut de `slmgr /xpr` (date d'expiration lisible).
 pub fn expiration_info() -> Result<CommandResult, NiTriTeError> {
     run_slmgr(&["/xpr"], 30)
-}
-
-/// Planifie un renouvellement KMS récurrent (tâche planifiée tous les 7 jours
-/// exécutant `slmgr /ato` en SYSTEM). Nécessite les droits admin.
-pub fn schedule_renewal() -> Result<CommandResult, NiTriTeError> {
-    let tr = format!("cscript //Nologo {} /ato", slmgr_path());
-    execute_system_command(
-        "schtasks",
-        &[
-            "/Create", "/SC", "DAILY", "/MO", "7",
-            "/TN", "NiTriTe-Activation-Renew",
-            "/TR", &tr,
-            "/RU", "SYSTEM",
-            "/F",
-        ],
-        30,
-    )
 }
 
 #[cfg(test)]

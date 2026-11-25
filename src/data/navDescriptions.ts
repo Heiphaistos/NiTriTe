@@ -28,7 +28,7 @@ export const navDescriptions: Record<string, string> = {
   "restore-points": "Créer et restaurer des points",
   "bsod-analyzer": "Comprendre les écrans bleus",
   "boot-manager": "Démarrage, BCD et entrées de boot",
-  "activation": "Activer Windows (KMS local ou HWID permanent)",
+  "activation": "Activer Windows en un clic (HWID permanent via MAS)",
   "disk-visualizer": "Carte de l'occupation des disques",
   "big-files": "Trouver les fichiers volumineux",
   "duplicate-finder": "Repérer les fichiers en double",

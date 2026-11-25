@@ -13,7 +13,7 @@ import { KeyRound, ShieldCheck, RefreshCw, Fingerprint } from "lucide-vue-next";
 
 const notify = useNotificationStore();
 
-interface DetectedEdition { edition_id: string; product_name: string; gvlk: string | null; gvlk_label: string | null; }
+interface DetectedEdition { edition_id: string; product_name: string; }
 interface LicenseStatus {
   name: string; description: string; license_status: number; license_status_text: string;
   grace_minutes: number; grace_days: number; channel: string; partial_key: string; activated: boolean;
@@ -86,7 +86,6 @@ onMounted(refresh);
         <div v-if="!activated && status.license.grace_days > 0">
           <span class="k">Jours restants</span><span class="v">{{ status.license.grace_days }} j</span>
         </div>
-        <div><span class="k">GVLK détectée</span><span class="v">{{ status.edition.gvlk_label || "non prise en charge" }}</span></div>
       </div>
       <pre v-if="status?.xpr_raw" class="raw">{{ status.xpr_raw }}</pre>
     </NCard>
